@@ -143,6 +143,9 @@ http.createServer(function (req, res) {
                     });
                 });
             });
+        } else {
+            res.writeHead(200, {'content-type': 'text/plain'});
+            res.end('stat on file not implemented yet');
         }
     }
 }).listen(8080);
