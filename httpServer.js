@@ -113,19 +113,19 @@ http.createServer(function (req, res) {
             fs.readdir(sSourcePath, function(err, files) {
                 var dir = {
                     type: "directory",
-                    content: []
+                    contents: []
                 }
                 
                 files.forEach(function(filename) {
                     fs.stat(path.join(sSourcePath, filename), function(err,statObj) {
                         if (statObj.isDirectory()) {
-                            dir.content.push({
+                            dir.contents.push({
                                 type: "directory",
                                 name: filename,
                                 size: 0
                             });
                         } else {
-                            dir.content.push({
+                            dir.contents.push({
                                 type: "file",
                                 name: filename,
                                 size: statObj.size
@@ -133,7 +133,7 @@ http.createServer(function (req, res) {
                         }
 
                         // is there a better way for synchronization???
-                        if (dir.content.length === files.length) {
+                        if (dir.contents.length === files.length) {
                             var data = JSON.stringify(dir);
                             console.log(data);
                             // github return text/plain, therefore we need to do the same
