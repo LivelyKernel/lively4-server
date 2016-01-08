@@ -32,7 +32,11 @@ function writeFile(sPath, req, res) {
     //after transmission, write file to disk
     req.on('end', function() {
         fs.writeFile(sPath, fullBody, function (err) {
-            if (err) throw err;
+            if (err) {
+                // throw err;
+                console.log(err);
+                return;
+            }
             console.log("saved " + sPath);
             res.writeHead(200, "OK");
             res.end();
@@ -91,9 +95,54 @@ http.createServer(function (req, res) {
         //writes go to shadow dir if selected
         if (sShadowDir) {
             var sShadowPath = path.join(sShadowDir, sPath);
-            mkdirp(path.dirname(sShadowPath), function(err) { if (err) console.log("error creating path " + sShadowPath); else writeFile(sShadowPath, req, res);});
+            mkdirp(path.dirname(sShadowPath), function(err) {
+                if (err) {
+                    console.log("error creating path " + sShadowPath);
+                } else {
+                    writeFile(sShadowPath, req, res);
+                }
+            });
         } else {
             writeFile(sSourcePath, req, res);
+        }
+    } else if (req.method == "OPTIONS") {
+        console.log("doing a stat on " + sSourcePath);
+        // statFile was called by client
+        if (sSourcePath.slice(-1) === path.sep) {
+            // a dir was requested
+            fs.readdir(sSourcePath, function(err, files) {
+                var dir = {
+                    type: "directory",
+                    content: []
+                }
+                
+                files.forEach(function(filename) {
+                    fs.stat(path.join(sSourcePath, filename), function(err,statObj) {
+                        if (statObj.isDirectory()) {
+                            dir.content.push({
+                                type: "directory",
+                                name: filename,
+                                size: 0
+                            });
+                        } else {
+                            dir.content.push({
+                                type: "file",
+                                name: filename,
+                                size: statObj.size
+                            });
+                        }
+
+                        // is there a better way for synchronization???
+                        if (dir.content.length === files.length) {
+                            var data = JSON.stringify(dir);
+                            console.log(data);
+                            // github return text/plain, therefore we need to do the same
+                            res.writeHead(200, {'content-type': 'text/plain'});
+                            res.end(data);
+                        }
+                    });
+                });
+            });
         }
     }
 }).listen(8080);
