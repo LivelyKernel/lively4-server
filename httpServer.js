@@ -45,15 +45,26 @@ function writeFile(sPath, req, res) {
 }
 
 function _readFile(sPath, res) {
-    fs.readFile(sPath, 'utf8', function (err,data) {
-        if (err) {
+    fs.exists(sPath, function(exists) {
+        if (!exists) {
             res.writeHead(404);
             res.end("File not found!\n");
-            return console.log(err);
+        } else {
+            res.writeHead(200, {'content-type': mime.lookup(sPath)});
+            var stream = fs.createReadStream(sPath, { bufferSize: 64 * 1024 });
+            stream.pipe(res);
         }
-        res.writeHead(200, {'content-type': mime.lookup(sPath)});
-        res.end(data);
     });
+    // fs.readFile(sPath, 'utf8', function (err,data) {
+    //     if (err) {
+    //         res.writeHead(404);
+    //         res.end("File not found!\n");
+    //         return console.log(err);
+    //     }
+    //     res.writeHead(200, {'content-type': mime.lookup(sPath)});
+    //     res.write(data);
+    //     res.end();
+    // });
 }
 
 function _readShadowFile(sPath, res) {
