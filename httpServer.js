@@ -17,15 +17,15 @@ var options = [{
 }, {
     name: "directory",
     short: "d",
-    type: "string",
+    type: "path",
     description: "root directory from which the server will serve files",
     example: "'npm start -d ../foo/bar' or npm start --directory=../foo/bar'"
 }, {
     name: "shadow",
     short: "s",
-    type: "boolean",
+    type: "path",
     description: "if set, reads and writes go to a shadow file system",
-    example: "'npm start -s' or 'npm start --shadow'"
+    example: "'npm start -s ../shadow' or 'npm start --shadow ../shadow'"
 }]
 
 // parse command line arguments
@@ -182,4 +182,12 @@ http.createServer(function (req, res) {
             res.end('stat on file not implemented yet');
         }
     }
-}).listen(port);
+}).listen(port, function(err) {
+    if (err) {
+        throw err;
+    }
+    console.log("Server running on port " + port + " in directory " + sSourceDir);
+    if (sShadowDir) {
+        console.log("Using shadow dir " + sShadowDir)
+    }
+});
