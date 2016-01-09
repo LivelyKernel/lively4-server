@@ -13,19 +13,19 @@ var options = [{
     short: "p",
     type: "int",
     description: "port on which the server will listen for connections",
-    example: "'npm start -p 8001' or 'npm start --port=8001'"
+    example: "'node httpServer.js -p 8001' or 'node httpServer.js --port=8001'"
 }, {
     name: "directory",
     short: "d",
     type: "path",
     description: "root directory from which the server will serve files",
-    example: "'npm start -d ../foo/bar' or npm start --directory=../foo/bar'"
+    example: "'node httpServer.js -d ../foo/bar' or node httpServer.js --directory=../foo/bar'"
 }, {
     name: "shadow",
     short: "s",
     type: "path",
     description: "if set, reads and writes go to a shadow file system",
-    example: "'npm start -s ../shadow' or 'npm start --shadow ../shadow'"
+    example: "'node httpServer.js -s ../shadow' or 'node httpServer.js --shadow ../shadow'"
 }]
 
 // parse command line arguments
@@ -121,7 +121,7 @@ http.createServer(function (req, res) {
     res.setHeader('Access-Control-Request-Method', '*');
     res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET');
     res.setHeader('Access-Control-Allow-Headers', '*');
-    
+
     var sSourcePath = path.join(sSourceDir, sPath);
     if (req.method == "GET") {
         readFile(sPath, res)
