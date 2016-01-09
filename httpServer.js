@@ -36,12 +36,15 @@ var sSourceDir = args.options.directory || ".";
 var sShadowDir = args.options.shadow;
 
 if (sShadowDir) {
-    mkdirp(sShadowDir, function(err) { if (err) {console.log("Error creating shadow dir: " + err); sShadowDir = null;}})
+  mkdirp(sShadowDir, function(err) { 
+    if (err) {
+      console.log("Error creating shadow dir: " + err); 
+      sShadowDir = null;
+    }
+  });
 }
 
 var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
-
-console.log("start server");
 
 //write file to disk
 function writeFile(sPath, req, res) {
@@ -78,16 +81,6 @@ function _readFile(sPath, res) {
             stream.pipe(res);
         }
     });
-    // fs.readFile(sPath, 'utf8', function (err,data) {
-    //     if (err) {
-    //         res.writeHead(404);
-    //         res.end("File not found!\n");
-    //         return console.log(err);
-    //     }
-    //     res.writeHead(200, {'content-type': mime.lookup(sPath)});
-    //     res.write(data);
-    //     res.end();
-    // });
 }
 
 function _readShadowFile(sPath, res) {
@@ -169,7 +162,6 @@ http.createServer(function (req, res) {
                         // is there a better way for synchronization???
                         if (dir.contents.length === files.length) {
                             var data = JSON.stringify(dir);
-                            console.log(data);
                             // github return text/plain, therefore we need to do the same
                             res.writeHead(200, {'content-type': 'text/plain'});
                             res.end(data);
