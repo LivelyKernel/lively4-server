@@ -3,16 +3,39 @@ var fs = require("fs");
 var url = require("url");
 var path = require("path");
 var mime = require("mime");
-var mkdirp = require('mkdirp');
-var async = require('async');
+var mkdirp = require("mkdirp");
+var async = require("async");
+var argv = require("argv");
 
-var sSourceDir = ".";
-var sShadowDir;
-if (process.argv.length > 2) {
-    sSourceDir = process.argv[2];
-}
-if (process.argv.length > 3) {
-    sShadowDir  = process.argv[3];
+// define command line options
+var options = [{
+    name: "port",
+    short: "p",
+    type: "int",
+    description: "port on which the server will listen for connections",
+    example: "'npm start -p 8001' or 'npm start --port=8001'"
+}, {
+    name: "directory",
+    short: "d",
+    type: "string",
+    description: "root directory from which the server will serve files",
+    example: "'npm start -d ../foo/bar' or npm start --directory=../foo/bar'"
+}, {
+    name: "shadow",
+    short: "s",
+    type: "boolean",
+    description: "if set, reads and writes go to a shadow file system",
+    example: "'npm start -s' or 'npm start --shadow'"
+}]
+
+// parse command line arguments
+var args = argv.option(options).run();
+
+var port = args.options.port || 8080;
+var sSourceDir = args.options.directory || ".";
+var sShadowDir = args.options.shadow;
+
+if (sShadowDir) {
     mkdirp(sShadowDir, function(err) { if (err) {console.log("Error creating shadow dir: " + err); sShadowDir = null;}})
 }
 
@@ -159,4 +182,4 @@ http.createServer(function (req, res) {
             res.end('stat on file not implemented yet');
         }
     }
-}).listen(8080);
+}).listen(port);
