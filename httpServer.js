@@ -115,6 +115,13 @@ http.createServer(function (req, res) {
         res.end("Your not allowed to access files outside the pages storage area\n");
         return;
     }
+
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Request-Method', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    
     var sSourcePath = path.join(sSourceDir, sPath);
     if (req.method == "GET") {
         readFile(sPath, res)
