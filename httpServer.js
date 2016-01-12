@@ -160,7 +160,7 @@ http.createServer(function(req, res) {
           }
           return;
         }
-        
+
         var dir = {
           type: "directory",
           contents: []
