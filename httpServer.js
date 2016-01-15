@@ -7,6 +7,9 @@ var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
 
+// this adds a timestamp to all log messages
+require("log-timestamp");
+
 // define command line options
 var options = [{
   name: "port",
