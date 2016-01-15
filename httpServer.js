@@ -154,6 +154,16 @@ http.createServer(function(req, res) {
     if (sSourcePath.slice(-1) === path.sep) {
       // a dir was requested
       fs.readdir(sSourcePath, function(err, files) {
+        if (err != null) {
+          if (err.code == 'ENOENT') {
+              res.writeHead(404);
+              res.end();
+          } else {
+            console.log(err);
+          }
+          return;
+        }
+
         var dir = {
           type: "directory",
           contents: []
