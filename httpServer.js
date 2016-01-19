@@ -148,58 +148,59 @@ http.createServer(function(req, res) {
   } else if (req.method == "OPTIONS") {
     console.log("doing a stat on " + sSourcePath);
     // statFile was called by client
-    if (sSourcePath.slice(-1) === path.sep) {
-      // a dir was requested
-      fs.readdir(sSourcePath, function(err, files) {
+    fs.stat(sSourcePath, function(err, stats) {
         if (err != null) {
-          if (err.code == 'ENOENT') {
-              res.writeHead(404);
-              res.end();
-          } else {
-            console.log(err);
-          }
-          return;
+              if (err.code == 'ENOENT') {
+                  res.writeHead(404);
+                  res.end();
+              } else {
+                console.log(err);
+              }
+            return;
         }
 
-        var dir = {
-          type: "directory",
-          contents: []
-        }
-
-        files.forEach(function(filename) {
-          fs.stat(path.join(sSourcePath, filename), function(err, statObj) {
-            if (statObj.isDirectory()) {
-              dir.contents.push({
-                type: "directory",
-                name: filename,
-                size: 0
-              });
-            } else {
-              dir.contents.push({
-                type: "file",
-                name: filename,
-                size: statObj.size
-              });
+        if (stats.isDirectory()) {
+          fs.readdir(sSourcePath, function(err, files) {
+            var dir = {
+              type: "directory",
+              contents: []
             }
 
-            // is there a better way for synchronization???
-            if (dir.contents.length === files.length) {
-              var data = JSON.stringify(dir);
-              // github return text/plain, therefore we need to do the same
-              res.writeHead(200, {
-                'content-type': 'text/plain'
+            files.forEach(function(filename) {
+              fs.stat(path.join(sSourcePath, filename), function(err, statObj) {
+                if (statObj.isDirectory()) {
+                  dir.contents.push({
+                    type: "directory",
+                    name: filename,
+                    size: 0
+                  });
+                } else {
+                  dir.contents.push({
+                    type: "file",
+                    name: filename,
+                    size: statObj.size
+                  });
+                }
+
+                // is there a better way for synchronization???
+                if (dir.contents.length === files.length) {
+                  var data = JSON.stringify(dir);
+                  // github return text/plain, therefore we need to do the same
+                  res.writeHead(200, {
+                    'content-type': 'text/plain'
+                  });
+                  res.end(data);
+                }
               });
-              res.end(data);
-            }
+            });
           });
-        });
-      });
-    } else {
-      res.writeHead(200, {
-        'content-type': 'text/plain'
-      });
-      res.end('stat on file not implemented yet');
-    }
+        } else if (stats.isFile()) {
+            res.writeHead(200, {
+              'content-type': 'text/plain'
+            });
+            res.end('stat on file not implemented yet');
+        }
+    });
   }
 }).listen(port, function(err) {
   if (err) {
