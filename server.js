@@ -292,7 +292,11 @@ require("joey")
                         console.log(err.stack)
                 }
 
-                return response(status, json);
+                return response(status, json, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
             }
         }));
 
@@ -302,7 +306,11 @@ require("joey")
                 var buffer   = yield request.body.read();
                 var content  = yield writefile(pathname, buffer);
 
-                return response(200, content);
+                return response(200, content{
+                    headers: {
+                        'Content-Type': mime.lookup(pathname)
+                    }
+                });
             } catch(err) {
 
                 var status = 500,
@@ -316,7 +324,11 @@ require("joey")
                         console.log(err.stack)
                 }
 
-                return response(status, json);
+                return response(status, json, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
             }
         }));
 
@@ -363,7 +375,8 @@ require("joey")
 
                 return response(status, json, {
                     headers: {
-                        'Allow': 'OPTIONS'
+                        'Allow': 'OPTIONS',
+                        'Content-Type': 'application/json'
                     }
                 })
             }
