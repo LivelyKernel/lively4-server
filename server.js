@@ -2,7 +2,8 @@ var Promise = require("bluebird"),
     fs      = require("q-io/fs"),
     nodeFs  = require("fs"),
     path    = require("path"),
-    natsort = require("natural-compare-lite");
+    natsort = require("natural-compare-lite"),
+    mime    = require("mime");
 
 // Long promise stack traces for debugging
 Promise.longStackTraces();
@@ -261,7 +262,7 @@ require("joey")
         response.headers = Object.assign({
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Request-Method': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, PATCH, DELETE'
+            'Access-Control-Allow-Methods': 'HEAD, GET, POST, OPTIONS, PUT, PATCH, DELETE'
         }, response.headers)
     })
     .methods(($) => {
@@ -270,7 +271,11 @@ require("joey")
                 var pathname = path.normalize(request.pathInfo);
                 var content  = yield readfile(pathname);
 
-                return response(200, content);
+                return response(200, content, {
+                    headers: {
+                        'Content-Type': mime.lookup(pathname)
+                    }
+                });
             } catch(err) {
 
                 var status = 500,
