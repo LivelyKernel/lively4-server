@@ -306,7 +306,7 @@ require("joey")
                 var buffer   = yield request.body.read();
                 var content  = yield writefile(pathname, buffer);
 
-                return response(200, content{
+                return response(200, content, {
                     headers: {
                         'Content-Type': mime.lookup(pathname)
                     }
