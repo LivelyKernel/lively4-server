@@ -74,20 +74,44 @@ function writeFile(sPath, req, res) {
 }
 
 function _readFile(sPath, res) {
+  console.log("read file " + sPath)
   fs.exists(sPath, function(exists) {
     if (!exists) {
       res.writeHead(404);
       res.end("File not found!\n");
     } else {
-      res.writeHead(200, {
-        'content-type': mime.lookup(sPath)
-      });
-      var stream = fs.createReadStream(sPath, {
-        bufferSize: 64 * 1024
-      });
-      stream.pipe(res);
-    }
-  });
+      fs.stat(sPath, function(err, stats) {
+        if (err != null) {
+              if (err.code == 'ENOENT') {
+                  res.writeHead(404);
+                  res.end();
+              } else {
+                console.log(err);
+              }
+            return;
+        }
+        if (stats.isDirectory()) {
+        	readDirectory(sPath, res, "text/html")
+			// res.writeHead(200, {
+	  //       	'content-type': 'text/html'
+	  //     	});
+	  //     	res.end("This is a directory")
+        } else {
+	      res.writeHead(200, {
+	        'content-type': mime.lookup(sPath)
+	      });
+	      var stream = fs.createReadStream(sPath, {
+	        bufferSize: 64 * 1024
+	      });
+	      stream.on('error', function (err) {
+	      	console.log("error reading: " + sPath + " error: " + err)
+	    	  res.end("Error reading file\n");
+		  });
+	      stream.pipe(res);
+	    }
+	  }) 
+  	};
+  })
 }
 
 function _readShadowFile(sPath, res) {
@@ -109,6 +133,58 @@ function _readShadowFile(sPath, res) {
       });
     }
   });
+}
+
+function readDirectory(aPath, res, contentType){
+	fs.readdir(aPath, function(err, files) {
+            var dir = {
+              type: "directory",
+              contents: []
+            }
+
+            files.forEach(function(filename) {
+              fs.stat(path.join(aPath, filename), function(err, statObj) {
+                if (statObj.isDirectory()) {
+                  dir.contents.push({
+                    type: "directory",
+                    name: filename,
+                    size: 0
+                  });
+                } else {
+                  dir.contents.push({
+                    type: "file",
+                    name: filename,
+                    size: statObj.size
+                  });
+                }
+
+                // is there a better way for synchronization???
+                if (dir.contents.length === files.length) {
+                	if (contentType == "text/html") {
+                	  // prefix the directory itself as needed if it does not end in "/"
+                	  var match = aPath.match(/\/([^/]+)$/)
+                	  if (match) { prefix = match[0] + "/" } else {prefix = ""};
+   					  var data = "<html><body><h1>" + aPath + "</h1>\n<ul>" +
+   					  	dir.contents.map(function(ea) { 
+   					  		return "<li><a href='" + prefix + ea.name+ "'>"+ea.name + "</a></li>"
+   					  	}).join("\n") + "</ul></body></html>"
+	                  // github return text/plain, therefore we need to do the same
+	                  res.writeHead(200, {
+	                    'content-type': 'text/html'
+	                  });
+	                  res.end(data);
+                	} else {
+	                  var data = JSON.stringify(dir, null, 2);
+	                  // github return text/plain, therefore we need to do the same
+	                  res.writeHead(200, {
+	                    'content-type': 'text/plain'
+	                  });
+	                  res.end(data);
+	              }
+                }
+              });
+            });
+          });
 }
 
 var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
@@ -163,40 +239,7 @@ http.createServer(function(req, res) {
         }
 
         if (stats.isDirectory()) {
-          fs.readdir(sSourcePath, function(err, files) {
-            var dir = {
-              type: "directory",
-              contents: []
-            }
-
-            files.forEach(function(filename) {
-              fs.stat(path.join(sSourcePath, filename), function(err, statObj) {
-                if (statObj.isDirectory()) {
-                  dir.contents.push({
-                    type: "directory",
-                    name: filename,
-                    size: 0
-                  });
-                } else {
-                  dir.contents.push({
-                    type: "file",
-                    name: filename,
-                    size: statObj.size
-                  });
-                }
-
-                // is there a better way for synchronization???
-                if (dir.contents.length === files.length) {
-                  var data = JSON.stringify(dir);
-                  // github return text/plain, therefore we need to do the same
-                  res.writeHead(200, {
-                    'content-type': 'text/plain'
-                  });
-                  res.end(data);
-                }
-              });
-            });
-          });
+          readDirectory(sSourcePath, res)
         } else if (stats.isFile()) {
             res.writeHead(200, {
               'content-type': 'text/plain'
