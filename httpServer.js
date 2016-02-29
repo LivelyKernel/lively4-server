@@ -137,54 +137,56 @@ function _readShadowFile(sPath, res) {
 
 function readDirectory(aPath, res, contentType){
 	fs.readdir(aPath, function(err, files) {
-            var dir = {
-              type: "directory",
-              contents: []
-            }
+    var dir = {
+      type: "directory",
+      contents: []
+    }
 
-            files.forEach(function(filename) {
-              fs.stat(path.join(aPath, filename), function(err, statObj) {
-                if (statObj.isDirectory()) {
-                  dir.contents.push({
-                    type: "directory",
-                    name: filename,
-                    size: 0
-                  });
-                } else {
-                  dir.contents.push({
-                    type: "file",
-                    name: filename,
-                    size: statObj.size
-                  });
-                }
-
-                // is there a better way for synchronization???
-                if (dir.contents.length === files.length) {
-                	if (contentType == "text/html") {
-                	  // prefix the directory itself as needed if it does not end in "/"
-                	  var match = aPath.match(/\/([^/]+)$/)
-                	  if (match) { prefix = match[0] + "/" } else {prefix = ""};
-   					  var data = "<html><body><h1>" + aPath + "</h1>\n<ul>" +
-   					  	dir.contents.map(function(ea) { 
-   					  		return "<li><a href='" + prefix + ea.name+ "'>"+ea.name + "</a></li>"
-   					  	}).join("\n") + "</ul></body></html>"
-	                  // github return text/plain, therefore we need to do the same
-	                  res.writeHead(200, {
-	                    'content-type': 'text/html'
-	                  });
-	                  res.end(data);
-                	} else {
-	                  var data = JSON.stringify(dir, null, 2);
-	                  // github return text/plain, therefore we need to do the same
-	                  res.writeHead(200, {
-	                    'content-type': 'text/plain'
-	                  });
-	                  res.end(data);
-	              }
-                }
-              });
-            });
+    files.forEach(function(filename) {
+      fs.stat(path.join(aPath, filename), function(err, statObj) {
+        if (statObj.isDirectory()) {
+          dir.contents.push({
+            type: "directory",
+            name: filename,
+            size: 0
           });
+        } else {
+          dir.contents.push({
+            type: "file",
+            name: filename,
+            size: statObj.size
+          });
+        }
+
+        // is there a better way for synchronization???
+        if (dir.contents.length === files.length) {
+        	if (contentType == "text/html") {
+        	  // prefix the directory itself as needed if it does not end in "/"
+        	  var match = aPath.match(/\/([^/]+)$/)
+        	  if (match) { prefix = match[1] + "/" } else {prefix = ""};
+
+			  var data = "<html><body><h1>" + aPath + "</h1>\n<ul>" +
+			  	"<!-- prefix=" + prefix + ' -->'  +
+          dir.contents.map(function(ea) { 
+			  		return "<li><a href='" + prefix + ea.name+ "'>"+ea.name + "</a></li>"
+			  	}).join("\n") + "</ul></body></html>"
+            // github return text/plain, therefore we need to do the same
+            res.writeHead(200, {
+              'content-type': 'text/html'
+            });
+            res.end(data);
+        	} else {
+            var data = JSON.stringify(dir, null, 2);
+            // github return text/plain, therefore we need to do the same
+            res.writeHead(200, {
+              'content-type': 'text/plain'
+            });
+            res.end(data);
+        }
+        }
+      });
+    });
+  });
 }
 
 var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
