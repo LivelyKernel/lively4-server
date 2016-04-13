@@ -6,6 +6,9 @@ var mime = require("mime");
 var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
+var child_process = require("child_process")
+
+
 
 // this adds a timestamp to all log messages
 require("log-timestamp");
@@ -193,7 +196,55 @@ var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
   return _readFile(path.join(sSourceDir, sPath), res)
 };
 
+function repsondWithCMD(cmd, res) {
+    child_process.exec(cmd,
+	function (error, stdout, stderr) {
+	    console.log('stdout: ' + stdout);
+	    console.log('stderr: ' + stderr);
+	    if (error !== null) {
+		console.log('exec error: ' + error);
+		res.writeHead(500);
+		res.end("" + stdout + "\n\nSTDERR: " + stderr);
+	    } else {
+		res.writeHead(200);
+		res.end("" + stdout );
+	    }
+	});
+}
+
+
+function gitControl(sPath, req, res) {
+  console.log("git control: " + sPath)
+  if (sPath.match(/\/_git\/sync/)) {
+      // #TODO replace it with something more secure... #Security #Prototype
+  // Set CORS headers
+      var repository = req.headers["gitrepository"]
+      var username = req.headers["gitusername"]
+      var password = req.headers["gitpassword"]
+
+      var cmd = '~/lively4-server/bin/lively4sync.sh ' + repository + " " + username + " " + password
+      console.log(cmd)
+      repsondWithCMD(cmd, res)
+  } else if (sPath.match(/\/_git\/status/)) {
+      var repository = req.headers["gitrepository"]
+      var cmd = 'cd ' + repository + "; git status "
+      console.log(cmd)
+      repsondWithCMD(cmd, res)
+  } else {
+      res.writeHead(200);
+      res.end("Lively4 git Control!");
+  }
+}
+
+
 http.createServer(function(req, res) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Request-Method', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+
+
   var oUrl = url.parse(req.url, true, false);
   console.log(oUrl.pathname);
   var sPath = path.normalize(oUrl.pathname);
@@ -203,11 +254,10 @@ http.createServer(function(req, res) {
     return;
   }
 
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Request-Method', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET');
-  res.setHeader('Access-Control-Allow-Headers', '*');
+    if (sPath.match(/\/_git.*/)) {
+	gitControl(sPath, req, res)
+	return
+    }
 
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
