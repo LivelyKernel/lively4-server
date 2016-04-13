@@ -197,19 +197,37 @@ var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
 };
 
 function repsondWithCMD(cmd, res) {
-    child_process.exec(cmd,
-	function (error, stdout, stderr) {
-	    console.log('stdout: ' + stdout);
-	    console.log('stderr: ' + stderr);
-	    if (error !== null) {
-		console.log('exec error: ' + error);
-		res.writeHead(500);
-		res.end("" + stdout + "\n\nSTDERR: " + stderr);
-	    } else {
-		res.writeHead(200);
-		res.end("" + stdout );
-	    }
-	});
+    var process = child_process.spawn("bash", ["-c", cmd]);
+    res.writeHead(200);
+
+    process.stdout.on('data', function (data) {
+	console.log('STDOUT: ' + data);
+	res.write(data, undefined, function() {console.log("flush")} )
+    })
+
+    process.stderr.on('data', function (data) {
+	console.log('stderr: ' + data);
+	res.write(data)
+    })
+
+    process.on('close', function (code) {
+	res.end()
+    })
+
+
+    // child_process.exec(cmd,
+    // 	function (error, stdout, stderr) {
+    // 	    console.log('stdout: ' + stdout);
+    // 	    console.log('stderr: ' + stderr);
+    // 	    if (error !== null) {
+    // 		console.log('exec error: ' + error); 
+   // 		res.writeHead(500);
+    // 		res.end("" + stdout + "\n\nSTDERR: " + stderr);
+    // 	    } else {
+    // 		res.writeHead(200);
+    // 		res.end("" + stdout );
+    // 	    }
+    // 	});
 }
 
 
@@ -221,8 +239,10 @@ function gitControl(sPath, req, res) {
       var repository = req.headers["gitrepository"]
       var username = req.headers["gitusername"]
       var password = req.headers["gitpassword"]
+      var email = req.headers["gitemail"]
 
-      var cmd = '~/lively4-server/bin/lively4sync.sh ' + repository + " " + username + " " + password
+
+      var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" + username + "' '" + password + "' '" +email +"'"
       console.log(cmd)
       repsondWithCMD(cmd, res)
   } else if (sPath.match(/\/_git\/status/)) {
@@ -235,9 +255,17 @@ function gitControl(sPath, req, res) {
       var cmd = 'cd ' + repository + "; git diff "
       console.log(cmd)
       repsondWithCMD(cmd, res)
+  } else if (sPath.match(/\/_git\/clone/)) {
+      var repositoryurl = req.headers["gitrepositoryurl"]
+      var repository = req.headers["gitrepository"]
+
+      var cmd = 'echo cd ~/lively4/' + 
+	  "; echo git clone " + repositoryurl + " "+ repository 
+      console.log(cmd)
+      repsondWithCMD(cmd, res)
   } else {
       res.writeHead(200);
-      res.end("Lively4 git Control!");
+      res.end("Lively4 git Control! " + sPath + " not implemented!");
   }
 }
 

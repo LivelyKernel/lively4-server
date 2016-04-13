@@ -6,6 +6,7 @@
 REPOSITORY=~/lively4/"$1"
 USERNAME="$2"
 PASSWORD="$3"
+EMAIL="$4"
 
 pushd $REPOSITORY > /dev/null
 
@@ -15,6 +16,9 @@ echo "REPO" $REPOSITORY "USERNAME "$USERNAME" PASSWORD "$PASSWORD "ORIGIN" $ORIG
 
 git status --porcelain | grep  "??" | sed 's/^?? /git add /' | bash
 echo -n "SYNC " > COMMIT ; 
+git config user.name "$USERNAME"
+git config user.email "$EMAIL"
+
 git status --porcelain | grep -v "??" | tr "\n" ";">> COMMIT;
 cat COMMIT 
 git commit -F COMMIT .; 
