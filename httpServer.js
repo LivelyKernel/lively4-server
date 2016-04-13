@@ -230,6 +230,11 @@ function gitControl(sPath, req, res) {
       var cmd = 'cd ' + repository + "; git status "
       console.log(cmd)
       repsondWithCMD(cmd, res)
+  } else if (sPath.match(/\/_git\/diff/)) {
+      var repository = req.headers["gitrepository"]
+      var cmd = 'cd ' + repository + "; git diff "
+      console.log(cmd)
+      repsondWithCMD(cmd, res)
   } else {
       res.writeHead(200);
       res.end("Lively4 git Control!");
