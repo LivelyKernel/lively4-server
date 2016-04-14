@@ -240,9 +240,12 @@ function gitControl(sPath, req, res) {
       var username = req.headers["gitusername"]
       var password = req.headers["gitpassword"]
       var email = req.headers["gitemail"]
-
-
       var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" + username + "' '" + password + "' '" +email +"'"
+      console.log(cmd)
+      repsondWithCMD(cmd, res)
+  } else if (sPath.match(/\/_git\/resolve/)) {
+      var repository = req.headers["gitrepository"]
+      var cmd = "~/lively4-server/bin/lively4resolve.sh '" + repository + "'"
       console.log(cmd)
       repsondWithCMD(cmd, res)
   } else if (sPath.match(/\/_git\/status/)) {

@@ -21,7 +21,7 @@ git config user.email "$EMAIL"
 
 git status --porcelain | grep -v "??" | tr "\n" ";">> COMMIT;
 cat COMMIT 
-git commit -F COMMIT .; 
+git commit -F COMMIT -a ; 
 git pull --no-edit; 
 git push $ORIGIN
 
