@@ -253,6 +253,13 @@ function gitControl(sPath, req, res) {
       var cmd = 'cd ' + repository + "; git status "
       console.log(cmd)
       repsondWithCMD(cmd, res)
+  } else if (sPath.match(/\/_git\/commit/)) {
+      var repository = req.headers["gitrepository"]
+      var msg = req.headers["gitcommitmessage"].replace(/'/g,"")
+      // # TODO...
+      var cmd = 'cd ' + repository + "; git commit -m '"+ msg +"' -a "
+      console.log(cmd)
+      repsondWithCMD(cmd, res)
   } else if (sPath.match(/\/_git\/diff/)) {
       var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git diff "
