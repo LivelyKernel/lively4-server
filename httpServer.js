@@ -9,7 +9,6 @@ var argv = require("argv");
 var child_process = require("child_process")
 
 
-
 // this adds a timestamp to all log messages
 require("log-timestamp");
 
@@ -54,6 +53,7 @@ var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 
 //write file to disk
 function writeFile(sPath, req, res) {
+    console.log("write file: " + sPath)
   var fullBody = '';
 
   //read chunks of data and store it in buffer
@@ -63,16 +63,28 @@ function writeFile(sPath, req, res) {
 
   //after transmission, write file to disk
   req.on('end', function() {
-    fs.writeFile(sPath, fullBody, function(err) {
-      if (err) {
-        // throw err;
-        console.log(err);
-        return;
+      if (sPath.match(/\/$/)){
+	  mkdirp(sPath, function(err) {
+	      if (err) {
+		  console.log("Error creating shadow dir: " + err);
+	      }
+	      console.log("mkdir " + sPath);
+	      res.writeHead(200, "OK");
+	      res.end();
+	  });
+
+      } else {
+	  fs.writeFile(sPath, fullBody, function(err) {
+	      if (err) {
+		  // throw err;
+		  console.log(err);
+		  return;
+	      }
+	      console.log("saved " + sPath);
+	      res.writeHead(200, "OK");
+	      res.end();
+	  });
       }
-      console.log("saved " + sPath);
-      res.writeHead(200, "OK");
-      res.end();
-    });
   });
 }
 
@@ -196,39 +208,36 @@ var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
   return _readFile(path.join(sSourceDir, sPath), res)
 };
 
-function repsondWithCMD(cmd, res) {
+function repsondWithCMD(cmd, res, finish) {
+    console.log(cmd)
     var process = child_process.spawn("bash", ["-c", cmd]);
+
+    res.setHeader('Content-Type', 'text/plain')
+    res.setHeader('Transfer-Encoding', 'chunked')
     res.writeHead(200);
+
+
 
     process.stdout.on('data', function (data) {
 	console.log('STDOUT: ' + data);
-	res.write(data, undefined, function() {console.log("flush")} )
+	res.write(data, undefined, function() {console.log("FLUSH")} )
+
+
     })
 
     process.stderr.on('data', function (data) {
 	console.log('stderr: ' + data);
 	res.write(data)
+
     })
 
     process.on('close', function (code) {
 	res.end()
+	if (finish) finish()
     })
-
-
-    // child_process.exec(cmd,
-    // 	function (error, stdout, stderr) {
-    // 	    console.log('stdout: ' + stdout);
-    // 	    console.log('stderr: ' + stderr);
-    // 	    if (error !== null) {
-    // 		console.log('exec error: ' + error); 
-   // 		res.writeHead(500);
-    // 		res.end("" + stdout + "\n\nSTDERR: " + stderr);
-    // 	    } else {
-    // 		res.writeHead(200);
-    // 		res.end("" + stdout );
-    // 	    }
-    // 	});
 }
+
+var RepositoryInSync = {} // cheap semaphore
 
 
 function gitControl(sPath, req, res) {
@@ -240,30 +249,55 @@ function gitControl(sPath, req, res) {
       var username = req.headers["gitusername"]
       var password = req.headers["gitpassword"]
       var email = req.headers["gitemail"]
+
+      // return repsondWithCMD("echo Sync " + repository + " " + RepositoryInSync[repository], res)
+
+      // #TODO finish it... does not work yet
+      console.log("SYNC REPO " + RepositoryInSync[repository])
+
+      if (RepositoryInSync[repository]) {
+	  return repsondWithCMD("echo Sync in progress: " + repository, res)
+      }
+      RepositoryInSync[repository] = true
       var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" + username + "' '" + password + "' '" +email +"'"
-      console.log(cmd)
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, function() { 
+	  RepositoryInSync[repository] = undefined 
+      })
   } else if (sPath.match(/\/_git\/resolve/)) {
       var repository = req.headers["gitrepository"]
       var cmd = "~/lively4-server/bin/lively4resolve.sh '" + repository + "'"
-      console.log(cmd)
       repsondWithCMD(cmd, res)
   } else if (sPath.match(/\/_git\/status/)) {
       var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git status "
-      console.log(cmd)
+      repsondWithCMD(cmd, res)
+  } else if (sPath.match(/\/_git\/log/)) {
+      var repository = req.headers["gitrepository"]
+      var cmd = 'cd ' + repository + "; git log "
       repsondWithCMD(cmd, res)
   } else if (sPath.match(/\/_git\/diff/)) {
       var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git diff "
-      console.log(cmd)
       repsondWithCMD(cmd, res)
   } else if (sPath.match(/\/_git\/clone/)) {
       var repositoryurl = req.headers["gitrepositoryurl"]
+      var repository = req.headers["gitrepositorytarget"]
+      var cmd = 'cd ~/lively4/; \n' + 
+	  "git clone " + repositoryurl + " "+ repository 
+      console.log(cmd)
+      repsondWithCMD(cmd, res)
+  } else if (sPath.match(/\/_git\/npminstall/)) {
+      var repositoryurl = req.headers["gitrepositoryurl"]
       var repository = req.headers["gitrepository"]
-
+      var cmd = 'cd ~/lively4/' +  repository + ";\n" +
+	  'npm install' 
+      console.log(cmd)
+      repsondWithCMD(cmd, res)
+  } else if (sPath.match(/\/_git\/test/)) {
+      var repositoryurl = req.headers["gitrepositoryurl"]
+      var repository = req.headers["gitrepository"]
       var cmd = 'echo cd ~/lively4/' + 
-	  "; echo git clone " + repositoryurl + " "+ repository 
+	  "; sleep 1; echo Hallo; sleep 1; echo welt; sleep 2; echo git clone " + repositoryurl + " "+ repository 
       console.log(cmd)
       repsondWithCMD(cmd, res)
   } else {
