@@ -13,19 +13,18 @@ ORIGIN=`git config --get remote.origin.url | sed "s/https:\/\//https:\/\/$USERNA
 echo "REPO" "$REPOSITORY" "USERNAME" "$USERNAME" "ORIGIN" "$ORIGIN"
 
 git status --porcelain | grep  "??" | sed 's/^?? /git add /' | bash
-echo -n "SYNC " > COMMIT ; 
 git config user.name "$USERNAME"
 git config user.email "$EMAIL"
-git status --porcelain | grep -v "??" | tr "\n" ";">> COMMIT;
-cat COMMIT 
-git commit -F COMMIT -a ; 
+STATUS=`git status --porcelain | grep -v "??" | tr "\n" ";"`
+COMMIT="SYNC "$STATUS
+git commit -m "$COMMIT" -a ; 
 echo "PULL"
-git pull --no-edit; 
+git pull --no-edit origin "$BRANCH" ; 
+
 echo "PUSH"
-git push $ORIGIN
+git push $ORIGIN $BRANCH
 
-echo "PULL FOR UPDATE"
-git pull --no-edit; 
-
+echo "FETCH AGAIN"
+git fetch origin "$BRANCH"
 
 popd > /dev/null

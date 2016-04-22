@@ -8,10 +8,6 @@ BRANCH="$5"
 
 pushd $REPOSITORY > /dev/null
 
-ORIGIN=`git config --get remote.origin.url | sed "s/https:\/\//https:\/\/$USERNAME:$PASSWORD@/"`
-
-echo REPO $REPOSITORY USERNAME $USERNAME ORIGIN $ORIGIN BRANCH $BRANCH
-
-echo git merge "$BRANCH"
+git pull --no-edit origin "$BRANCH"
 
 popd > /dev/null

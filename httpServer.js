@@ -274,7 +274,7 @@ function gitControl(sPath, req, res) {
       }
       RepositoryInSync[repository] = true
       var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" 
-	  + username + "' '" + password + "' '" +email +"'"
+	  + username + "' '" + password + "' '" +email + "' '"+branch +"'"
       respondWithCMD(cmd, res, function() { 
 	  RepositoryInSync[repository] = undefined 
       }, dryrun)
