@@ -208,7 +208,8 @@ var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
   return _readFile(path.join(sSourceDir, sPath), res)
 };
 
-function repsondWithCMD(cmd, res, finish) {
+
+function repsondWithCMD(cmd, res, finish, dryrun) {
     console.log(cmd)
     var process = child_process.spawn("bash", ["-c", cmd]);
 
@@ -216,7 +217,9 @@ function repsondWithCMD(cmd, res, finish) {
     res.setHeader('Transfer-Encoding', 'chunked')
     res.writeHead(200);
 
-
+    if (dryrun) {
+	return res.end("dry run:\n" + cmd)
+    }
 
     process.stdout.on('data', function (data) {
 	console.log('STDOUT: ' + data);
@@ -237,76 +240,109 @@ function repsondWithCMD(cmd, res, finish) {
     })
 }
 
-var RepositoryInSync = {} // cheap semaphore
+function deleteFile(sPath, res) {
 
+    sPath = sPath.replace(/['"; &|]/g,"")
+    return repsondWithCMD("rm -v ~/lively4'" +sPath + "'", res)
+}
+
+
+var RepositoryInSync = {} // cheap semaphore
 
 function gitControl(sPath, req, res) {
   console.log("git control: " + sPath)
-  if (sPath.match(/\/_git\/sync/)) {
+
+  var dryrun = req.headers["dryrun"]
+  dryrun = dryrun && dryrun == "true"
       // #TODO replace it with something more secure... #Security #Prototype
   // Set CORS headers
-      var repository = req.headers["gitrepository"]
-      var username = req.headers["gitusername"]
-      var password = req.headers["gitpassword"]
-      var email = req.headers["gitemail"]
+   var repository = req.headers["gitrepository"]
+   var username = req.headers["gitusername"]
+   var password = req.headers["gitpassword"]
+   var email = req.headers["gitemail"]
 
+  if (sPath.match(/\/_git\/sync/)) {
       // return repsondWithCMD("echo Sync " + repository + " " + RepositoryInSync[repository], res)
 
       // #TODO finish it... does not work yet
       console.log("SYNC REPO " + RepositoryInSync[repository])
-
       if (RepositoryInSync[repository]) {
-	  return repsondWithCMD("echo Sync in progress: " + repository, res)
+	  return repsondWithCMD("echo Sync in progress: " + repository, res, null, dryrun)
       }
       RepositoryInSync[repository] = true
       var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" + username + "' '" + password + "' '" +email +"'"
       repsondWithCMD(cmd, res, function() { 
 	  RepositoryInSync[repository] = undefined 
-      })
+      }, dryrun)
   } else if (sPath.match(/\/_git\/resolve/)) {
       var repository = req.headers["gitrepository"]
       var cmd = "~/lively4-server/bin/lively4resolve.sh '" + repository + "'"
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, null, dryrun)
   } else if (sPath.match(/\/_git\/status/)) {
       var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git status "
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, null, dryrun)
   } else if (sPath.match(/\/_git\/log/)) {
       var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git log "
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, null, dryrun)
   } else if (sPath.match(/\/_git\/commit/)) {
       var repository = req.headers["gitrepository"]
-      var msg = req.headers["gitcommitmessage"].replace(/'/g,"")
-      // # TODO...
-      var cmd = 'cd ' + repository + "; git commit -m '"+ msg +"' -a "
+      var msg = req.headers["gitcommitmessage"]
+      if (msg) {
+	      msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'"
+      } else {
+	  return res.end("Please provide a commit message!")
+      }
+      var cmd = 'cd ' + repository + "; git commit "+ msg +" -a "
       console.log(cmd)
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, null, dryrun)
   } else if (sPath.match(/\/_git\/diff/)) {
       var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git diff "
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, null, dryrun)
   } else if (sPath.match(/\/_git\/clone/)) {
       var repositoryurl = req.headers["gitrepositoryurl"]
-      var repository = req.headers["gitrepositorytarget"]
+      var repository = req.headers["gitrepository"]
       var cmd = 'cd ~/lively4/; \n' + 
 	  "git clone " + repositoryurl + " "+ repository 
       console.log(cmd)
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, null, dryrun)
   } else if (sPath.match(/\/_git\/npminstall/)) {
       var repositoryurl = req.headers["gitrepositoryurl"]
       var repository = req.headers["gitrepository"]
       var cmd = 'cd ~/lively4/' +  repository + ";\n" +
 	  'npm install' 
       console.log(cmd)
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, null, dryrun)
+
+  } else if (sPath.match(/\/_git\/remoteurl/)) {
+      var repository = req.headers["gitrepository"]
+      var cmd = 'cd ~/lively4/' +  repository + ";\n" +
+	  'git config --get remote.origin.url' 
+      console.log(cmd)
+      repsondWithCMD(cmd, res, null, dryrun)
+  } else if (sPath.match(/\/_git\/branches/)) {
+      var repository = req.headers["gitrepository"]
+      var cmd = 'cd ~/lively4/' +  repository + ";\n" +
+	  'git branch -a ' 
+      console.log(cmd)
+      repsondWithCMD(cmd, res, null, dryrun)
+  } else if (sPath.match(/\/_git\/branch/)) {
+      var repository = req.headers["gitrepository"]
+      var branch = req.headers["gitrepositorybranch"]
+  
+      var cmd = 'cd ~/lively4/' +  repository + ";\n" +
+	  'echo What to do? git branch  ' + branch +'??? Tim, Stefan? Anybody? ' 
+      console.log(cmd)
+      repsondWithCMD(cmd, res, null, dryrun)
   } else if (sPath.match(/\/_git\/test/)) {
       var repositoryurl = req.headers["gitrepositoryurl"]
       var repository = req.headers["gitrepository"]
       var cmd = 'echo cd ~/lively4/' + 
 	  "; sleep 1; echo Hallo; sleep 1; echo welt; sleep 2; echo git clone " + repositoryurl + " "+ repository 
       console.log(cmd)
-      repsondWithCMD(cmd, res)
+      repsondWithCMD(cmd, res, null, dryrun)
   } else {
       res.writeHead(200);
       res.end("Lively4 git Control! " + sPath + " not implemented!");
@@ -351,8 +387,10 @@ http.createServer(function(req, res) {
         }
       });
     } else {
-      writeFile(sSourcePath, req, res);
+	writeFile(sSourcePath, req, res);
     }
+  } else if (req.method == "DELETE") {
+      deleteFile(sPath, res)
   } else if (req.method == "OPTIONS") {
     console.log("doing a stat on " + sSourcePath);
     // statFile was called by client
