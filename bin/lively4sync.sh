@@ -4,6 +4,7 @@ REPOSITORY=~/lively4/"$1"
 USERNAME="$2"
 PASSWORD="$3"
 EMAIL="$4"
+BRANCH="$5"
 
 pushd $REPOSITORY > /dev/null
 
@@ -18,7 +19,13 @@ git config user.email "$EMAIL"
 git status --porcelain | grep -v "??" | tr "\n" ";">> COMMIT;
 cat COMMIT 
 git commit -F COMMIT -a ; 
+echo "PULL"
 git pull --no-edit; 
+echo "PUSH"
 git push $ORIGIN
+
+echo "PULL FOR UPDATE"
+git pull --no-edit; 
+
 
 popd > /dev/null

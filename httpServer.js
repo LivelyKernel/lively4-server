@@ -209,7 +209,7 @@ var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
 };
 
 
-function repsondWithCMD(cmd, res, finish, dryrun) {
+function respondWithCMD(cmd, res, finish, dryrun) {
     console.log(cmd)
     var process = child_process.spawn("bash", ["-c", cmd]);
 
@@ -256,10 +256,12 @@ function gitControl(sPath, req, res) {
   dryrun = dryrun && dryrun == "true"
       // #TODO replace it with something more secure... #Security #Prototype
   // Set CORS headers
-   var repository = req.headers["gitrepository"]
-   var username = req.headers["gitusername"]
-   var password = req.headers["gitpassword"]
-   var email = req.headers["gitemail"]
+  var repository = req.headers["gitrepository"]
+  var repositoryurl = req.headers["gitrepositoryurl"]
+  var username = req.headers["gitusername"]
+  var password = req.headers["gitpassword"]
+  var email = req.headers["gitemail"]
+  var branch = req.headers["gitrepositorybranch"]
 
   if (sPath.match(/\/_git\/sync/)) {
       // return repsondWithCMD("echo Sync " + repository + " " + RepositoryInSync[repository], res)
@@ -267,27 +269,29 @@ function gitControl(sPath, req, res) {
       // #TODO finish it... does not work yet
       console.log("SYNC REPO " + RepositoryInSync[repository])
       if (RepositoryInSync[repository]) {
-	  return repsondWithCMD("echo Sync in progress: " + repository, res, null, dryrun)
+	  return respondWithCMD("echo Sync in progress: " + 
+		repository, res, null, dryrun)
       }
       RepositoryInSync[repository] = true
-      var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" + username + "' '" + password + "' '" +email +"'"
-      repsondWithCMD(cmd, res, function() { 
+      var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" 
+	  + username + "' '" + password + "' '" +email +"'"
+      respondWithCMD(cmd, res, function() { 
 	  RepositoryInSync[repository] = undefined 
       }, dryrun)
+
   } else if (sPath.match(/\/_git\/resolve/)) {
-      var repository = req.headers["gitrepository"]
       var cmd = "~/lively4-server/bin/lively4resolve.sh '" + repository + "'"
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else if (sPath.match(/\/_git\/status/)) {
-      var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git status "
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else if (sPath.match(/\/_git\/log/)) {
-      var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git log "
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else if (sPath.match(/\/_git\/commit/)) {
-      var repository = req.headers["gitrepository"]
       var msg = req.headers["gitcommitmessage"]
       if (msg) {
 	      msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'"
@@ -295,54 +299,52 @@ function gitControl(sPath, req, res) {
 	  return res.end("Please provide a commit message!")
       }
       var cmd = 'cd ' + repository + "; git commit "+ msg +" -a "
-      console.log(cmd)
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else if (sPath.match(/\/_git\/diff/)) {
-      var repository = req.headers["gitrepository"]
       var cmd = 'cd ' + repository + "; git diff "
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else if (sPath.match(/\/_git\/clone/)) {
-      var repositoryurl = req.headers["gitrepositoryurl"]
-      var repository = req.headers["gitrepository"]
       var cmd = 'cd ~/lively4/; \n' + 
 	  "git clone " + repositoryurl + " "+ repository 
-      console.log(cmd)
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else if (sPath.match(/\/_git\/npminstall/)) {
-      var repositoryurl = req.headers["gitrepositoryurl"]
-      var repository = req.headers["gitrepository"]
       var cmd = 'cd ~/lively4/' +  repository + ";\n" +
 	  'npm install' 
-      console.log(cmd)
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
 
   } else if (sPath.match(/\/_git\/remoteurl/)) {
-      var repository = req.headers["gitrepository"]
       var cmd = 'cd ~/lively4/' +  repository + ";\n" +
 	  'git config --get remote.origin.url' 
-      console.log(cmd)
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else if (sPath.match(/\/_git\/branches/)) {
-      var repository = req.headers["gitrepository"]
       var cmd = 'cd ~/lively4/' +  repository + ";\n" +
 	  'git branch -a ' 
-      console.log(cmd)
-      repsondWithCMD(cmd, res, null, dryrun)
-  } else if (sPath.match(/\/_git\/branch/)) {
-      var repository = req.headers["gitrepository"]
-      var branch = req.headers["gitrepositorybranch"]
-  
-      var cmd = 'cd ~/lively4/' +  repository + ";\n" +
-	  'echo What to do? git branch  ' + branch +'??? Tim, Stefan? Anybody? ' 
-      console.log(cmd)
-      repsondWithCMD(cmd, res, null, dryrun)
+      respondWithCMD(cmd, res, null, dryrun)
+
+  } else if (sPath.match(/\/_git\/branch/)) {  
+      var cmd = "~/lively4-server/bin/lively4branch.sh '" + repository + "' '" 
+	  + username + "' '" + password + "' '" +email +"' '"+ branch + "'"
+      respondWithCMD(cmd, res, null, dryrun)
+
+  } else if (sPath.match(/\/_git\/merge/)) {  
+      var cmd = "~/lively4-server/bin/lively4merge.sh '" + repository + "' '" 
+	  + username + "' '" + password + "' '" +email +"' '"+ branch + "'"
+      respondWithCMD(cmd, res, null, dryrun)
+
+  } else if (sPath.match(/\/_git\/delete/)) {  
+      var cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'"
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else if (sPath.match(/\/_git\/test/)) {
-      var repositoryurl = req.headers["gitrepositoryurl"]
-      var repository = req.headers["gitrepository"]
       var cmd = 'echo cd ~/lively4/' + 
-	  "; sleep 1; echo Hallo; sleep 1; echo welt; sleep 2; echo git clone " + repositoryurl + " "+ repository 
-      console.log(cmd)
-      repsondWithCMD(cmd, res, null, dryrun)
+	  "; sleep 1; echo Hallo; sleep 1; echo welt; sleep 2; echo git clone " 
+	  + repositoryurl + " "+ repository 
+      respondWithCMD(cmd, res, null, dryrun)
+
   } else {
       res.writeHead(200);
       res.end("Lively4 git Control! " + sPath + " not implemented!");
