@@ -211,7 +211,6 @@ var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
 
 function respondWithCMD(cmd, res, finish, dryrun) {
     console.log(cmd)
-    var process = child_process.spawn("bash", ["-c", cmd]);
 
     res.setHeader('Content-Type', 'text/plain')
     res.setHeader('Transfer-Encoding', 'chunked')
@@ -220,6 +219,8 @@ function respondWithCMD(cmd, res, finish, dryrun) {
     if (dryrun) {
 	return res.end("dry run:\n" + cmd)
     }
+
+    var process = child_process.spawn("bash", ["-c", cmd]);
 
     process.stdout.on('data', function (data) {
 	console.log('STDOUT: ' + data);
