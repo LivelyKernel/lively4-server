@@ -377,7 +377,7 @@ http.createServer(function(req, res) {
 
   if (sPath.match(/\/_meta\//)) {
       if (sPath.match(/_meta\/exit/)) {
-	  res.end("goodbye, we hope for the best...Yeah!!! Really?")
+	  res.end("goodbye, we hope for the best!")
 	  process.exit()
       } else {
 	  res.writeHead(500);
