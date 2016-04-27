@@ -8,7 +8,6 @@ var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process")
 
-
 // this adds a timestamp to all log messages
 require("log-timestamp");
 
@@ -32,6 +31,8 @@ var options = [{
   description: "if set, reads and writes go to a shadow file system",
   example: "'node httpServer.js -s ../shadow' or 'node httpServer.js --shadow ../shadow'"
 }]
+
+console.log("Welcome to Lively!")
 
 // parse command line arguments
 var args = argv.option(options).run();
