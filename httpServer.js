@@ -244,7 +244,7 @@ function respondWithCMD(cmd, res, finish, dryrun) {
 function deleteFile(sPath, res) {
 
     sPath = sPath.replace(/['"; &|]/g,"")
-    return repsondWithCMD("rm -v ~/lively4'" +sPath + "'", res)
+    return respondWithCMD("rm -v ~/lively4'" +sPath + "'", res)
 }
 
 
