@@ -25,6 +25,6 @@ echo "PUSH"
 git push $ORIGIN $BRANCH
 
 echo "FETCH AGAIN"
-git fetch origin "$BRANCH"
-
+#git fetch origin "$BRANCH"
+git fetch
 popd > /dev/null
