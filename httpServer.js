@@ -107,11 +107,7 @@ function _readFile(sPath, res) {
             return;
         }
         if (stats.isDirectory()) {
-        	readDirectory(sPath, res, "text/html")
-			// res.writeHead(200, {
-	  //       	'content-type': 'text/html'
-	  //     	});
-	  //     	res.end("This is a directory")
+          readDirectory(sPath, res, "text/html")
         } else {
 	      res.writeHead(200, {
 	        'content-type': mime.lookup(sPath)
@@ -198,7 +194,7 @@ function readDirectory(aPath, res, contentType){
               'content-type': 'text/plain'
             });
             res.end(data);
-        }
+          }
         }
       });
     });
@@ -208,7 +204,6 @@ function readDirectory(aPath, res, contentType){
 var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
   return _readFile(path.join(sSourceDir, sPath), res)
 };
-
 
 function respondWithCMD(cmd, res, finish, dryrun) {
     console.log(cmd)
@@ -244,7 +239,6 @@ function deleteFile(sPath, res) {
     return respondWithCMD("rm -v ~/lively4'" +sPath + "'", res)
 }
 
-
 var RepositoryInSync = {} // cheap semaphore
 
 function gitControl(sPath, req, res) {
@@ -252,7 +246,7 @@ function gitControl(sPath, req, res) {
 
   var dryrun = req.headers["dryrun"]
   dryrun = dryrun && dryrun == "true"
-      // #TODO replace it with something more secure... #Security #Prototype
+  // #TODO replace it with something more secure... #Security #Prototype
   // Set CORS headers
   var repository = req.headers["gitrepository"]
   var repositoryurl = req.headers["gitrepositoryurl"]
@@ -263,7 +257,6 @@ function gitControl(sPath, req, res) {
 
   if (sPath.match(/\/_git\/sync/)) {
       // return repsondWithCMD("echo Sync " + repository + " " + RepositoryInSync[repository], res)
-
       // #TODO finish it... does not work yet
       console.log("SYNC REPO " + RepositoryInSync[repository])
       if (RepositoryInSync[repository]) {
@@ -337,18 +330,11 @@ function gitControl(sPath, req, res) {
       var cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'"
       respondWithCMD(cmd, res, null, dryrun)
 
-  } else if (sPath.match(/\/_git\/test/)) {
-      var cmd = 'echo cd ~/lively4/' + 
-	  "; sleep 1; echo Hallo; sleep 1; echo welt; sleep 2; echo git clone " 
-	  + repositoryurl + " "+ repository 
-      respondWithCMD(cmd, res, null, dryrun)
-
   } else {
       res.writeHead(200);
       res.end("Lively4 git Control! " + sPath + " not implemented!");
   }
 }
-
 
 http.createServer(function(req, res) {
   // Set CORS headers
@@ -356,7 +342,6 @@ http.createServer(function(req, res) {
   res.setHeader('Access-Control-Request-Method', '*');
   res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET');
   res.setHeader('Access-Control-Allow-Headers', '*');
-
 
   var oUrl = url.parse(req.url, true, false);
   console.log(oUrl.pathname);
@@ -385,7 +370,6 @@ http.createServer(function(req, res) {
       return
   }
 
-
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
     readFile(sPath, res)
@@ -401,7 +385,7 @@ http.createServer(function(req, res) {
         }
       });
     } else {
-	writeFile(sSourcePath, req, res);
+	    writeFile(sSourcePath, req, res);
     }
   } else if (req.method == "DELETE") {
       deleteFile(sPath, res)
@@ -409,24 +393,23 @@ http.createServer(function(req, res) {
     console.log("doing a stat on " + sSourcePath);
     // statFile was called by client
     fs.stat(sSourcePath, function(err, stats) {
-        if (err != null) {
-              if (err.code == 'ENOENT') {
-                  res.writeHead(404);
-                  res.end();
-              } else {
-                console.log(err);
-              }
-            return;
+      if (err != null) {
+        if (err.code == 'ENOENT') {
+            res.writeHead(404);
+            res.end();
+        } else {
+          console.log(err);
         }
-
-        if (stats.isDirectory()) {
-          readDirectory(sSourcePath, res)
-        } else if (stats.isFile()) {
-            res.writeHead(200, {
-              'content-type': 'text/plain'
-            });
-            res.end('stat on file not implemented yet');
-        }
+        return;
+      }
+      if (stats.isDirectory()) {
+        readDirectory(sSourcePath, res)
+      } else if (stats.isFile()) {
+          res.writeHead(200, {
+            'content-type': 'text/plain'
+          });
+          res.end('stat on file not implemented yet');
+      }
     });
   }
 }).listen(port, function(err) {
@@ -438,3 +421,5 @@ http.createServer(function(req, res) {
     console.log("Using shadow dir " + sShadowDir)
   }
 });
+
+
