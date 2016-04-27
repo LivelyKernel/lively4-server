@@ -2,6 +2,8 @@
 
 LIVELY=~/lively4
 SERVER=~/lively4-server
+PORT=9005
+LOGFILE=$LIVELY/server.log
 
 cd $LIVELY
 killall watch.sh
@@ -12,5 +14,9 @@ while true; do
     git pull --no-edit
     popd
     echo "restart http server"`date`  | tee $LIVELY/server.log;
-    node $SERVER/httpServer.js --directory=$LIVELY4 --port=9005 | tee $LIVELY/server.log;
+    node $SERVER/httpServer.js --directory=$LIVELY4 --port=$PORT  | \
+	sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
+	sed -u 's/lively4sync.*/lively4sync.../' | \
+	tee $LOGFILE;
+
 done
