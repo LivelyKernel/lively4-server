@@ -375,6 +375,18 @@ http.createServer(function(req, res) {
 	return
     }
 
+  if (sPath.match(/\/_meta\//)) {
+      if (sPath.match(/_meta\/exit/)) {
+	  res.end("goodbye, we hope for the best...")
+	  process.exit()
+      } else {
+	  res.writeHead(500);
+	  res.end("meta: " + sPath + " not implemented!" );
+      }
+      return
+  }
+
+
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
     readFile(sPath, res)
