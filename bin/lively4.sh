@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 LIVELY=~/lively4
 SERVER=~/lively4-server
@@ -8,7 +8,7 @@ killall watch.sh
 $SERVER/bin/watch.sh $SERVER/httpServer.js "killall node" &
 while true; do
     echo "update server code"
-    pushd $SERVER
+    pushd "$SERVER"
     git pull --no-edit
     popd
     echo "restart http server"`date`  | tee $LIVELY/server.log;
