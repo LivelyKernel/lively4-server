@@ -218,32 +218,28 @@ function respondWithCMD(cmd, res, finish, dryrun) {
     res.writeHead(200);
 
     if (dryrun) {
-	return res.end("dry run:\n" + cmd)
+    	return res.end("dry run:\n" + cmd)
     }
 
     var process = child_process.spawn("bash", ["-c", cmd]);
 
     process.stdout.on('data', function (data) {
-	console.log('STDOUT: ' + data);
-	res.write(data, undefined, function() {console.log("FLUSH")} )
-
-
+	    console.log('STDOUT: ' + data);
+	    res.write(data, undefined, function() {console.log("FLUSH")} )
     })
 
     process.stderr.on('data', function (data) {
-	console.log('stderr: ' + data);
-	res.write(data)
-
+	  console.log('stderr: ' + data);
+	  res.write(data)
     })
 
     process.on('close', function (code) {
-	res.end()
-	if (finish) finish()
+	    res.end()
+	    if (finish) finish()
     })
 }
 
 function deleteFile(sPath, res) {
-
     sPath = sPath.replace(/['"; &|]/g,"")
     return respondWithCMD("rm -v ~/lively4'" +sPath + "'", res)
 }
@@ -271,16 +267,16 @@ function gitControl(sPath, req, res) {
       // #TODO finish it... does not work yet
       console.log("SYNC REPO " + RepositoryInSync[repository])
       if (RepositoryInSync[repository]) {
-	  return respondWithCMD("echo Sync in progress: " + 
-		repository, res, null, dryrun)
+	      return respondWithCMD("echo Sync in progress: " + 
+		    repository, res, null, dryrun)
       }
       RepositoryInSync[repository] = true
       var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" 
-	  + username + "' '" + password + "' '" +email + "' '"+branch +"'"
+	      + username + "' '" + password + "' '" +email + "' '"+branch +"'"
       respondWithCMD(cmd, res, function() { 
-	  RepositoryInSync[repository] = undefined 
+	    RepositoryInSync[repository] = undefined 
       }, dryrun)
-
+      
   } else if (sPath.match(/\/_git\/resolve/)) {
       var cmd = "~/lively4-server/bin/lively4resolve.sh '" + repository + "'"
       respondWithCMD(cmd, res, null, dryrun)
@@ -371,18 +367,20 @@ http.createServer(function(req, res) {
     return;
   }
 
-    if (sPath.match(/\/_git.*/)) {
-	gitControl(sPath, req, res)
-	return
-    }
+  if (sPath.match(/\/_git.*/)) {
+  	gitControl(sPath, req, res)
+    return
+  }
 
   if (sPath.match(/\/_meta\//)) {
       if (sPath.match(/_meta\/exit/)) {
-	  res.end("goodbye, we hope for the best!")
-	  process.exit()
+	      res.end("goodbye, we hope for the best!")
+	      process.exit()
+      } else if (sPath.match(/_meta\/hello/)) {
+	      res.end("Hello World!")
       } else {
-	  res.writeHead(500);
-	  res.end("meta: " + sPath + " not implemented!" );
+	      res.writeHead(500);
+	      res.end("meta: " + sPath + " not implemented!" );
       }
       return
   }
