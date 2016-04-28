@@ -245,6 +245,20 @@ var RepositoryInSync = {} // cheap semaphore
 
 
 
+function searchFiles(sPath, req, res) {
+  var pattern = req.headers["searchpattern"]
+  var rootdir = req.headers["rootdir"]
+  
+  if (sPath.match(/\/_search\/files/)) {
+    return respondWithCMD("cd " +  lively4dir + "; " +
+    (rootdir ? "cd '" + rootdir + "'; " : "") + 
+    "grep -R '"+ pattern +"'", res)
+  } else {
+      res.writeHead(200);
+      res.end("Lively4 Search! " + sPath + " not implemented!");
+  }
+}
+
 function gitControl(sPath, req, res) {
   console.log("git control: " + sPath)
 
@@ -266,7 +280,7 @@ function gitControl(sPath, req, res) {
       // #TODO finish it... does not work yet
       console.log("SYNC REPO " + RepositoryInSync[repository])
       if (RepositoryInSync[repository]) {
-	      return respondWithCMD("echo Sync in progress: " + 
+        return respondWithCMD("echo Sync in progress: " + 
 		    repository, res, null, dryrun)
       }
       RepositoryInSync[repository] = true
@@ -376,6 +390,11 @@ http.createServer(function(req, res) {
 	      res.end("meta: " + sPath + " not implemented!" );
       }
       return
+  }
+
+  if (sPath.match(/\/_search\//)) {
+    searchFiles(sPath, req, res)
+    return
   }
 
   var sSourcePath = path.join(sSourceDir, sPath);
