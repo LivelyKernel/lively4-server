@@ -17,10 +17,10 @@ git status --porcelain | grep  "??" | sed 's/^?? /git add /' | bash
 git config user.name "$USERNAME"
 git config user.email "$EMAIL"
 STATUS=`git status --porcelain | grep -v "??" | tr "\n" ";"`
-if [ $MSG = "" ]; then
+if [ -z "$MSG" ]; then
   COMMIT="SYNC "$STATUS
 else  
-  COMMIT=$MSG
+  COMMIT="$MSG"
 fi
 echo COMMIT $COMMIT
 
