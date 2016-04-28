@@ -24,6 +24,7 @@ else
 fi
 echo COMMIT $COMMIT
 
+
 git commit -m "$COMMIT" -a ; 
 echo "PULL"
 git pull --no-edit origin "$BRANCH" ; 
