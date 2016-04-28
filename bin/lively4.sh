@@ -13,6 +13,7 @@ while true; do
     pushd "$SERVER"
     git pull --no-edit
     popd
+    sleep 1
     echo "restart http server"`date`  | tee $LIVELY/server.log;
     node $SERVER/httpServer.js --directory=$LIVELY4 --port=$PORT  | \
 	sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
