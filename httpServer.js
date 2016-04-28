@@ -11,6 +11,7 @@ var child_process = require("child_process")
 // this adds a timestamp to all log messages
 require("log-timestamp");
 
+var lively4dir = "~/lively4/" // #TODO replace magic string... lively4
 
 // define command line options
 var options = [{
@@ -242,6 +243,8 @@ function deleteFile(sPath, res) {
 
 var RepositoryInSync = {} // cheap semaphore
 
+
+
 function gitControl(sPath, req, res) {
   console.log("git control: " + sPath)
 
@@ -255,6 +258,8 @@ function gitControl(sPath, req, res) {
   var password = req.headers["gitpassword"]
   var email = req.headers["gitemail"]
   var branch = req.headers["gitrepositorybranch"]
+  var msg = req.headers["gitcommitmessage"]
+      
 
   if (sPath.match(/\/_git\/sync/)) {
       // return repsondWithCMD("echo Sync " + repository + " " + RepositoryInSync[repository], res)
@@ -265,14 +270,14 @@ function gitControl(sPath, req, res) {
 		    repository, res, null, dryrun)
       }
       RepositoryInSync[repository] = true
-      var cmd = "~/lively4-server/bin/lively4sync.sh '" + repository + "' '" 
-	      + username + "' '" + password + "' '" +email + "' '"+branch +"'"
+      var cmd = "lively4sync.sh '" + repository + "' '" 
+	      + username + "' '" + password + "' '" +email + "' '"+branch +"' '"+msg+"'"
       respondWithCMD(cmd, res, function() { 
 	    RepositoryInSync[repository] = undefined 
       }, dryrun)
       
   } else if (sPath.match(/\/_git\/resolve/)) {
-      var cmd = "~/lively4-server/bin/lively4resolve.sh '" + repository + "'"
+      var cmd = "lively4resolve.sh '" + repository + "'"
       respondWithCMD(cmd, res, null, dryrun)
 
   } else if (sPath.match(/\/_git\/status/)) {
@@ -284,7 +289,6 @@ function gitControl(sPath, req, res) {
       respondWithCMD(cmd, res, null, dryrun)
 
   } else if (sPath.match(/\/_git\/commit/)) {
-      var msg = req.headers["gitcommitmessage"]
       if (msg) {
 	      msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'"
       } else {
@@ -301,7 +305,7 @@ function gitControl(sPath, req, res) {
       respondWithCMD(cmd, res, null, dryrun)
 
   } else if (sPath.match(/\/_git\/clone/)) {
-      var cmd = 'cd ~/lively4/; \n' + 
+      var cmd = 'cd '+lively4dir+'; \n' + 
 	  "git clone " + repositoryurl + " "+ repository 
       respondWithCMD(cmd, res, null, dryrun)
 
