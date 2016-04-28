@@ -5,7 +5,7 @@ while true; do
   sleep 1
   NEW=`ls -l "$FILE"`
   if [ "$NEW" != "$LAST" ]; then
-    echo "$2"
+    echo "code: $2"
     bash -c "$2" &
     LAST="$NEW"
   fi
