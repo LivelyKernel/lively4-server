@@ -5,8 +5,8 @@
 LIVELY=~/lively4
 SERVER=~/lively4/lively4-server
 PORT=9006
-cd $LIVELY
 
+cd $LIVELY
 _term() { 
   echo "Caught kill signal! Kill watcher and node, too!" 
   kill -TERM "$WATCHERPID" 2>/dev/null
