@@ -287,9 +287,12 @@ function gitControl(sPath, req, res) {
       if (msg) {
 	      msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'"
       } else {
-	  return res.end("Please provide a commit message!")
+	       return res.end("Please provide a commit message!")
       }
-      var cmd = 'cd ' + repository + "; git commit "+ msg +" -a "
+      var cmd = 'cd ' + repository + ";\n"+
+        "git config user.name "+username + ";\n"+
+        "git config user.email "+email + ";\n"+
+        "git commit "+ msg +" -a "
       respondWithCMD(cmd, res, null, dryrun)
 
   } else if (sPath.match(/\/_git\/diff/)) {
