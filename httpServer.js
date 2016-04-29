@@ -13,6 +13,7 @@ require("log-timestamp");
 
 var lively4dir = "~/lively4/" // #TODO replace magic string... lively4
 
+
 // define command line options
 var options = [{
   name: "port",
@@ -366,37 +367,43 @@ http.createServer(function(req, res) {
   res.setHeader('Access-Control-Allow-Headers', '*');
 
   var oUrl = url.parse(req.url, true, false);
-  console.log(oUrl.pathname);
+  console.log("pathname: " + oUrl.pathname);
+
+  var pathname = oUrl.pathname
+
+  // WARNING under windows, this replaces "/" with "\"
   var sPath = path.normalize(oUrl.pathname);
+  console.log("normalize: " + sPath);
+
   if (breakOutRegex.test(sPath) == true) {
     res.writeHead(500);
     res.end("Your not allowed to access files outside the pages storage area\n");
     return;
   }
 
-  if (sPath.match(/\/_git.*/)) {
-  	gitControl(sPath, req, res)
+  if (pathname.match(/\/_git.*/)) {
+  	gitControl(pathname, req, res)
     return
   }
 
-  if (sPath.match(/\/_meta\//)) {
-      if (sPath.match(/_meta\/exit/)) {
+  if (pathname.match(/\/_meta\//)) {
+      if (pathname.match(/_meta\/exit/)) {
 	      res.end("goodbye, we hope for the best!")
 	      process.exit()
-      } else if (sPath.match(/_meta\/hello/)) {
+      } else if (pathname.match(/_meta\/hello/)) {
 	      res.end("Hello World!")
       } else {
 	      res.writeHead(500);
-	      res.end("meta: " + sPath + " not implemented!" );
+	      res.end("meta: " + pathname + " not implemented!" );
       }
       return
   }
 
-  if (sPath.match(/\/_search\//)) {
-    searchFiles(sPath, req, res)
+  if (pathname.match(/\/_search\//)) {
+    searchFiles(pathname, req, res)
     return
   }
-
+  
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
     readFile(sPath, res)

@@ -23,10 +23,17 @@ pushd $LIVELY
 
 export PATH=$SERVER/bin:$PATH
 
-type lively4sync.sh
-
 $SERVER/bin/watch.sh $SERVER/httpServer.js 'kill -USR1 '$$ &
 WATCHERPID=$!
+
+if [ $OS = Windows_NT ]; then
+    SERVER=`cygpath -wa $SERVER`
+    LIVELY4=`cygpath -wa $LIVELY4`
+
+    echo "WIN SERVER "$SERVER
+    echo "WIN LIVELY "$LIVELY4
+fi
+
 
 while true; do
   # cheap log rotate
@@ -40,6 +47,8 @@ while true; do
     popd
   fi
   # start server and filter secret tokens out before logging
+  
+  
   node $SERVER/httpServer.js --directory=$LIVELY4 --port=$PORT 2>&1 > >(\
 	  sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
 	  sed -u 's/lively4sync.*/lively4sync.../' | \
