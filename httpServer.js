@@ -100,6 +100,7 @@ function _readFile(sPath, res) {
       res.end("File not found!\n");
     } else {
       fs.stat(sPath, function(err, stats) {
+        // console.log("stat " + sPath + " " + err + " "  + stats)
         if (err != null) {
               if (err.code == 'ENOENT') {
                   res.writeHead(404);
@@ -158,8 +159,15 @@ function readDirectory(aPath, res, contentType){
     }
 
     files.forEach(function(filename) {
-      fs.stat(path.join(aPath, filename), function(err, statObj) {
-        if (statObj.isDirectory()) {
+      var filePath = path.join(aPath, filename)
+      fs.stat(filePath, function(err, statObj) {
+        if (!statObj) {
+           dir.contents.push({
+            type: "file",
+            name: filename,
+            size: 0,
+          });
+        } else if (statObj.isDirectory()) {
           dir.contents.push({
             type: "directory",
             name: filename,
@@ -373,7 +381,7 @@ http.createServer(function(req, res) {
 
   // WARNING under windows, this replaces "/" with "\"
   var sPath = path.normalize(oUrl.pathname);
-  console.log("normalize: " + sPath);
+  // console.log("normalize: " + sPath);
 
   if (breakOutRegex.test(sPath) == true) {
     res.writeHead(500);
@@ -428,6 +436,7 @@ http.createServer(function(req, res) {
     // statFile was called by client
     fs.stat(sSourcePath, function(err, stats) {
       if (err != null) {
+        console.log("stat ERROR: " + err)
         if (err.code == 'ENOENT') {
             res.writeHead(404);
             res.end();
