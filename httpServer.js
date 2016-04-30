@@ -400,6 +400,10 @@ http.createServer(function(req, res) {
 	      process.exit()
       } else if (pathname.match(/_meta\/hello/)) {
 	      res.end("Hello World!")
+      } else if (pathname.match(/_meta\/play/)) {
+        var filename = '~/lively4/' +req.headers["filepath"]
+	      var cmd = "play '" +  filename + "'"
+        respondWithCMD(cmd, res)
       } else {
 	      res.writeHead(500);
 	      res.end("meta: " + pathname + " not implemented!" );
