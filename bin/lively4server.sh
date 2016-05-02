@@ -26,7 +26,7 @@ export PATH=$SERVER/bin:$PATH
 $SERVER/bin/watch.sh $SERVER/httpServer.js 'kill -USR1 '$$ &
 WATCHERPID=$!
 
-if [ $OS = Windows_NT ]; then
+if [ "$OS" == "Windows_NT" ]; then
     SERVER=`cygpath -wa $SERVER`
     LIVELY4=`cygpath -wa $LIVELY4`
 

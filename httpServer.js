@@ -283,7 +283,16 @@ function gitControl(sPath, req, res) {
   var branch = req.headers["gitrepositorybranch"]
   var msg = req.headers["gitcommitmessage"]
       
-
+  if (!email) {
+	  return res.end("please provide email")
+  }
+  if (!username) {
+	  return res.end("please provide username")
+  }
+  if (!password) {
+	  return res.end("please login")
+  }
+  
   if (sPath.match(/\/_git\/sync/)) {
       // return repsondWithCMD("echo Sync " + repository + " " + RepositoryInSync[repository], res)
       // #TODO finish it... does not work yet
