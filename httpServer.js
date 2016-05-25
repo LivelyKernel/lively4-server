@@ -403,15 +403,9 @@ http.createServer(function(req, res) {
     return;
   }
 
-<<<<<<< HEAD
   if (sPath.match(/\/_git.*/)) {
   	gitControl(sPath, req, res);
   	return;
-=======
-  if (pathname.match(/\/_git.*/)) {
-  	gitControl(pathname, req, res)
-    return
->>>>>>> 63884246df3a4ee8ca290929b291c164cc17b043
   }
 
   if (pathname.match(/\/_meta\//)) {
