@@ -7,7 +7,7 @@ var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process")
-// var lunrSearch = require("./lunr-search.js");
+var lunrSearch = require("./lunr-search.js");
 // .search(string)
 // .update(path)
 // .add(path)
@@ -375,13 +375,6 @@ function gitControl(sPath, req, res) {
       var cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'"
       respondWithCMD(cmd, res, null, dryrun)
 
-<<<<<<< HEAD
-      var cmd = 'echo cd ~/lively4/' +
-    "; echo git clone " + repositoryurl + " "+ repository
-      console.log(cmd)
-      repsondWithCMD(cmd, res)
-=======
->>>>>>> ba4ccc44364a998e8b4e05e0c6308dbb612f2583
   } else {
       res.writeHead(200);
       res.end("Lively4 git Control! " + sPath + " not implemented!");
