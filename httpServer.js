@@ -7,7 +7,7 @@ var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process")
-var lunrSearch = require("./lunr-search.js");
+// var lunrSearch = require("./lunr-search.js");
 // .search(string)
 // .update(path)
 // .add(path)
