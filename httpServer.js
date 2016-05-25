@@ -92,7 +92,7 @@ function writeFile(sPath, req, res) {
           console.log(err);
           return;
         }
-        // lunrSearch.add(sPath);
+        lunrSearch.add(sPath);
         console.log("saved " + sPath);
         res.writeHead(200, "OK");
         res.end();
@@ -257,7 +257,7 @@ function respondWithCMD(cmd, res, finish, dryrun) {
 
 function deleteFile(sPath, res) {
     sPath = sPath.replace(/['"; &|]/g,"")
-    // lunrSearch.remove(sPath);
+    lunrSearch.remove(sPath);
     return respondWithCMD("rm -v ~/lively4'" +sPath + "'", res)
 }
 
@@ -393,18 +393,13 @@ function searchFilesWithIndex(sPath, req, res) {
   var location = query.location;
 
   if (sPath.match(/\/api\/searchSetup.*/)) {
-    // lunrSearch.setup(location);
+    lunrSearch.createIndex(location);
     console.log("[Search] create index in location: " + location);
     res.writeHead(200, "OK");
     res.end();
   } else {
     var pattern = query.q;
-    // var results = lunrSearch.search(pattern, location);
-    var results = [
-    {
-      ref: "/server",
-      score: 1.0
-    }]
+    var results = lunrSearch.search(pattern, location);
     console.log("[Search] search: " + pattern + " in location: " + location);
     res.writeHead(200, {"Content-Type": "application/json"});
     res.end(JSON.stringify(results));
