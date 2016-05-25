@@ -7,6 +7,11 @@ var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process")
+// var lunrSearch = require("./lunr-search.js");
+// .search(string)
+// .update(path)
+// .add(path)
+// .remove(path)
 
 
 // this adds a timestamp to all log messages
@@ -370,10 +375,10 @@ http.createServer(function(req, res) {
     return;
   }
 
-    if (sPath.match(/\/_git.*/)) {
-	gitControl(sPath, req, res)
-	return
-    }
+  if (sPath.match(/\/_git.*/)) {
+  	gitControl(sPath, req, res);
+  	return;
+  }
 
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
