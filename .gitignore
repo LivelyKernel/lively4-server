@@ -1,3 +1,9 @@
+# logfiles
+COMMIT
+
+server.log
+server.log.last
+
 # Emacs backup files
 *~
 

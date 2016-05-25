@@ -1,12 +1,12 @@
 #!/bin/bash
 FILE="$1"
-CMD="$2"
 LAST=`ls -l "$FILE"`
 while true; do
   sleep 1
   NEW=`ls -l "$FILE"`
   if [ "$NEW" != "$LAST" ]; then
-    $CMD
+    echo "code: $2"
+    bash -c "$2" &
     LAST="$NEW"
   fi
 done
