@@ -7,14 +7,12 @@ var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process")
-// var lunrSearch = require("./lunr-search.js");
+var lunrSearch = require("./lunr-search.js");
 // .search(string)
 // .update(path)
 // .add(path)
 // .remove(path)
 
-// this adds a timestamp to all log messages
-require("log-timestamp");
 
 var lively4dir = "~/lively4/" // #TODO replace magic string... lively4
 
@@ -57,6 +55,12 @@ if (sShadowDir) {
     }
   });
 }
+
+lunrSearch.setRootFolder(sSourceDir);
+lunrSearch.createIndex("/lively4-core");
+
+// this adds a timestamp to all log messages
+require("log-timestamp");
 
 var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 
