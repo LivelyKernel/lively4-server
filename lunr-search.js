@@ -9,10 +9,14 @@ var child_process = require("child_process");
 // Object that holds workers for server subdirectories,
 // e.g. '/lively4-core'
 var workers = {};
+
+var promiseCallbacks = {};
 // rootFolder is an absolute directory to where the server serves,
 // e.g. where the lively4-core folder is found
 var rootFolder = null;
 var idxFileName = "index.l4idx";
+
+var curMsgId = 0;
 
 
 // *** Exported methods ***
@@ -59,7 +63,7 @@ function createIndex(subdir) {
   workers[subdir].on("message", function(m) {
     switch (m.type) {
       case "search-response":
-        // handle some promise stuff
+        handleSearchResponse(m.msgId, m.message);
         break;
       case "error":
         console.log("[Indexing] Error (" + subdir + "): " + m.message);
@@ -78,12 +82,28 @@ function search(subdir, query) {
     return;
   }
 
+  var msgId = getNextMsgId();
+  promiseCallbacks[msgId] = {};
+
+  var p = new Promise((resolve, reject) => {
+    promiseCallbacks[msgId].resolve = resolve;
+    promiseCallbacks[msgId].reject = reject;
+  });
+
   workers[subdir].send({
     type: "search",
+    msgId: msgId,
     query: query
   });
 
-  // return promise?
+  return p;
+}
+
+function handleSearchResponse(msgId, result) {
+  var resolve = promiseCallbacks[msgId].resolve;
+  delete promiseCallbacks[msgId];
+
+  resolve(result);
 }
 
 function addFile(serverRelPath) {
@@ -147,6 +167,13 @@ function toIdxRelPath(subdir, absPath) {
 
   // remove e.g. <rootFolder>/lively4-core/ (including the last slash, therefore + 1)
   return slash(absPath.slice(rootFolder.length + subdir.length + 1));
+}
+
+// *** Helper Functions ***
+
+function getNextMsgId() {
+  curMsgId++;
+  return curMsgId;
 }
 
 

@@ -400,10 +400,11 @@ function searchFilesWithIndex(sPath, req, res) {
     res.end();
   } else {
     var pattern = query.q;
-    var results = lunrSearch.search(pattern, location);
     console.log("[Search] search: " + pattern + " in location: " + location);
-    res.writeHead(200, {"Content-Type": "application/json"});
-    res.end(JSON.stringify(results));
+    lunrSearch.search(location, pattern).then((results) => {
+      res.writeHead(200, {"Content-Type": "application/json"});
+      res.end(JSON.stringify(results));
+    });
   }
 }
 
