@@ -133,7 +133,7 @@ function addFilesToIndex(relPaths) {
     var content = fs.readFileSync(relPath, 'utf8');
 
     removeFileFromIndex(relPath);
-
+    
     index.add({
       path: relPath,
       filename: parsedPath.base,

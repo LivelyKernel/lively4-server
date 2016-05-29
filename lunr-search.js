@@ -1,3 +1,4 @@
+// TODO: clean those up!
 var lunr = require("lunr");
 var fs = require("fs");
 var path = require("path");
@@ -86,10 +87,12 @@ function search(subdir, query) {
 }
 
 function addFile(serverRelPath) {
+  serverRelPath = slash(serverRelPath);
   // find corresponding index
   var subdir = getIndexSubdir(serverRelPath);
   if (!subdir) {
     // no index found for the serverRelPath, so dont add it
+    console.log("[Indexing] unknown subdir " + serverRelPath);
     return;
   }
   if (!workers[subdir]) {
@@ -100,11 +103,12 @@ function addFile(serverRelPath) {
   var absPath = toAbsPath(serverRelPath);
   workers[subdir].send({
     type: "addFile",
-    idxRelPath: toIdxRelPath(absPath)
+    idxRelPath: toIdxRelPath(subdir, absPath)
   });
 }
 
 function removeFile(serverRelPath) {
+  serverRelPath = slash(serverRelPath);
   // find corresponding index
   var subdir = getIndexSubdir(serverRelPath);
   if (!subdir) {
@@ -119,7 +123,7 @@ function removeFile(serverRelPath) {
   var absPath = toAbsPath(serverRelPath);
   workers[subdir].send({
     type: "removeFile",
-    idxRelPath: toIdxRelPath(absPath)
+    idxRelPath: toIdxRelPath(subdir, absPath)
   });
 }
 
@@ -127,7 +131,7 @@ function removeFile(serverRelPath) {
 // *** Helper methods ***
 
 function getIndexSubdir(filepath) {
-  return Object.keys(lunrIdx).find(function(subidx) {
+  return Object.keys(workers).find(function(subidx) {
     return filepath.indexOf(subidx + "/") == 0;
   });
 }
@@ -141,8 +145,8 @@ function toIdxRelPath(subdir, absPath) {
     return;
   }
 
-  // TODO: dont use length to cut off paths
-  return slash(absPath.slice(rootFolder.length + subdir.length));
+  // remove e.g. <rootFolder>/lively4-core/ (including the last slash, therefore + 1)
+  return slash(absPath.slice(rootFolder.length + subdir.length + 1));
 }
 
 

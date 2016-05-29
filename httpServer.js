@@ -66,7 +66,8 @@ var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 
 //write file to disk
 function writeFile(sPath, req, res) {
-  console.log("write file: " + sPath)
+  var sSourcePath = path.join(sSourceDir, sPath);
+  console.log("write file: " + sSourcePath)
   var fullBody = '';
 
   //read chunks of data and store it in buffer
@@ -76,24 +77,24 @@ function writeFile(sPath, req, res) {
 
   //after transmission, write file to disk
   req.on('end', function() {
-    if (sPath.match(/\/$/)){
-      mkdirp(sPath, function(err) {
+    if (sSourcePath.match(/\/$/)){
+      mkdirp(sSourcePath, function(err) {
         if (err) {
           console.log("Error creating shadow dir: " + err);
         }
-        console.log("mkdir " + sPath);
+        console.log("mkdir " + sSourcePath);
         res.writeHead(200, "OK");
         res.end();
       });
     } else {
-      fs.writeFile(sPath, fullBody, function(err) {
+      fs.writeFile(sSourcePath, fullBody, function(err) {
         if (err) {
           // throw err;
           console.log(err);
           return;
         }
         lunrSearch.add(sPath);
-        console.log("saved " + sPath);
+        console.log("saved " + sSourcePath);
         res.writeHead(200, "OK");
         res.end();
       });
@@ -476,7 +477,7 @@ http.createServer(function(req, res) {
         }
       });
     } else {
-      writeFile(sSourcePath, req, res);
+      writeFile(sPath, req, res);
     }
   } else if (req.method == "DELETE") {
       deleteFile(sPath, res)
