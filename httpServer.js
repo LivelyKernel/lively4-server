@@ -394,10 +394,16 @@ function searchFilesWithIndex(sPath, req, res) {
   var location = query.location;
 
   if (sPath.match(/\/api\/searchSetup.*/)) {
-    lunrSearch.createIndex(location);
     console.log("[Search] create index in location: " + location);
-    res.writeHead(200, "OK");
-    res.end();
+    lunrSearch.createIndex(location).then(() => {
+      // index is available
+      res.writeHead(200, "OK");
+      res.end();
+    }, () => {
+      // index not available yet
+      res.writeHead(200, "Not yet");
+      res.end();
+    });
   } else {
     var pattern = query.q;
     console.log("[Search] search: " + pattern + " in location: " + location);

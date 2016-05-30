@@ -12,17 +12,13 @@ var index = null;
 var idxFileName = "index.l4idx";
 
 process.on("message", m => {
-  if (!index) {
+  if (!index && m.type !== "init") {
     init();
   }
 
   switch (m.type) {
     case "init":
-      init();
-      break;
-    case "createIndex":
-      // temporarily done in init
-      // createIndex();
+      init(m.msgId);
       break;
     case "addFile":
       addFile(m.idxRelPath);
@@ -47,7 +43,7 @@ process.on("message", m => {
 
 // *** Message handlers ***
 
-function init() {
+function init(msgId) {
   if (index) {
     return;
   }
@@ -71,8 +67,21 @@ function init() {
     let data = fs.readFileSync(idxFileName);
     let jsonData = JSON.parse(data);
     index = lunr.Index.load(jsonData);
+
+    process.send({
+      type: "init-response",
+      msgId: msgId,
+      message: "ready"
+    });
   } catch (err) {
-    // no index found, setup the index
+    // no index found
+    process.send({
+      type: "init-response",
+      msgId: msgId,
+      message: "creating"
+    });
+
+    // setup the index
     index = lunr(function() {
       this.field("filename");
       this.field("content");
@@ -130,8 +139,8 @@ function indexFilesDeep() {
       if (stat.isDirectory()) {
         walk(path.join(rootDir, file));
       } else if (stat.isFile()) {
-        // just index js-files for now
-        if (file.slice(-3) === ".js") {
+        // just index js-files for now, with size < 500kB
+        if (file.slice(-3) === ".js" && stat.size < 500000) {
           relFilePaths.push(path.join(rootDir, file));
         }
       }
@@ -158,7 +167,6 @@ function addFilesToIndex(relPaths) {
     });
 
     process.stdout.write("Indexing " + relPaths.length + " files (" + Math.floor((nr+1)*100 / relPaths.length) + "%)" + "\r");
-    // console.log("Indexing " + relPaths.length + " files (" + Math.floor((nr+1)*100 / relPaths.length) + "%)" + "\r");
   });
 
   process.stdout.write("\n");

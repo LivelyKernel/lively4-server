@@ -1,8 +1,4 @@
-// TODO: clean those up!
-var lunr = require("lunr");
-var fs = require("fs");
 var path = require("path");
-var jsTokens = require("js-tokens");
 var slash = require("slash");
 var child_process = require("child_process");
 
@@ -27,52 +23,65 @@ function setRootFolder(filepath) {
 }
 
 function createIndex(subdir) {
-  if (!rootFolder) {
-    console.log("[Indexing] Cannot create index, no root folder set");
-    return;
-  }
-
-  if (workers[subdir]) {
-    // console.log("[Indexing] Overwrite existing index");
-    console.log("[Indexing] Index already exists");
-    return;
-  }
-
-  console.log("[Indexing] Starting new worker for " + subdir);
-  try {
-    workers[subdir] = child_process.fork(path.join(process.cwd(), "lunr-search-worker.js"), {
-      cwd: toAbsPath(subdir),
-      // pipe stdout/stderr into this process
-      silent: true
-    });
-  } catch (err) {
-    console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
-    return;
-  }
-
-  // handle stdout of child
-  workers[subdir].stdout.on("data", (data) => {
-    process.stdout.write(`[Indexing] (${subdir}) ${data}`);
-  });
-
-  // handle stderr of child
-  workers[subdir].stderr.on("data", (data) => {
-    process.stderr.write(`[Indexing] (${subdir}) ${data}`);
-  });
-
-  workers[subdir].on("message", function(m) {
-    switch (m.type) {
-      case "search-response":
-        handleSearchResponse(m.msgId, m.message);
-        break;
-      case "error":
-        console.log("[Indexing] Error (" + subdir + "): " + m.message);
-        break;
+  return new Promise((resolve, reject) => {
+    if (!rootFolder) {
+      console.log("[Indexing] Cannot create index, no root folder set");
+      reject("Error: no root folder set");
+      return;
     }
-  });
 
-  workers[subdir].send({
-    type: "createIndex"
+    if (workers[subdir]) {
+      console.log("[Indexing] Index already exists");
+      resolve();
+      return;
+    }
+
+    console.log("[Indexing] Starting new worker for " + subdir);
+    try {
+      workers[subdir] = child_process.fork(path.join(process.cwd(), "lunr-search-worker.js"), {
+        cwd: toAbsPath(subdir),
+        // pipe stdout/stderr into this process
+        silent: true
+      });
+    } catch (err) {
+      console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
+      return;
+    }
+
+    // handle stdout of child
+    workers[subdir].stdout.on("data", (data) => {
+      process.stdout.write(`[Indexing] (${subdir}) ${data}`);
+    });
+
+    // handle stderr of child
+    workers[subdir].stderr.on("data", (data) => {
+      process.stderr.write(`[Indexing] (${subdir}) ${data}`);
+    });
+
+    workers[subdir].on("message", function(m) {
+      switch (m.type) {
+        case "search-response":
+          handleSearchResponse(m.msgId, m.message);
+          break;
+        case "init-response":
+          handleInitResponse(m.msgId, m.message);
+          break;
+        case "error":
+          console.log("[Indexing] Error (" + subdir + "): " + m.message);
+          break;
+      }
+    });
+
+    var msgId = getNextMsgId();
+    promiseCallbacks[msgId] = {
+      resolve: resolve,
+      reject: reject
+    }
+
+    workers[subdir].send({
+      type: "init",
+      msgId: msgId
+    });
   });
 }
 
@@ -100,10 +109,33 @@ function search(subdir, query) {
 }
 
 function handleSearchResponse(msgId, result) {
+  if (!promiseCallbacks[msgId]) {
+    console.log(`[Indexing] No promise registered for ${msgId}`);
+    return;
+  }
+
   var resolve = promiseCallbacks[msgId].resolve;
   delete promiseCallbacks[msgId];
 
   resolve(result);
+}
+
+function handleInitResponse(msgId, result) {
+  if (!promiseCallbacks[msgId]) {
+    console.log(`[Indexing] No promise registered for ${msgId}`);
+    return;
+  }
+
+  var resolve = promiseCallbacks[msgId].resolve;
+  var reject = promiseCallbacks[msgId].reject;
+  delete promiseCallbacks[msgId];
+
+  if (result === "ready") {
+    resolve();
+  } else {
+    // result === "creating"
+    reject();
+  }
 }
 
 function addFile(serverRelPath) {
