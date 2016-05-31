@@ -78,7 +78,7 @@ function init(msgId) {
     process.send({
       type: "init-response",
       msgId: msgId,
-      message: "creating"
+      message: "indexing"
     });
 
     // setup the index
@@ -95,6 +95,10 @@ function init(msgId) {
     index.tokenizer(jsTokenizer);
 
     createIndex();
+    process.send({
+      type: "init-response",
+      message: "ready"
+    });
   }
 }
 
@@ -141,6 +145,7 @@ function indexFilesDeep() {
       } else if (stat.isFile()) {
         // just index js-files for now, with size < 500kB
         if (file.slice(-3) === ".js" && stat.size < 500000) {
+        // if (file.slice(-3) === ".js") {
           relFilePaths.push(path.join(rootDir, file));
         }
       }

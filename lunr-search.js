@@ -5,6 +5,7 @@ var child_process = require("child_process");
 // Object that holds workers for server subdirectories,
 // e.g. '/lively4-core'
 var workers = {};
+var indexStatus = {};
 
 var promiseCallbacks = {};
 // rootFolder is an absolute directory to where the server serves,
@@ -30,9 +31,14 @@ function createIndex(subdir) {
       return;
     }
 
-    if (workers[subdir]) {
+    if (indexStatus[subdir] === "ready") {
       console.log("[Indexing] Index already exists");
       resolve();
+      return;
+    }
+
+    if (indexStatus[subdir] === "indexing") {
+      reject();
       return;
     }
 
@@ -45,6 +51,7 @@ function createIndex(subdir) {
       });
     } catch (err) {
       console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
+      reject(err);
       return;
     }
 
@@ -64,7 +71,7 @@ function createIndex(subdir) {
           handleSearchResponse(m.msgId, m.message);
           break;
         case "init-response":
-          handleInitResponse(m.msgId, m.message);
+          handleInitResponse(m.msgId, m.message, subdir);
           break;
         case "error":
           console.log("[Indexing] Error (" + subdir + "): " + m.message);
@@ -82,6 +89,8 @@ function createIndex(subdir) {
       type: "init",
       msgId: msgId
     });
+
+    indexStatus[subdir] = "indexing";
   });
 }
 
@@ -120,8 +129,19 @@ function handleSearchResponse(msgId, result) {
   resolve(result);
 }
 
-function handleInitResponse(msgId, result) {
+function handleInitResponse(msgId, result, subdir) {
+  // Worker does not send a msgId, when it had to create the
+  // requested index, because the msgId was already used to
+  // signal that the index did not exist.
+  if (!msgId) {
+    // index has been created now,
+    // so next call to createIndex will resolve immediately
+    indexStatus[subdir] = "ready";
+    return;
+  }
+
   if (!promiseCallbacks[msgId]) {
+    // this should never happen!
     console.log(`[Indexing] No promise registered for ${msgId}`);
     return;
   }
@@ -131,9 +151,12 @@ function handleInitResponse(msgId, result) {
   delete promiseCallbacks[msgId];
 
   if (result === "ready") {
+    // index was requested and just had to be loaded from disk
+    indexStatus[subdir] = "ready";
     resolve();
   } else {
-    // result === "creating"
+    // index was requested, does not exist and is being built not
+    indexStatus[subdir] = "indexing";
     reject();
   }
 }

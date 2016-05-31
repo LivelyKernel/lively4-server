@@ -7,6 +7,7 @@ var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process")
+var slash = require("slash");
 var lunrSearch = require("./lunr-search.js");
 // .search(string)
 // .update(path)
@@ -57,7 +58,7 @@ if (sShadowDir) {
 }
 
 lunrSearch.setRootFolder(sSourceDir);
-lunrSearch.createIndex("/lively4-core");
+// lunrSearch.createIndex("/lively4-core");
 
 // this adds a timestamp to all log messages
 require("log-timestamp");
@@ -394,13 +395,14 @@ function searchFilesWithIndex(sPath, req, res) {
   var location = query.location;
 
   if (sPath.match(/\/api\/searchSetup.*/)) {
-    console.log("[Search] create index in location: " + location);
     lunrSearch.createIndex(location).then(() => {
       // index is available
+      console.log("[Search] index available in location: " + location);
       res.writeHead(200, "OK");
       res.end();
     }, () => {
       // index not available yet
+      console.log("[Search] index not yet available in location: " + location);
       res.writeHead(200, "Not yet");
       res.end();
     });
@@ -427,8 +429,8 @@ http.createServer(function(req, res) {
 
   var pathname = oUrl.pathname
 
-  // WARNING under windows, this replaces "/" with "\"
-  var sPath = path.normalize(oUrl.pathname);
+  // use slash to avoid conversion from '\' to '/' on Windows
+  var sPath = slash(path.normalize(oUrl.pathname));
   // console.log("normalize: " + sPath);
 
   if (breakOutRegex.test(sPath) == true) {
