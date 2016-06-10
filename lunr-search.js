@@ -1,6 +1,47 @@
-var path = require("path");
-var slash = require("slash");
-var child_process = require("child_process");
+'use strict'
+
+var isNode = (typeof window === 'undefined');
+
+var path, slash, child_process;
+
+if (isNode) {
+  path = require("path");
+  slash = require("slash");
+  child_process = require("child_process");
+}
+
+function send(receiver, message) {
+  if (isNode) {
+    receiver.send(message);
+  } else {
+    receiver.postMessage(message);
+  }
+}
+
+function createProcess(script, cwd) {
+  if (isNode) {
+    let p = child_process.fork(path.join(process.cwd(), script), {
+      cwd: toAbsPath(cwd),
+      // pipe stdout/stderr into this process
+      silent: true
+    });
+
+    // handle stdout of child
+    p.stdout.on("data", (data) => {
+      process.stdout.write(`[Indexing] (${cwd}) ${data}`);
+    });
+
+    // handle stderr of child
+    p.stderr.on("data", (data) => {
+      process.stderr.write(`[Indexing] (${cwd}) ${data}`);
+    });
+
+    return p;
+  }
+
+  // in Browser:
+  return new Worker(script);
+}
 
 // Object that holds workers for server subdirectories,
 // e.g. '/lively4-core'
@@ -44,26 +85,13 @@ function createIndex(subdir) {
 
     console.log("[Indexing] Starting new worker for " + subdir);
     try {
-      workers[subdir] = child_process.fork(path.join(process.cwd(), "lunr-search-worker.js"), {
-        cwd: toAbsPath(subdir),
-        // pipe stdout/stderr into this process
-        silent: true
-      });
+      workers[subdir] = createProcess("lunr-search-worker.js", subdir);
     } catch (err) {
       console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
       reject(err);
       return;
     }
 
-    // handle stdout of child
-    workers[subdir].stdout.on("data", (data) => {
-      process.stdout.write(`[Indexing] (${subdir}) ${data}`);
-    });
-
-    // handle stderr of child
-    workers[subdir].stderr.on("data", (data) => {
-      process.stderr.write(`[Indexing] (${subdir}) ${data}`);
-    });
 
     workers[subdir].on("message", function(m) {
       switch (m.type) {
@@ -85,7 +113,7 @@ function createIndex(subdir) {
       reject: reject
     }
 
-    workers[subdir].send({
+    send(workers[subdir], {
       type: "init",
       msgId: msgId
     });
@@ -108,7 +136,7 @@ function search(subdir, query) {
     promiseCallbacks[msgId].reject = reject;
   });
 
-  workers[subdir].send({
+  send(workers[subdir], {
     type: "search",
     msgId: msgId,
     query: query
@@ -162,6 +190,7 @@ function handleInitResponse(msgId, result, subdir) {
 }
 
 function addFile(serverRelPath) {
+  // e.g. serverRelPath == "/lively4-core/src/client/foo.js"
   serverRelPath = slash(serverRelPath);
   // find corresponding index
   var subdir = getIndexSubdir(serverRelPath);
@@ -176,13 +205,14 @@ function addFile(serverRelPath) {
   }
 
   var absPath = toAbsPath(serverRelPath);
-  workers[subdir].send({
+  send(workers[subdir], {
     type: "addFile",
     idxRelPath: toIdxRelPath(subdir, absPath)
   });
 }
 
 function removeFile(serverRelPath) {
+  // e.g. serverRelPath == "/lively4-core/src/client/foo.js"
   serverRelPath = slash(serverRelPath);
   // find corresponding index
   var subdir = getIndexSubdir(serverRelPath);
@@ -196,7 +226,7 @@ function removeFile(serverRelPath) {
   }
 
   var absPath = toAbsPath(serverRelPath);
-  workers[subdir].send({
+  send(workers[subdir], {
     type: "removeFile",
     idxRelPath: toIdxRelPath(subdir, absPath)
   });
@@ -234,10 +264,14 @@ function getNextMsgId() {
 
 // *** Export public methods ***
 
-module.exports = {
-  setRootFolder: setRootFolder,
-  createIndex: createIndex,
-  search: search,
-  add: addFile,
-  remove: removeFile
+if (isNode) {
+  module.exports = {
+    setRootFolder: setRootFolder,
+    createIndex: createIndex,
+    search: search,
+    add: addFile,
+    remove: removeFile
+  }
+} else {
+  // we'll see...
 }

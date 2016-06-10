@@ -1,17 +1,46 @@
 'use strict'
 
+var isNode = (typeof window === 'undefined');
+
 var lunr = require("lunr");
 var slash = require("slash");
 var path = require("path");
 var fs = require("fs");
 var jsTokens = require("js-tokens");
+var cp = require("./lunr-node-content-provider.js");
+
+function send(message) {
+  if (isNode) {
+    process.send(message);
+  } else {
+    postMessage(message);
+  }
+}
+
+function exit() {
+  if (isNode) {
+    process.exit();
+  } else {
+    close();
+  }
+}
+
+function log(string) {
+  if (isNode) {
+    // if the string doesnt end with \r append \n
+    string += string.slice(-1) !== "\r" ? "\n" : "";
+    process.stdout.write(string);
+  } else {
+    console.log(string);
+  }
+}
 
 // lunr index object
 var index = null;
 
 var idxFileName = "index.l4idx";
 
-process.on("message", m => {
+function messageHandler(m) {
   if (!index && m.type !== "init") {
     init();
   }
@@ -33,12 +62,18 @@ process.on("message", m => {
       stop();
       break;
     default:
-      process.send({
+      send({
         type: "error",
         message: "Unknown message type"
       });
   }
-});
+}
+
+if (isNode) {
+  process.on("message", messageHandler);
+} else {
+  onmessage = messageHandler;
+}
 
 
 // *** Message handlers ***
@@ -60,22 +95,19 @@ function init(msgId) {
 
   // check for existing index file
   try {
-    fs.accessSync(idxFileName, fs.R_OK | fs.W_OK);
-    // index exists and is accessible to rw, load it
-    console.log("Found existing index, load it");
+    let jsonData = cp.loadIndexJson(idxFileName);
+    log("Found existing index, load it");
 
-    let data = fs.readFileSync(idxFileName);
-    let jsonData = JSON.parse(data);
     index = lunr.Index.load(jsonData);
 
-    process.send({
+    send({
       type: "init-response",
       msgId: msgId,
       message: "ready"
     });
   } catch (err) {
     // no index found
-    process.send({
+    send({
       type: "init-response",
       msgId: msgId,
       message: "indexing"
@@ -95,7 +127,7 @@ function init(msgId) {
     index.tokenizer(jsTokenizer);
 
     createIndex();
-    process.send({
+    send({
       type: "init-response",
       message: "ready"
     });
@@ -103,24 +135,44 @@ function init(msgId) {
 }
 
 function createIndex() {
-  indexFilesDeep();
+  var files = cp.FileReader();
+
+  var counter = 0;
+  for (var file of files) {
+    counter++;
+    log(`Indexing file ${counter}\r`);
+
+    addDocumentToIndex(file);
+  }
+
   saveIndexFile();
 }
 
 function addFile(relPath) {
-  addFilesToIndex([relPath]);
+  log("about to add");
+  var files = cp.FileReader([relPath]);
+  log("adding file " + relPath);
+  for (var file of files) {
+    addDocumentToIndex(file);
+  }
+  log("added file");
+
   saveIndexFile();
 }
 
-function removeFile(relPath) {
-  removeFileFromIndex(relPath);
+function removeFile(_relPath) {
+  var relPath = slash(path.normalize(_relPath));
+  index.remove({
+    path: relPath
+  });
+
   saveIndexFile();
 }
 
 function search(query, msgId) {
   var result = index.search(query);
 
-  process.send({
+  send({
     type: "search-response",
     msgId: msgId,
     message: result
@@ -129,64 +181,33 @@ function search(query, msgId) {
 
 function stop() {
   saveIndexFile();
-  process.exit();
+  exit();
 }
 
 
 // *** Internal methods ***
 
-function indexFilesDeep() {
-  var relFilePaths = [];
-  (function walk(rootDir) {
-    fs.readdirSync(rootDir).forEach(function(file) {
-      var stat = fs.statSync(path.join(rootDir, file));
-      if (stat.isDirectory()) {
-        walk(path.join(rootDir, file));
-      } else if (stat.isFile()) {
-        // just index js-files for now, with size < 500kB
-        if (file.slice(-3) === ".js" && stat.size < 500000) {
-        // if (file.slice(-3) === ".js") {
-          relFilePaths.push(path.join(rootDir, file));
-        }
-      }
-    });
-  })("./");
-
-  addFilesToIndex(relFilePaths);
-}
-
-function addFilesToIndex(relPaths) {
-  relPaths.forEach(function(_relPath, nr) {
-    var relPath = slash(path.normalize(_relPath));
-    var parsedPath = path.parse(relPath);
-
-    // console.log("[Indexing] " + idxRelPath);
-    var content = fs.readFileSync(relPath, 'utf8');
-
-    removeFileFromIndex(relPath);
-
-    index.add({
-      path: relPath,
-      filename: parsedPath.base,
-      content: content
-    });
-
-    process.stdout.write("Indexing " + relPaths.length + " files (" + Math.floor((nr+1)*100 / relPaths.length) + "%)" + "\r");
+function addDocumentToIndex(doc) {
+  index.remove({
+    path: doc.path
   });
 
-  process.stdout.write("\n");
-}
-
-function removeFileFromIndex(_relPath) {
-  var relPath = slash(path.normalize(_relPath));
-  index.remove({
-    path: relPath
+  index.add({
+    path: doc.path,
+    filename: doc.filename,
+    content: doc.content
   });
 }
 
 function saveIndexFile() {
-  var serialized = JSON.stringify(index.toJSON());
-
-  fs.writeFileSync(idxFileName, serialized);
-  console.log("written index to " + path.join(process.cwd(), idxFileName));
+  try {
+    cp.saveIndexJson(index, idxFileName);
+    if (isNode) {
+      log("Written index to " + path.join(process.cwd(), idxFileName));
+    } else {
+      log("Written index " + idxFileName);
+    }
+  } catch (err) {
+    log("Error saving index file: " + err);
+  }
 }
