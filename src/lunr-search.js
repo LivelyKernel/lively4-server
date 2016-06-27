@@ -4,10 +4,12 @@ var isNode = (typeof window === 'undefined');
 
 var path, slash, child_process;
 
+var requireHack = require;
+
 if (isNode) {
-  path = require("path");
-  slash = require("slash");
-  child_process = require("child_process");
+  path = requireHack("path");
+  slash = requireHack("slash");
+  child_process = requireHack("child_process");
 }
 
 function send(receiver, message) {
@@ -64,7 +66,7 @@ function setRootFolder(filepath) {
   rootFolder = slash(path.resolve(filepath));
 }
 
-function createIndex(subdir) {
+function createIndex(subdir, options) {
   return new Promise((resolve, reject) => {
     if (!rootFolder) {
       console.log("[Indexing] Cannot create index, no root folder set");
@@ -85,7 +87,8 @@ function createIndex(subdir) {
 
     console.log("[Indexing] Starting new worker for " + subdir);
     try {
-      workers[subdir] = createProcess("lunr-search-worker.js", subdir);
+      let script = isNode ? "lunr-node-search-worker.js" : "lunr-es6-search-worker.js"
+      workers[subdir] = createProcess(script, subdir);
     } catch (err) {
       console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
       reject(err);
@@ -115,11 +118,16 @@ function createIndex(subdir) {
 
     send(workers[subdir], {
       type: "init",
-      msgId: msgId
+      msgId: msgId,
+      options: options
     });
 
     indexStatus[subdir] = "indexing";
   });
+}
+
+export function setup(options) {
+  return createIndex(options.path, options);
 }
 
 function search(subdir, query) {
@@ -143,6 +151,10 @@ function search(subdir, query) {
   });
 
   return p;
+}
+
+export function find(pattern) {
+  return search(this.path, pattern);
 }
 
 function handleSearchResponse(msgId, result) {
@@ -272,6 +284,4 @@ if (isNode) {
     add: addFile,
     remove: removeFile
   }
-} else {
-  // we'll see...
 }

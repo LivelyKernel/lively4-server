@@ -29,6 +29,11 @@
     "q-io": "^1.13.2",
     "js-tokens": "^1.0.3",
     "lunr": "^0.7.0",
-    "slash": "^1.0.0"
+    "slash": "^1.0.0",
+    "babel-plugin-transform-runtime": "^6.9.0",
+    "babel-polyfill": "^6.9.1",
+    "babel-preset-es2015": "^6.9.0",
+    "gulp": "^3.9.1",
+    "gulp-babel": "^6.1.2"
   }
 }
