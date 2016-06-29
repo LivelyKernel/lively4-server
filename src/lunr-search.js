@@ -61,12 +61,16 @@ var curMsgId = 0;
 
 // *** Exported methods ***
 
-function setRootFolder(filepath) {
+export function setRootFolder(filepath) {
   // becomes e.g. "C:/felix/bla" on Windows
-  rootFolder = slash(path.resolve(filepath));
+  if (isNode) {
+    rootFolder = slash(path.resolve(filepath));
+  } else {
+    rootFolder = filepath;
+  }
 }
 
-function createIndex(subdir, options) {
+export function createIndex(subdir, options) {
   return new Promise((resolve, reject) => {
     if (!rootFolder) {
       console.log("[Indexing] Cannot create index, no root folder set");
@@ -87,7 +91,7 @@ function createIndex(subdir, options) {
 
     console.log("[Indexing] Starting new worker for " + subdir);
     try {
-      let script = isNode ? "lunr-node-search-worker.js" : "lunr-es6-search-worker.js"
+      let script = isNode ? "lunr-node-search-worker.js" : "../lively4-server/src/lunr-es6-search-worker-wrapper.js"
       workers[subdir] = createProcess(script, subdir);
     } catch (err) {
       console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
@@ -95,8 +99,7 @@ function createIndex(subdir, options) {
       return;
     }
 
-
-    workers[subdir].on("message", function(m) {
+    let messageHandler = function(m) {
       switch (m.type) {
         case "search-response":
           handleSearchResponse(m.msgId, m.message);
@@ -108,7 +111,14 @@ function createIndex(subdir, options) {
           console.log("[Indexing] Error (" + subdir + "): " + m.message);
           break;
       }
-    });
+    }
+
+    if (isNode) {
+      workers[subdir].on("message", messageHandler);
+    } else {
+      onmessage = messageHandler;
+    }
+
 
     var msgId = getNextMsgId();
     promiseCallbacks[msgId] = {
@@ -201,7 +211,7 @@ function handleInitResponse(msgId, result, subdir) {
   }
 }
 
-function addFile(serverRelPath) {
+export function addFile(serverRelPath) {
   // e.g. serverRelPath == "/lively4-core/src/client/foo.js"
   serverRelPath = slash(serverRelPath);
   // find corresponding index
@@ -223,7 +233,7 @@ function addFile(serverRelPath) {
   });
 }
 
-function removeFile(serverRelPath) {
+export function removeFile(serverRelPath) {
   // e.g. serverRelPath == "/lively4-core/src/client/foo.js"
   serverRelPath = slash(serverRelPath);
   // find corresponding index
