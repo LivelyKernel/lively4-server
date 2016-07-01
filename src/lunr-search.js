@@ -137,7 +137,21 @@ export function createIndex(subdir, options) {
 }
 
 export function setup(options) {
-  return createIndex(options.path, options);
+  this.setRootFolder("https://lively4");
+  return new Promise((resolve, reject) => {
+
+    let fetchStatus =  () => {
+      createIndex(options.path, options).then( () => {
+        resolve();
+        clearInterval(interval);
+      }, () => {
+        console.log("[Indexing] Waiting for index: " + options.name)
+      });
+    };
+  
+    fetchStatus();
+    let interval = setInterval(fetchStatus, 5000);
+  });
 }
 
 function search(subdir, query) {

@@ -1,6 +1,7 @@
 'use strict'
 
 import SearchWorker from './lunr-search-worker.js';
+import * as cp from "../../lively4-core/src/client/search/lunr-dropbox-content-provider.js"
 // import * as utils from "./search-utils.js";
 
 export default class ES6SearchWorker extends SearchWorker {
@@ -11,7 +12,7 @@ export default class ES6SearchWorker extends SearchWorker {
       // utils.ensureLunr();
       // this.lunr = window.lunr;
       this.lunr = lunr;
-      // this.cp = cp;
+      this.cp = cp;
     }
 
     send(message) {
