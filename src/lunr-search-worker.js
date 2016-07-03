@@ -47,11 +47,11 @@ export default class SearchWorker {
       return;
     }
 
-    var jsTokenizer = function (obj) {
+    var jsTokenizer = (obj) => {
       if (!arguments.length || obj == null || obj == undefined) return []
       if (Array.isArray(obj)) return obj.map(function (t) { return this.lunr.utils.asString(t).toLowerCase() })
 
-      return obj.toString().trim().toLowerCase().match(jsTokens).filter(function(token) { return token.length < 30; });
+      return obj.toString().trim().toLowerCase().match(this.jsTokens).filter(function(token) { return token.length < 30; });
     }
 
     // register tokenizer function to allow index serialization
@@ -105,6 +105,7 @@ export default class SearchWorker {
     var counter = 0;
     while (true) {
       var file = await files.next();
+
       // if the iterator is exhausted an object {done: true} is returned ?! ^^
       if (file.done) {
         break;
@@ -112,7 +113,7 @@ export default class SearchWorker {
       counter++;
       this.log(`Indexing file ${counter}\r`);
 
-      this.addDocumentToIndex(file);
+      this.addDocumentToIndex(file.value);
     }
 
     this.saveIndexFile();
@@ -122,12 +123,12 @@ export default class SearchWorker {
     var files = this.cp.FileReader(relPath, this.options);
     while (true) {
       var file = await files.next();
+
       // if the iterator is exhausted an object {done: true} is returned ?! ^^
       if (file.done) {
         break;
       }
-      this.addDocumentToIndex(file);
-      break;
+      this.addDocumentToIndex(file.value);
     }
 
     this.saveIndexFile();
@@ -173,6 +174,7 @@ export default class SearchWorker {
 
   saveIndexFile() {
     try {
+      console.log(this.index);
       this.cp.saveIndexJson(this.index, this.idxFileName, this.options);
       this.log("Written index " + this.idxFileName);
     } catch (err) {

@@ -5,8 +5,8 @@ var slash = require("slash");
 var path = require("path");
 var fs = require("fs");
 var jsTokens = require("js-tokens");
-import * as cp from "./lunr-node-content-provider.js"
-import SearchWorker from "./lunr-search-worker.js"
+import * as cp from "./lunr-node-content-provider.js";
+import SearchWorker from "./lunr-search-worker.js";
 
 class NodeSearchWorker extends SearchWorker {
 
@@ -15,6 +15,7 @@ class NodeSearchWorker extends SearchWorker {
       process.on("message", this.messageHandler.bind(this));
       this.lunr = lunr;
       this.cp = cp;
+      this.jsTokens = jsTokens;
     }
 
     send(message) {

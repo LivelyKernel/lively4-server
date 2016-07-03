@@ -5,14 +5,14 @@ var slash = require("slash");
 var path = require("path");
 
 // this function throws an error if the index file does not exist
-function loadIndexJson(l4idxFile) {
+export function loadIndexJson(l4idxFile) {
   fs.accessSync(l4idxFile, fs.R_OK | fs.W_OK);
   // l4idxFile exists and is accessible to rw, load it
   let data = fs.readFileSync(l4idxFile);
   return JSON.parse(data);
 }
 
-function saveIndexJson(jsonIndex, filename) {
+export function saveIndexJson(jsonIndex, filename) {
   var serialized = JSON.stringify(jsonIndex.toJSON());
   fs.writeFileSync(filename, serialized);
 }
@@ -37,24 +37,29 @@ function getFilepaths() {
   return relFilePaths;
 }
 
-function* FileReader(filePaths) {
-  if (filePaths === undefined) {
-    filePaths = getFilepaths();
+export async function* FileReader(filepath) {
+  let filepaths;
+  if (filepath === undefined) {
+    filepaths = getFilepaths();
+  } else {
+    filepaths = [filepath];
   }
 
-  for (let i = 0; i < filePaths.length; i++) {
-    let relPath = slash(path.normalize(filePaths[i]));
+  for (let i = 0; i < filepaths.length; i++) {
+    let relPath = slash(path.normalize(filepaths[i]));
     let parsedPath = path.parse(relPath);
+    // async doesn't work, always is done after one iteration
+    // let content = await new Promise( function(resolve, reject) {
+    //   fs.readFile(relPath, 'utf8', function (err, data) {
+    //     if (err) reject();
+    //     resolve(data);
+    //   });
+    // });
+    let content = fs.readFileSync(relPath, 'utf8');
     yield {
       path: relPath,
       filename: parsedPath.base,
-      content: fs.readFileSync(relPath, 'utf8')
+      content: content
     }
   }
-}
-
-module.exports = {
-  loadIndexJson: loadIndexJson,
-  saveIndexJson: saveIndexJson,
-  FileReader: FileReader
 }

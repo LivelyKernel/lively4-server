@@ -4,6 +4,9 @@
     ["transform-runtime", {
       "polyfill": false,
       "regenerator": true
-    }]
+    }],
+    "transform-regenerator",
+    "syntax-async-functions",
+    "syntax-async-generators"
   ]
 }
