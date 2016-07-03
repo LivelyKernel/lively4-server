@@ -40,7 +40,7 @@ export default class SearchWorker {
 
   // *** Message handlers ***
 
-  init(msgId, options) {
+  async init(msgId, options) {
     this.options = options
 
     if (this.index) {
@@ -90,7 +90,8 @@ export default class SearchWorker {
       // set the js tokenizer
       this.index.tokenizer(jsTokenizer);
 
-      this.createIndex();
+      await this.createIndex();
+      console.log("Index successfully created")
       this.send({
         type: "init-response",
         message: "ready"
@@ -98,11 +99,16 @@ export default class SearchWorker {
     }
   }
 
-  createIndex() {
+  async createIndex() {
     var files = this.cp.FileReader(this.options);
 
     var counter = 0;
-    for (var file of files) {
+    while (true) {
+      var file = await files.next();
+      // if the iterator is exhausted an object {done: true} is returned ?! ^^
+      if (file.done) {
+        break;
+      }
       counter++;
       this.log(`Indexing file ${counter}\r`);
 
@@ -112,10 +118,16 @@ export default class SearchWorker {
     this.saveIndexFile();
   }
 
-  addFile(relPath) {
+  async addFile(relPath) {
     var files = this.cp.FileReader(relPath, this.options);
-    for (var file of files) {
+    while (true) {
+      var file = await files.next();
+      // if the iterator is exhausted an object {done: true} is returned ?! ^^
+      if (file.done) {
+        break;
+      }
       this.addDocumentToIndex(file);
+      break;
     }
 
     this.saveIndexFile();

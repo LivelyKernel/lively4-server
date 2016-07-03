@@ -100,6 +100,10 @@ export function createIndex(subdir, options) {
     }
 
     let messageHandler = function(m) {
+      // web workers hide the sent message behind the data key
+      if (!isNode) {
+        m = m.data;
+      }
       switch (m.type) {
         case "search-response":
           handleSearchResponse(m.msgId, m.message);
@@ -116,7 +120,7 @@ export function createIndex(subdir, options) {
     if (isNode) {
       workers[subdir].on("message", messageHandler);
     } else {
-      onmessage = messageHandler;
+      workers[subdir].onmessage = messageHandler;
     }
 
 
@@ -148,7 +152,7 @@ export function setup(options) {
         console.log("[Indexing] Waiting for index: " + options.name)
       });
     };
-  
+
     fetchStatus();
     let interval = setInterval(fetchStatus, 5000);
   });
