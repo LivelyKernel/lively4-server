@@ -91,7 +91,7 @@ export function createIndex(subdir, options) {
 
     console.log("[Indexing] Starting new worker for " + subdir);
     try {
-      let script = isNode ? "lunr-node-search-worker.js" : "../lively4-server/src/lunr-es6-search-worker-wrapper.js"
+      let script = isNode ? "lunr-node-search-worker.js" : "../lively4-server/src/lunr-es6-search-worker-wrapper.js";
       workers[subdir] = createProcess(script, subdir);
     } catch (err) {
       console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
@@ -115,7 +115,7 @@ export function createIndex(subdir, options) {
           console.log("[Indexing] Error (" + subdir + "): " + m.message);
           break;
       }
-    }
+    };
 
     if (isNode) {
       workers[subdir].on("message", messageHandler);
@@ -128,7 +128,7 @@ export function createIndex(subdir, options) {
     promiseCallbacks[msgId] = {
       resolve: resolve,
       reject: reject
-    }
+    };
 
     send(workers[subdir], {
       type: "init",
@@ -182,7 +182,13 @@ function search(subdir, query) {
 }
 
 export function find(pattern) {
-  return search(this.path, pattern);
+  return search(this.path, pattern).then( (result) => {
+    return result.map( (res) => {
+      res.path = join(this.path, res.ref);
+      res.type = "dropbox";
+      return res;
+    });
+  });
 }
 
 function handleSearchResponse(msgId, result) {
@@ -299,6 +305,16 @@ function toIdxRelPath(subdir, absPath) {
 function getNextMsgId() {
   curMsgId++;
   return curMsgId;
+}
+
+function join(path1, path2) {
+  if (path1[path1.length-1] != "/") {
+    path1 += "/";
+  }
+  if (path2[0] == "/") {
+    path2 = path2.slice(1, path2.length);
+  }
+  return path1 + path2;
 }
 
 
