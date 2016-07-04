@@ -16,6 +16,7 @@ class NodeSearchWorker extends SearchWorker {
       this.lunr = lunr;
       this.cp = cp;
       this.jsTokens = jsTokens;
+      this.tokenizer.jsTokens = jsTokens;
     }
 
     send(message) {

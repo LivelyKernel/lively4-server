@@ -33,7 +33,7 @@ function getFilepaths() {
         walk(path.join(rootDir, file));
       } else if (stat.isFile()) {
         // just index js-files for now, with size < 500kB
-        if (file.slice(-3) === ".js" && stat.size < 500000) {
+        if ((file.slice(-3) === ".js" || file.slice(-5) === ".html" || file.slice(-3) === ".md") && stat.size < 500000) {
         // if (file.slice(-3) === ".js") {
           relFilePaths.push(path.join(rootDir, file));
         }
@@ -66,6 +66,7 @@ export async function* FileReader(filepath) {
     yield {
       path: relPath,
       filename: parsedPath.base,
+      ext: parsedPath.ext.slice(1),
       content: content
     }
   }

@@ -1,11 +1,39 @@
 'use strict'
 
+function tokenizer(obj) {
+  if (!arguments.length || obj == null || obj == undefined) return [];
+  if (Array.isArray(obj)) return obj.map(function (t) { return lunr.utils.asString(t).toLowerCase() });
+
+  if (tokenizer.mode === "js") {
+    // use js regex
+    return obj.toString().trim().toLowerCase().match(tokenizer.jsTokens).filter(function(token) {
+      return token.length < 30 && token !== "";
+    });
+  }
+  if (tokenizer.mode === "html") {
+    // use simple whitespace split for now
+    return obj.toString().trim().toLowerCase().split(" ").filter(function(token) {
+      return token.length < 30 && token !== "";
+    });
+  }
+
+  // unknown mode, use whitespace split
+  return obj.toString().trim().toLowerCase().split(" ").filter(function(token) {
+    return token.length < 30 && token !== "";
+  });
+}
+
+tokenizer.setMode = function(mode) {
+  tokenizer.mode = mode;
+}
+
 export default class SearchWorker {
 
   constructor() {
     // lunr index object
     this.index = null;
     this.idxFileName = "index.l4idx";
+    this.tokenizer = tokenizer;
   }
 
   messageHandler(m) {
@@ -47,15 +75,8 @@ export default class SearchWorker {
       return;
     }
 
-    var jsTokenizer = (obj) => {
-      if (!arguments.length || obj == null || obj == undefined) return []
-      if (Array.isArray(obj)) return obj.map(function (t) { return this.lunr.utils.asString(t).toLowerCase() })
-
-      return obj.toString().trim().toLowerCase().match(this.jsTokens).filter(function(token) { return token.length > 0 && token.length < 30; });
-    }
-
     // register tokenizer function to allow index serialization
-    this.lunr.tokenizer.registerFunction(jsTokenizer, "jsTokenizer");
+    this.lunr.tokenizer.registerFunction(tokenizer, "tokenizer");
 
     // check for existing index file
     try {
@@ -88,7 +109,7 @@ export default class SearchWorker {
       // TODO: clear stopwords!!!
 
       // set the js tokenizer
-      this.index.tokenizer(jsTokenizer);
+      this.index.tokenizer(tokenizer);
 
       await this.createIndex();
       console.log("Index successfully created")
@@ -161,6 +182,8 @@ export default class SearchWorker {
   // *** Internal methods ***
 
   addDocumentToIndex(doc) {
+    tokenizer.setMode(doc.ext);
+
     this.index.remove({
       path: doc.path
     });
