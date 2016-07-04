@@ -1,4 +1,4 @@
-'use strict'
+'use strict';
 
 var fs = require("fs");
 var slash = require("slash");
@@ -13,13 +13,20 @@ function isIndexable(filepath) {
 export function loadIndexJson(l4idxFile) {
   fs.accessSync(l4idxFile, fs.R_OK | fs.W_OK);
   // l4idxFile exists and is accessible to rw, load it
-  let data = fs.readFileSync(l4idxFile);
-  return JSON.parse(data);
+  return new Promise( (resolve, reject) => {
+    fs.readFile(l4idxFile, (err, data) => {
+      resolve(JSON.parse(data));
+    });
+  });
 }
 
 export function saveIndexJson(jsonIndex, filename) {
-  var serialized = JSON.stringify(jsonIndex.toJSON());
-  fs.writeFileSync(filename, serialized);
+  var serialized = JSON.stringify(jsonIndex);
+  return new Promise( (resolve, reject) => {
+    fs.writeFile(filename, serialized, (err, data) => {
+      resolve(data);
+    });
+  });
 }
 
 function getFilepaths() {

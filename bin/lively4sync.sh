@@ -29,6 +29,10 @@ git commit -m "$COMMIT" -a ;
 echo "PULL"
 git pull --no-edit origin "$BRANCH" ; 
 
+# ALT: #Issue6
+# git pull --rebase --no-edit origin "$BRANCH" ; 
+
+
 echo "PUSH"
 git push $ORIGIN $BRANCH
 

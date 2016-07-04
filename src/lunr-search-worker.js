@@ -7,7 +7,7 @@ function tokenizer(obj) {
   if (tokenizer.mode === "js") {
     // use js regex
     return obj.toString().trim().toLowerCase().match(tokenizer.jsTokens).filter(function(token) {
-      return token.length < 30;
+      return token.length < 30 && token !== "";
     });
   }
   if (tokenizer.mode === "html") {
@@ -80,7 +80,7 @@ export default class SearchWorker {
 
     // check for existing index file
     try {
-      let jsonData = this.cp.loadIndexJson(this.idxFileName, this.options);
+      let jsonData = await this.cp.loadIndexJson(this.idxFileName, this.options);
       this.log("Found existing index, load it");
 
       this.index = this.lunr.Index.load(jsonData);
@@ -197,9 +197,9 @@ export default class SearchWorker {
 
   saveIndexFile() {
     try {
-      // console.log(this.index);
-      this.cp.saveIndexJson(this.index, this.idxFileName, this.options);
-      this.log("Written index " + this.idxFileName);
+      this.cp.saveIndexJson(this.index, this.idxFileName, this.options).then( () => {
+        this.log("Written index " + this.idxFileName);
+      });
     } catch (err) {
       this.log("Error saving index file: " + err);
     }
