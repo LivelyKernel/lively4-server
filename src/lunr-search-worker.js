@@ -4,22 +4,27 @@ function tokenizer(obj) {
   if (!arguments.length || obj == null || obj == undefined) return [];
   if (Array.isArray(obj)) return obj.map(function (t) { return lunr.utils.asString(t).toLowerCase() });
 
+  let tokens;
   if (tokenizer.mode === "js") {
     // use js regex
-    return obj.toString().trim().toLowerCase().match(tokenizer.jsTokens).filter(function(token) {
+    tokens = obj.toString().trim().toLowerCase().match(tokenizer.jsTokens).filter(function(token) {
       return token.length < 30 && token !== "";
     });
-  }
-  if (tokenizer.mode === "html") {
+  } else if (tokenizer.mode === "html") {
     // use simple whitespace split for now
-    return obj.toString().trim().toLowerCase().split(" ").filter(function(token) {
+    tokens = obj.toString().trim().toLowerCase().split(" ").filter(function(token) {
+      return token.length < 30 && token !== "";
+    });
+  } else {
+    // unknown mode, use whitespace split
+    tokens = obj.toString().trim().toLowerCase().split(" ").filter(function(token) {
       return token.length < 30 && token !== "";
     });
   }
 
-  // unknown mode, use whitespace split
-  return obj.toString().trim().toLowerCase().split(" ").filter(function(token) {
-    return token.length < 30 && token !== "";
+  // filter weird characters
+  return tokens.map(token => {
+    return token.replace(/[^\x00-\x7F]/g, "");
   });
 }
 

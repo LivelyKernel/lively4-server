@@ -14,7 +14,7 @@ export class ES6SearchWorker extends SearchWorker {
       // this.lunr = window.lunr;
       this.lunr = lunr;
       this.cp = cp;
-      this.jsTokens = jsTokens;
+      this.tokenizer.jsTokens = jsTokens;
 
       // if a msgId was provided the init message was received before ES6Worker was instantiated
       if (msgId) {
