@@ -32,6 +32,7 @@ tokenizer.setMode = function(mode) {
   tokenizer.mode = mode;
 }
 
+// abstract class!
 export default class SearchWorker {
 
   constructor() {
@@ -39,16 +40,23 @@ export default class SearchWorker {
     this.index = null;
     this.idxFileName = "index.l4idx";
     this.tokenizer = tokenizer;
+    
+    this.send({
+      type: "worker-ready"
+    });
   }
 
   messageHandler(m) {
-    if (!this.index && m.type !== "init") {
-      this.init();
-    }
+    // if (!this.index && m.type !== "init") {
+    //   this.init();
+    // }
 
     switch (m.type) {
       case "init":
         this.init(m.msgId, m.options);
+        break;
+      case "checkIndexFile":
+        this.checkIndexFile(m.msgId, m.options);
         break;
       case "addFile":
         this.addFile(m.idxRelPath);
@@ -123,6 +131,15 @@ export default class SearchWorker {
         message: "ready"
       });
     }
+  }
+  
+  async checkIndexFile(msgId, options) {
+    let status = await this.cp.checkIndexFile(this.idxFileName, options);
+    this.send({
+      type: "index-status-response",
+      msgId: msgId,
+      message: status
+    });
   }
 
   async createIndex() {

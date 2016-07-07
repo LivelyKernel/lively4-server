@@ -51,6 +51,7 @@ var workers = {};
 var indexStatus = {};
 
 var promiseCallbacks = {};
+var workerReadyPromise;
 // rootFolder is an absolute directory to where the server serves,
 // e.g. where the lively4-core folder is found
 var rootFolder = null;
@@ -70,11 +71,73 @@ export function setRootFolder(filepath) {
   }
 }
 
+export function startWorker(subdir) {
+  return new Promise((resolve, reject) => {
+    if (!rootFolder) {
+      throw new Error("startWorker: no root folder set");
+    }
+    
+    if (workers[subdir]) {
+      console.log("[Indexing] Worker already exists");
+      resolve();
+      return;
+    }
+    
+    console.log("[Indexing] Starting new worker for " + subdir);
+    try {
+      let script = isNode ? "lunr-node-search-worker.js" : "../lively4-server/src/lunr-es6-search-worker-wrapper.js";
+      workers[subdir] = createProcess(script, subdir);
+    } catch (err) {
+      console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
+      reject(err);
+      return;
+    }
+  
+    let messageHandler = function(m) {
+      // web workers hide the sent message behind the data key
+      if (!isNode) {
+        m = m.data;
+      }
+      switch (m.type) {
+        case "worker-ready":
+          resolve();
+          break;
+        case "search-response":
+          handleSearchResponse(m.msgId, m.message);
+          break;
+        case "init-response":
+          handleInitResponse(m.msgId, m.message, subdir);
+          break;
+        case "index-status-response":
+          handleIndexStatusResponse(m.msgId, m.message);
+          break;
+        case "error":
+          console.log("[Indexing] Error (" + subdir + "): " + m.message);
+          break;
+        default:
+          console.log("[Indexing] Unknown message:", m);
+      }
+    }
+  
+    if (isNode) {
+      workers[subdir].on("message", messageHandler);
+    } else {
+      workers[subdir].onmessage = messageHandler;
+    }
+  });
+}
+
 export function createIndex(subdir, options) {
   return new Promise((resolve, reject) => {
     if (!rootFolder) {
       console.log("[Indexing] Cannot create index, no root folder set");
       reject("Error: no root folder set");
+      return;
+    }
+    
+    if (!workers[subdir]) {
+      console.log("[Indexing] Cannot create index, no worker running for ", subdir);
+      reject("Error: no worker running");
       return;
     }
 
@@ -88,42 +151,7 @@ export function createIndex(subdir, options) {
       reject();
       return;
     }
-
-    console.log("[Indexing] Starting new worker for " + subdir);
-    try {
-      let script = isNode ? "lunr-node-search-worker.js" : "../lively4-server/src/lunr-es6-search-worker-wrapper.js";
-      workers[subdir] = createProcess(script, subdir);
-    } catch (err) {
-      console.log("[Indexing] Error starting new worker for " + subdir + ": " + err);
-      reject(err);
-      return;
-    }
-
-    let messageHandler = function(m) {
-      // web workers hide the sent message behind the data key
-      if (!isNode) {
-        m = m.data;
-      }
-      switch (m.type) {
-        case "search-response":
-          handleSearchResponse(m.msgId, m.message);
-          break;
-        case "init-response":
-          handleInitResponse(m.msgId, m.message, subdir);
-          break;
-        case "error":
-          console.log("[Indexing] Error (" + subdir + "): " + m.message);
-          break;
-      }
-    };
-
-    if (isNode) {
-      workers[subdir].on("message", messageHandler);
-    } else {
-      workers[subdir].onmessage = messageHandler;
-    }
-
-
+    
     var msgId = getNextMsgId();
     promiseCallbacks[msgId] = {
       resolve: resolve,
@@ -141,7 +169,6 @@ export function createIndex(subdir, options) {
 }
 
 export function setup(options) {
-  this.setRootFolder("https://lively4");
   return new Promise((resolve, reject) => {
 
     let fetchStatus =  () => {
@@ -179,6 +206,29 @@ function search(subdir, query) {
   });
 
   return p;
+}
+
+export function checkIndexFile(subdir, options) {
+  return startWorker(subdir).then(() => {
+    if (indexStatus[subdir]) {
+      return Promise.resolve(indexStatus[subdir]);
+    }
+    var msgId = getNextMsgId();
+    promiseCallbacks[msgId] = {};
+  
+    var p = new Promise((resolve, reject) => {
+      promiseCallbacks[msgId].resolve = resolve;
+      promiseCallbacks[msgId].reject = reject;
+    });
+    
+    send(workers[subdir], {
+      type: "checkIndexFile",
+      msgId: msgId,
+      options: options
+    });
+    
+    return p;
+  });
 }
 
 export function find(pattern) {
@@ -233,6 +283,19 @@ function handleInitResponse(msgId, result, subdir) {
     indexStatus[subdir] = "indexing";
     reject();
   }
+}
+
+function handleIndexStatusResponse(msgId, result) {
+  if (!promiseCallbacks[msgId]) {
+    // this should never happen!
+    console.log(`[Indexing] No promise registered for ${msgId}`);
+    return;
+  }
+  
+  var resolve = promiseCallbacks[msgId].resolve;
+  delete promiseCallbacks[msgId];
+  
+  resolve(result);
 }
 
 export function addFile(serverRelPath) {
