@@ -163,11 +163,16 @@ export default class SearchWorker {
   }
 
   async addFile(relPath) {
+    if (!this.cp.isIndexable(relPath)) {
+      this.log(`[Search] Won't index ${relPath}, no indexable extension`);
+      return;
+    }
+
     var files = this.cp.FileReader(relPath, this.options);
     while (true) {
       var file = await files.next();
 
-      // if the iterator is exhausted an object {done: true} is returned ?! ^^
+      // if the iterator is exhausted an object {done: true} is returned
       if (file.done) {
         break;
       }

@@ -4,8 +4,8 @@ var fs = require("fs");
 var slash = require("slash");
 var path = require("path");
 
-function isIndexable(filepath) {
-  let extentions = ["js", "html", "md"];
+export function isIndexable(filepath) {
+  let extentions = ["js", "html", "md", "txt"];
   return extentions.indexOf(filepath.slice(filepath.lastIndexOf(".") + 1)) >= 0;
 }
 

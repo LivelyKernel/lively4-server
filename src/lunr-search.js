@@ -303,13 +303,9 @@ export function addFile(serverRelPath) {
   serverRelPath = slash(serverRelPath);
   // find corresponding index
   var subdir = getIndexSubdir(serverRelPath);
-  if (!subdir) {
-    // no index found for the serverRelPath, so dont add it
-    console.log("[Indexing] unknown subdir " + serverRelPath);
-    return;
-  }
-  if (!workers[subdir]) {
-    console.log("[Indexing] Cannot add file, no index created for " + subdir);
+
+  if (!subdir || !workers[subdir]) {
+    console.log("[Indexing] Cannot add file, no index created for " + serverRelPath);
     return;
   }
 
