@@ -418,6 +418,10 @@ function searchFilesWithIndex(sPath, req, res) {
     lunrSearch.search(location, pattern).then((results) => {
       res.writeHead(200, {"Content-Type": "application/json"});
       res.end(JSON.stringify(results));
+    }).catch(err => {
+      // no index for location available
+      res.writeHead(503);
+      res.end();
     });
   }
 }

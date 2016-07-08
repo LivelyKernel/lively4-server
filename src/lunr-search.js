@@ -188,7 +188,7 @@ export function setup(options) {
 function search(subdir, query) {
   if (!workers[subdir]) {
     console.log("[Indexing] Cannot search, no index created for " + subdir);
-    return;
+    return Promise.reject();
   }
 
   var msgId = getNextMsgId();
