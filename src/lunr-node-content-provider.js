@@ -29,6 +29,21 @@ export function saveIndexJson(jsonIndex, filename) {
   });
 }
 
+export function checkIndexFile(filename, options) {
+  return new Promise((resolve, reject) => {
+    try {
+      fs.accessSync(filename, fs.R_OK | fs.W_OK);
+      console.log("respone available")
+      resolve("available");
+      return;
+    } catch (err) {
+      console.log("respone unavailable")
+      resolve("unavailable");
+      return;
+    }
+  });
+}
+
 function getFilepaths() {
   var relFilePaths = [];
   (function walk(rootDir) {

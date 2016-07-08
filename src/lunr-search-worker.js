@@ -40,7 +40,7 @@ export default class SearchWorker {
     this.index = null;
     this.idxFileName = "index.l4idx";
     this.tokenizer = tokenizer;
-    
+
     this.send({
       type: "worker-ready"
     });
@@ -132,7 +132,7 @@ export default class SearchWorker {
       });
     }
   }
-  
+
   async checkIndexFile(msgId, options) {
     let status = await this.cp.checkIndexFile(this.idxFileName, options);
     this.send({

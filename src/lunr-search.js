@@ -76,13 +76,13 @@ export function startWorker(subdir) {
     if (!rootFolder) {
       throw new Error("startWorker: no root folder set");
     }
-    
+
     if (workers[subdir]) {
       console.log("[Indexing] Worker already exists");
       resolve();
       return;
     }
-    
+
     console.log("[Indexing] Starting new worker for " + subdir);
     try {
       let script = isNode ? "lunr-node-search-worker.js" : "../lively4-server/src/lunr-es6-search-worker-wrapper.js";
@@ -92,7 +92,7 @@ export function startWorker(subdir) {
       reject(err);
       return;
     }
-  
+
     let messageHandler = function(m) {
       // web workers hide the sent message behind the data key
       if (!isNode) {
@@ -118,7 +118,7 @@ export function startWorker(subdir) {
           console.log("[Indexing] Unknown message:", m);
       }
     }
-  
+
     if (isNode) {
       workers[subdir].on("message", messageHandler);
     } else {
@@ -134,7 +134,7 @@ export function createIndex(subdir, options) {
       reject("Error: no root folder set");
       return;
     }
-    
+
     if (!workers[subdir]) {
       console.log("[Indexing] Cannot create index, no worker running for ", subdir);
       reject("Error: no worker running");
@@ -151,7 +151,7 @@ export function createIndex(subdir, options) {
       reject();
       return;
     }
-    
+
     var msgId = getNextMsgId();
     promiseCallbacks[msgId] = {
       resolve: resolve,
@@ -215,18 +215,18 @@ export function checkIndexFile(subdir, options) {
     }
     var msgId = getNextMsgId();
     promiseCallbacks[msgId] = {};
-  
+
     var p = new Promise((resolve, reject) => {
       promiseCallbacks[msgId].resolve = resolve;
       promiseCallbacks[msgId].reject = reject;
     });
-    
+
     send(workers[subdir], {
       type: "checkIndexFile",
       msgId: msgId,
       options: options
     });
-    
+
     return p;
   });
 }
@@ -291,10 +291,10 @@ function handleIndexStatusResponse(msgId, result) {
     console.log(`[Indexing] No promise registered for ${msgId}`);
     return;
   }
-  
+
   var resolve = promiseCallbacks[msgId].resolve;
   delete promiseCallbacks[msgId];
-  
+
   resolve(result);
 }
 
@@ -387,6 +387,7 @@ if (isNode) {
   module.exports = {
     setRootFolder: setRootFolder,
     createIndex: createIndex,
+    checkIndexFile: checkIndexFile,
     search: search,
     add: addFile,
     remove: removeFile
