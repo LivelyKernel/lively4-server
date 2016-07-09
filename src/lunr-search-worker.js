@@ -143,11 +143,12 @@ export default class SearchWorker {
   }
 
   async createIndex() {
-    var files = this.cp.FileReader(this.options);
+    let files = this.cp.FileReader(this.options);
+    let indexedVersions = {};
 
-    var counter = 0;
+    let counter = 0;
     while (true) {
-      var file = await files.next();
+      let file = await files.next();
 
       // if the iterator is exhausted an object {done: true} is returned ?! ^^
       if (file.done) {
@@ -157,9 +158,11 @@ export default class SearchWorker {
       this.log(`Indexing file ${counter}\r`);
 
       this.addDocumentToIndex(file.value);
+      indexedVersions[file.value.path] = file.value.rev;
     }
 
     this.saveIndexFile();
+    this.saveIndexedVersions(indexedVersions);
   }
 
   async addFile(relPath) {
@@ -230,5 +233,9 @@ export default class SearchWorker {
     } catch (err) {
       this.log("Error saving index file: " + err);
     }
+  }
+
+  saveIndexedVersions(versions) {
+    // subclass might want to override this
   }
 }

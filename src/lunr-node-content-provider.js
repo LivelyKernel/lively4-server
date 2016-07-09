@@ -33,11 +33,9 @@ export function checkIndexFile(filename, options) {
   return new Promise((resolve, reject) => {
     try {
       fs.accessSync(filename, fs.R_OK | fs.W_OK);
-      console.log("respone available")
       resolve("available");
       return;
     } catch (err) {
-      console.log("respone unavailable")
       resolve("unavailable");
       return;
     }
@@ -52,7 +50,7 @@ function getFilepaths() {
       if (stat.isDirectory()) {
         walk(path.join(rootDir, file));
       } else if (stat.isFile()) {
-        // just index js-files for now, with size < 500kB
+        // file-size < 500kB
         if (isIndexable(file) && stat.size < 500000) {
         // if (file.slice(-3) === ".js") {
           relFilePaths.push(path.join(rootDir, file));
