@@ -12,8 +12,11 @@ Run `node httpServer.js -h` for command line argument information.
 
 # Setup
 
-Either run httpServer.js directly, or use a script like bin/lively4S1.sh
+`npm install`.
 
+Then, either run `node httpServer.js` directly, or use a script like bin/lively4S1.sh
+
+Configure the served directory with `--directory=path/to/dir`.
 
 # Self-supporting development of lively4-server
 
