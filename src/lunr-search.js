@@ -359,8 +359,6 @@ function toIdxRelPath(subdir, absPath) {
   return slash(absPath.slice(rootFolder.length + subdir.length + 1));
 }
 
-// *** Helper Functions ***
-
 function getNextMsgId() {
   curMsgId++;
   return curMsgId;

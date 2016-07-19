@@ -162,7 +162,6 @@ export default class SearchWorker {
     }
 
     this.saveIndexFile();
-    this.saveIndexedVersions(indexedVersions);
   }
 
   async addFile(relPath) {
