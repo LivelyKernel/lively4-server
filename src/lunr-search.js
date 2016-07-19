@@ -109,7 +109,7 @@ export function startWorker(subdir) {
           handleInitResponse(m.msgId, m.message, subdir);
           break;
         case "index-status-response":
-          handleIndexStatusResponse(m.msgId, m.message);
+          handleIndexStatusResponse(m.msgId, m.message, subdir);
           break;
         case "error":
           console.log("[Indexing] Error (" + subdir + "): " + m.message);
@@ -127,44 +127,50 @@ export function startWorker(subdir) {
   });
 }
 
+function stopWorker(subdir) {
+  console.log("stop", subdir);
+  send(workers[subdir], {
+    type: "stop"
+  });
+
+  delete workers[subdir];
+  delete indexStatus[subdir];
+}
+
 export function createIndex(subdir, options) {
-  return new Promise((resolve, reject) => {
-    if (!rootFolder) {
-      console.log("[Indexing] Cannot create index, no root folder set");
-      reject("Error: no root folder set");
-      return;
-    }
+  return startWorker(subdir).then(() => {
+    new Promise((resolve, reject) => {
+      if (!rootFolder) {
+        console.log("[Indexing] Cannot create index, no root folder set");
+        reject("Error: no root folder set");
+        return;
+      }
 
-    if (!workers[subdir]) {
-      console.log("[Indexing] Cannot create index, no worker running for ", subdir);
-      reject("Error: no worker running");
-      return;
-    }
+      if (indexStatus[subdir] === "ready") {
+        console.log("[Indexing] Index already exists");
+        resolve();
+        return;
+      }
 
-    if (indexStatus[subdir] === "ready") {
-      console.log("[Indexing] Index already exists");
-      resolve();
-      return;
-    }
+      if (indexStatus[subdir] === "indexing") {
+        reject();
+        return;
+      }
 
-    if (indexStatus[subdir] === "indexing") {
-      reject();
-      return;
-    }
+      var msgId = getNextMsgId();
+      promiseCallbacks[msgId] = {
+        resolve: resolve,
+        reject: reject
+      };
 
-    var msgId = getNextMsgId();
-    promiseCallbacks[msgId] = {
-      resolve: resolve,
-      reject: reject
-    };
+      send(workers[subdir], {
+        type: "init",
+        msgId: msgId,
+        options: options
+      });
 
-    send(workers[subdir], {
-      type: "init",
-      msgId: msgId,
-      options: options
+      indexStatus[subdir] = "indexing";
     });
-
-    indexStatus[subdir] = "indexing";
   });
 }
 
@@ -279,13 +285,13 @@ function handleInitResponse(msgId, result, subdir) {
     indexStatus[subdir] = "ready";
     resolve();
   } else {
-    // index was requested, does not exist and is being built not
+    // index was requested, does not exist and is being built now
     indexStatus[subdir] = "indexing";
     reject();
   }
 }
 
-function handleIndexStatusResponse(msgId, result) {
+function handleIndexStatusResponse(msgId, result, subdir) {
   if (!promiseCallbacks[msgId]) {
     // this should never happen!
     console.log(`[Indexing] No promise registered for ${msgId}`);
@@ -296,6 +302,10 @@ function handleIndexStatusResponse(msgId, result) {
   delete promiseCallbacks[msgId];
 
   resolve(result);
+
+  if (result === "unavailable") {
+    stopWorker(subdir);
+  }
 }
 
 export function addFile(serverRelPath) {

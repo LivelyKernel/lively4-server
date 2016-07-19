@@ -158,7 +158,6 @@ export default class SearchWorker {
       this.log(`Indexing file ${counter}\r`);
 
       this.addDocumentToIndex(file.value);
-      indexedVersions[file.value.path] = file.value.rev;
     }
 
     this.saveIndexFile();
@@ -203,7 +202,7 @@ export default class SearchWorker {
   }
 
   stop() {
-    this.saveIndexFile();
+    // this.saveIndexFile();
     this.exit();
   }
 
