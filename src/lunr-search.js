@@ -128,43 +128,39 @@ export function startWorker(subdir) {
 }
 
 export function createIndex(subdir, options) {
-  return new Promise((resolve, reject) => {
-    if (!rootFolder) {
-      console.log("[Indexing] Cannot create index, no root folder set");
-      reject("Error: no root folder set");
-      return;
-    }
+  return startWorker(subdir).then( () => {
+    return new Promise((resolve, reject) => {
+      if (!rootFolder) {
+        console.log("[Indexing] Cannot create index, no root folder set");
+        reject("Error: no root folder set");
+        return;
+      }
 
-    if (!workers[subdir]) {
-      console.log("[Indexing] Cannot create index, no worker running for ", subdir);
-      reject("Error: no worker running");
-      return;
-    }
+      if (indexStatus[subdir] === "ready") {
+        console.log("[Indexing] Index already exists");
+        resolve();
+        return;
+      }
 
-    if (indexStatus[subdir] === "ready") {
-      console.log("[Indexing] Index already exists");
-      resolve();
-      return;
-    }
+      if (indexStatus[subdir] === "indexing") {
+        reject();
+        return;
+      }
 
-    if (indexStatus[subdir] === "indexing") {
-      reject();
-      return;
-    }
+      var msgId = getNextMsgId();
+      promiseCallbacks[msgId] = {
+        resolve: resolve,
+        reject: reject
+      };
 
-    var msgId = getNextMsgId();
-    promiseCallbacks[msgId] = {
-      resolve: resolve,
-      reject: reject
-    };
+      send(workers[subdir], {
+        type: "init",
+        msgId: msgId,
+        options: options
+      });
 
-    send(workers[subdir], {
-      type: "init",
-      msgId: msgId,
-      options: options
+      indexStatus[subdir] = "indexing";
     });
-
-    indexStatus[subdir] = "indexing";
   });
 }
 
