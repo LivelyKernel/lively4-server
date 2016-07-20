@@ -94,7 +94,7 @@ function writeFile(sPath, req, res) {
           console.log(err);
           return;
         }
-        lunrSearch.add(sPath);
+        lunrSearch.addFile(sPath);
         console.log("saved " + sSourcePath);
         res.writeHead(200, "OK");
         res.end();
@@ -196,14 +196,15 @@ function readDirectory(aPath, res, contentType){
         if (dir.contents.length === files.length) {
           if (contentType == "text/html") {
             // prefix the directory itself as needed if it does not end in "/"
-            var match = aPath.match(/\/([^/]+)$/)
-            if (match) { prefix = match[1] + "/" } else {prefix = ""};
+            var prefix;
+            var match = aPath.match(/\/([^/]+)$/);
+            var prefix = match ? match[1] + "/" : "";
 
-        var data = "<html><body><h1>" + aPath + "</h1>\n<ul>" +
-          "<!-- prefix=" + prefix + ' -->'  +
-          dir.contents.map(function(ea) {
-            return "<li><a href='" + prefix + ea.name+ "'>"+ea.name + "</a></li>"
-          }).join("\n") + "</ul></body></html>"
+            var data = "<html><body><h1>" + aPath + "</h1>\n<ul>" +
+              "<!-- prefix=" + prefix + ' -->'  +
+              dir.contents.map(function(ea) {
+                return "<li><a href='" + prefix + ea.name+ "'>"+ea.name + "</a></li>"
+              }).join("\n") + "</ul></body></html>"
             // github return text/plain, therefore we need to do the same
             res.writeHead(200, {
               'content-type': 'text/html'
@@ -259,7 +260,7 @@ function respondWithCMD(cmd, res, finish, dryrun) {
 
 function deleteFile(sPath, res) {
     sPath = sPath.replace(/['"; &|]/g,"")
-    lunrSearch.remove(sPath);
+    lunrSearch.removeFile(sPath);
     return respondWithCMD("rm -v ~/lively4'" +sPath + "'", res)
 }
 
