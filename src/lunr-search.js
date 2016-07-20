@@ -191,7 +191,7 @@ export function setup(options) {
   });
 }
 
-function search(subdir, query) {
+export function search(subdir, query) {
   if (!workers[subdir]) {
     console.log("[Indexing] Cannot search, no index created for " + subdir);
     return Promise.reject();
@@ -214,7 +214,7 @@ function search(subdir, query) {
   return p;
 }
 
-export function checkIndexFile(subdir, options) {
+export function getStatus(subdir, options) {
   return startWorker(subdir).then(() => {
     if (indexStatus[subdir]) {
       return Promise.resolve(indexStatus[subdir]);
@@ -382,18 +382,4 @@ function join(path1, path2) {
     path2 = path2.slice(1, path2.length);
   }
   return path1 + path2;
-}
-
-
-// *** Export public methods ***
-
-if (isNode) {
-  module.exports = {
-    setRootFolder: setRootFolder,
-    createIndex: createIndex,
-    checkIndexFile: checkIndexFile,
-    search: search,
-    add: addFile,
-    remove: removeFile
-  }
 }

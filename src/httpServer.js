@@ -407,7 +407,7 @@ function searchFilesWithIndex(sPath, req, res) {
       res.end();
     });
   } else if (sPath.match(/\/api\/searchIndexStatus.*/)) {
-    lunrSearch.checkIndexFile(location).then(status => {
+    lunrSearch.getStatus(location).then(status => {
       console.log(`[Search] check index status for ${location}: ${status}`);
       res.writeHead(200, {"Content-Type": "application/json"});
       res.end(JSON.stringify({indexStatus: status}));
