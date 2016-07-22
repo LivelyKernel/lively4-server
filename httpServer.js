@@ -255,11 +255,19 @@ function respondWithCMD(cmd, res, finish, dryrun) {
 function deleteFile(sPath, res) {
     sPath = sPath.replace(/['"; &|]/g,"");
     // lunrSearch.remove(sPath);
-    return respondWithCMD("rm -v ~/lively4'" +sPath + "'", res);
+    return respondWithCMD(
+      "f=~/lively4'" +sPath + "';" 
+      + 'if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi', res);
+}
+
+function createDirectory(sPath, res) {
+  console.log("create directory " + sPath)
+  sPath = sPath.replace(/['"; &|]/g,"");
+  // lunrSearch.remove(sPath);
+  return respondWithCMD("mkdir ~/lively4'" +sPath + "'", res);
 }
 
 var RepositoryInSync = {}; // cheap semaphore
-
 
 function searchFiles(sPath, req, res) {
   var pattern = req.headers["searchpattern"];
@@ -483,6 +491,8 @@ http.createServer(function(req, res) {
     }
   } else if (req.method == "DELETE") {
       deleteFile(sPath, res);
+  } else if (req.method == "MKCOL") {
+      createDirectory(sPath, res);
   } else if (req.method == "OPTIONS") {
     console.log("doing a stat on " + sSourcePath);
     // statFile was called by client
