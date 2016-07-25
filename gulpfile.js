@@ -7,7 +7,7 @@ var lastTranspilationSuccessful;
 gulp.task("server", ["babel"], function() {
   if (lastTranspilationSuccessful) {
     if (node) node.kill()
-    node = spawn("node", ["httpServer.js", "-p", "8088", "-d", "../.."], {stdio: "inherit", cwd: "dist"})
+    node = spawn("node", (["httpServer.js"]).concat(process.argv.slice(2)), {stdio: "inherit", cwd: "dist"})
     node.on("close", function (code) {
       if (code === 8) {
         gulp.log("Error detected, waiting for changes...");
