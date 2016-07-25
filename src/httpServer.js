@@ -398,13 +398,13 @@ function searchFilesWithIndex(sPath, req, res) {
     lunrSearch.createIndex(location).then(() => {
       // index is available
       console.log("[Search] index available in location: " + location);
-      res.writeHead(200, "OK");
-      res.end();
+      res.writeHead(200, {"Content-Type": "application/json"});
+      res.end(JSON.stringify({indexStatus: "available"}));
     }, () => {
       // index not available yet
       console.log("[Search] index not yet available in location: " + location);
-      res.writeHead(200, "Not yet");
-      res.end();
+      res.writeHead(200, {"Content-Type": "application/json"});
+      res.end(JSON.stringify({indexStatus: "indexing"}));
     });
   } else if (sPath.match(/\/api\/search\/statusIndex.*/)) {
     lunrSearch.getStatus(location).then(status => {
