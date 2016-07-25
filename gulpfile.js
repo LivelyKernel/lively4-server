@@ -6,15 +6,15 @@ var lastTranspilationSuccessful;
 
 gulp.task("server", ["babel"], function() {
   if (lastTranspilationSuccessful) {
-    if (node) node.kill()
-    node = spawn("node", ["httpServer.js", "-p", "8088", "-d", "../.."], {stdio: "inherit", cwd: "dist"})
+    if (node) node.kill();
+    node = spawn("node", ["httpServer.js", "-p", "8088", "-d", "../.."], {stdio: "inherit", cwd: "dist"});
     node.on("close", function (code) {
       if (code === 8) {
         gulp.log("Error detected, waiting for changes...");
       }
     });
   }
-})
+});
 
 gulp.task("babel", function () {
   // don't end the watch task if the transpilation fails
@@ -30,9 +30,13 @@ gulp.task("babel", function () {
     .pipe(gulp.dest("dist"));
 });
 
-gulp.task("watch", function() {
+gulp.task("prod", function() {
   gulp.run(["babel", "server"]);
-  gulp.watch("src/**/*.js", ["babel", "server"])
 });
 
-gulp.task("default", ["watch"]);
+gulp.task("watch", function() {
+  gulp.run(["babel", "server"]);
+  gulp.watch("src/**/*.js", ["babel", "server"]);
+});
+
+gulp.task("default", ["prod"]);
