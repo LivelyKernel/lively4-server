@@ -58,7 +58,6 @@ if (sShadowDir) {
 }
 
 lunrSearch.setRootFolder(sSourceDir);
-// lunrSearch.createIndex("/lively4-core");
 
 // this adds a timestamp to all log messages
 require("log-timestamp");
@@ -395,7 +394,7 @@ function searchFilesWithIndex(sPath, req, res) {
   var query = urlParts.query;
   var location = query.location;
 
-  if (sPath.match(/\/api\/searchSetup.*/)) {
+  if (sPath.match(/\/api\/search\/createIndex.*/)) {
     lunrSearch.createIndex(location).then(() => {
       // index is available
       console.log("[Search] index available in location: " + location);
@@ -407,11 +406,17 @@ function searchFilesWithIndex(sPath, req, res) {
       res.writeHead(200, "Not yet");
       res.end();
     });
-  } else if (sPath.match(/\/api\/searchIndexStatus.*/)) {
+  } else if (sPath.match(/\/api\/search\/statusIndex.*/)) {
     lunrSearch.getStatus(location).then(status => {
       console.log(`[Search] check index status for ${location}: ${status}`);
       res.writeHead(200, {"Content-Type": "application/json"});
       res.end(JSON.stringify({indexStatus: status}));
+    });
+  } else if (sPath.match(/\/api\/search\/removeIndex.*/)) {
+    lunrSearch.removeIndex(location).then(() => {
+      console.log("[Search] index removed in location: " + location);
+      res.writeHead(200, "OK");
+      res.end();
     });
   } else {
     var pattern = query.q;
