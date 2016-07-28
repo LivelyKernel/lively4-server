@@ -6,16 +6,12 @@ var mime = require("mime");
 var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
-var child_process = require("child_process")
+var child_process = require("child_process");
 var slash = require("slash");
 var lunrSearch = require("./lively4-search/shared/lunr-search.js");
-// .search(string)
-// .update(path)
-// .add(path)
-// .remove(path)
 
 
-var lively4dir = "~/lively4/" // #TODO replace magic string... lively4
+var lively4dir = "~/lively4/"; // #TODO replace magic string... lively4
 
 
 // define command line options
@@ -37,9 +33,9 @@ var options = [{
   type: "path",
   description: "if set, reads and writes go to a shadow file system",
   example: "'node httpServer.js -s ../shadow' or 'node httpServer.js --shadow ../shadow'"
-}]
+}];
 
-console.log("Welcome to Lively!")
+console.log("Welcome to Lively!");
 
 // parse command line arguments
 var args = argv.option(options).run();
@@ -67,7 +63,7 @@ var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 //write file to disk
 function writeFile(sPath, req, res) {
   var sSourcePath = path.join(sSourceDir, sPath);
-  console.log("write file: " + sSourcePath)
+  console.log("write file: " + sSourcePath);
   var fullBody = '';
 
   //read chunks of data and store it in buffer
@@ -103,7 +99,7 @@ function writeFile(sPath, req, res) {
 }
 
 function _readFile(sPath, res) {
-  console.log("read file " + sPath)
+  console.log("read file " + sPath);
   fs.exists(sPath, function(exists) {
     if (!exists) {
       res.writeHead(404);
@@ -111,7 +107,7 @@ function _readFile(sPath, res) {
     } else {
       fs.stat(sPath, function(err, stats) {
         // console.log("stat " + sPath + " " + err + " "  + stats)
-        if (err != null) {
+        if (err !== null) {
           if (err.code == 'ENOENT') {
               res.writeHead(404);
               res.end();
@@ -121,7 +117,7 @@ function _readFile(sPath, res) {
           return;
         }
         if (stats.isDirectory()) {
-          readDirectory(sPath, res, "text/html")
+          readDirectory(sPath, res, "text/html");
         } else {
           res.writeHead(200, {
             'content-type': mime.lookup(sPath)
@@ -130,14 +126,14 @@ function _readFile(sPath, res) {
             bufferSize: 64 * 1024
           });
           stream.on('error', function (err) {
-            console.log("error reading: " + sPath + " error: " + err)
+            console.log("error reading: " + sPath + " error: " + err);
             res.end("Error reading file\n");
           });
           stream.pipe(res);
         }
       });
-    };
-  })
+    }
+  });
 }
 
 function _readShadowFile(sPath, res) {
@@ -166,10 +162,10 @@ function readDirectory(aPath, res, contentType){
     var dir = {
       type: "directory",
       contents: []
-    }
+    };
 
     files.forEach(function(filename) {
-      var filePath = path.join(aPath, filename)
+      var filePath = path.join(aPath, filename);
       fs.stat(filePath, function(err, statObj) {
         if (!statObj) {
            dir.contents.push({
@@ -193,24 +189,25 @@ function readDirectory(aPath, res, contentType){
 
         // is there a better way for synchronization???
         if (dir.contents.length === files.length) {
+          var data;
           if (contentType == "text/html") {
             // prefix the directory itself as needed if it does not end in "/"
-            var prefix;
             var match = aPath.match(/\/([^/]+)$/);
             var prefix = match ? match[1] + "/" : "";
 
-            var data = "<html><body><h1>" + aPath + "</h1>\n<ul>" +
+            data = "<html><body><h1>" + aPath + "</h1>\n<ul>" +
               "<!-- prefix=" + prefix + ' -->'  +
               dir.contents.map(function(ea) {
-                return "<li><a href='" + prefix + ea.name+ "'>"+ea.name + "</a></li>"
-              }).join("\n") + "</ul></body></html>"
+                return "<li><a href='" + prefix + ea.name+ "'>"+ea.name + "</a></li>";
+              }).join("\n") + "</ul></body></html>";
+
             // github return text/plain, therefore we need to do the same
             res.writeHead(200, {
               'content-type': 'text/html'
             });
             res.end(data);
           } else {
-            var data = JSON.stringify(dir, null, 2);
+            data = JSON.stringify(dir, null, 2);
             // github return text/plain, therefore we need to do the same
             res.writeHead(200, {
               'content-type': 'text/plain'
@@ -224,56 +221,63 @@ function readDirectory(aPath, res, contentType){
 }
 
 var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
-  return _readFile(path.join(sSourceDir, sPath), res)
+  return _readFile(path.join(sSourceDir, sPath), res);
 };
 
 function respondWithCMD(cmd, res, finish, dryrun) {
-    console.log(cmd)
+    console.log(cmd);
 
-    res.setHeader('Content-Type', 'text/plain')
-    res.setHeader('Transfer-Encoding', 'chunked')
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Transfer-Encoding', 'chunked');
     res.writeHead(200);
 
     if (dryrun) {
-      return res.end("dry run:\n" + cmd)
+      return res.end("dry run:\n" + cmd);
     }
 
     var process = child_process.spawn("bash", ["-c", cmd]);
 
     process.stdout.on('data', function (data) {
       console.log('STDOUT: ' + data);
-      res.write(data, undefined, function() {console.log("FLUSH")} )
-    })
+      res.write(data, undefined, function() {console.log("FLUSH");} );
+    });
 
     process.stderr.on('data', function (data) {
     console.log('stderr: ' + data);
-    res.write(data)
-    })
+    res.write(data);
+    });
 
     process.on('close', function (code) {
-      res.end()
-      if (finish) finish()
-    })
+      res.end();
+      if (finish) finish();
+    });
 }
 
 
 function deleteFile(sPath, res) {
-    sPath = sPath.replace(/['"; &|]/g,"")
+    sPath = sPath.replace(/['"; &|]/g,"");
     lunrSearch.removeFile(sPath);
-    return respondWithCMD("rm -v ~/lively4'" +sPath + "'", res)
+    return respondWithCMD(
+      "f=~/lively4'" +sPath + "';" +
+      'if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi', res);
 }
 
-var RepositoryInSync = {} // cheap semaphore
+function createDirectory(sPath, res) {
+  console.log("create directory " + sPath);
+  sPath = sPath.replace(/['"; &|]/g,"");
+  return respondWithCMD("mkdir ~/lively4'" +sPath + "'", res);
+}
 
+var RepositoryInSync = {}; // cheap semaphore
 
 function searchFiles(sPath, req, res) {
-  var pattern = req.headers["searchpattern"]
-  var rootdir = req.headers["rootdir"]
+  var pattern = req.headers["searchpattern"];
+  var rootdir = req.headers["rootdir"];
 
   if (sPath.match(/\/_search\/files/)) {
     return respondWithCMD("cd " +  lively4dir + "; " +
     (rootdir ? "cd '" + rootdir + "'; " : "") +
-    "grep -R '"+ pattern +"'", res)
+    "grep -R '"+ pattern +"'", res);
   } else {
       res.writeHead(200);
       res.end("Lively4 Search! " + sPath + " not implemented!");
@@ -281,106 +285,107 @@ function searchFiles(sPath, req, res) {
 }
 
 function gitControl(sPath, req, res) {
-  console.log("git control: " + sPath)
+  console.log("git control: " + sPath);
 
-  var dryrun = req.headers["dryrun"]
-  dryrun = dryrun && dryrun == "true"
+  var dryrun = req.headers["dryrun"];
+  dryrun = dryrun && dryrun == "true";
   // #TODO replace it with something more secure... #Security #Prototype
   // Set CORS headers
-  var repository = req.headers["gitrepository"]
-  var repositoryurl = req.headers["gitrepositoryurl"]
-  var username = req.headers["gitusername"]
-  var password = req.headers["gitpassword"]
-  var email = req.headers["gitemail"]
-  var branch = req.headers["gitrepositorybranch"]
-  var msg = req.headers["gitcommitmessage"]
+  var repository = req.headers["gitrepository"];
+  var repositoryurl = req.headers["gitrepositoryurl"];
+  var username = req.headers["gitusername"];
+  var password = req.headers["gitpassword"];
+  var email = req.headers["gitemail"];
+  var branch = req.headers["gitrepositorybranch"];
+  var msg = req.headers["gitcommitmessage"];
 
   if (!email) {
-    return res.end("please provide email")
+    return res.end("please provide email");
   }
   if (!username) {
-    return res.end("please provide username")
+    return res.end("please provide username");
   }
   if (!password) {
-    return res.end("please login")
+    return res.end("please login");
   }
 
+  var cmd;
   if (sPath.match(/\/_git\/sync/)) {
       // return repsondWithCMD("echo Sync " + repository + " " + RepositoryInSync[repository], res)
       // #TODO finish it... does not work yet
-      console.log("SYNC REPO " + RepositoryInSync[repository])
+      console.log("SYNC REPO " + RepositoryInSync[repository]);
       if (RepositoryInSync[repository]) {
         return respondWithCMD("echo Sync in progress: " +
-        repository, res, null, dryrun)
+        repository, res, null, dryrun);
       }
-      RepositoryInSync[repository] = true
-      var cmd = "lively4sync.sh '" + repository + "' '"
-        + username + "' '" + password + "' '" +email + "' '"+branch +"' '"+msg+"'"
+      RepositoryInSync[repository] = true;
+      cmd = "lively4sync.sh '" + repository + "' '" +
+        username + "' '" + password + "' '" +email + "' '"+branch +"' '"+msg+"'";
       respondWithCMD(cmd, res, function() {
-      RepositoryInSync[repository] = undefined
-      }, dryrun)
+      RepositoryInSync[repository] = undefined;
+      }, dryrun);
 
   } else if (sPath.match(/\/_git\/resolve/)) {
-      var cmd = "lively4resolve.sh '" + repository + "'"
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = "lively4resolve.sh '" + repository + "'";
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/status/)) {
-      var cmd = 'cd ' + repository + "; git status "
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = 'cd ' + repository + "; git status ";
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/log/)) {
-      var cmd = 'cd ' + repository + "; git log "
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = 'cd ' + repository + "; git log ";
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/commit/)) {
       if (msg) {
-        msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'"
+        msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'";
       } else {
-         return res.end("Please provide a commit message!")
+         return res.end("Please provide a commit message!");
       }
-      var cmd = 'cd ' + repository + ";\n"+
+      cmd = 'cd ' + repository + ";\n"+
         "git config user.name "+username + ";\n"+
         "git config user.email "+email + ";\n"+
-        "git commit "+ msg +" -a "
-      respondWithCMD(cmd, res, null, dryrun)
+        "git commit "+ msg +" -a ";
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/diff/)) {
-      var cmd = 'cd ' + repository + "; git diff "
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = 'cd ' + repository + "; git diff ";
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/clone/)) {
-      var cmd = 'cd '+lively4dir+'; \n' +
-    "git clone " + repositoryurl + " "+ repository
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = 'cd '+lively4dir+'; \n' +
+    "git clone " + repositoryurl + " "+ repository;
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/npminstall/)) {
-      var cmd = 'cd ~/lively4/' +  repository + ";\n" +
-    'npm install'
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = 'cd ~/lively4/' +  repository + ";\n" +
+    'npm install';
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/remoteurl/)) {
-      var cmd = 'cd ~/lively4/' +  repository + ";\n" +
-    'git config --get remote.origin.url'
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = 'cd ~/lively4/' +  repository + ";\n" +
+    'git config --get remote.origin.url';
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/branches/)) {
-      var cmd = 'cd ~/lively4/' +  repository + ";\n" +
-    'git branch -a '
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = 'cd ~/lively4/' +  repository + ";\n" +
+    'git branch -a ';
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/branch/)) {
-      var cmd = "~/lively4-server/bin/lively4branch.sh '" + repository + "' '"
-    + username + "' '" + password + "' '" +email +"' '"+ branch + "'"
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = "~/lively4-server/bin/lively4branch.sh '" + repository + "' '" +
+      username + "' '" + password + "' '" +email +"' '"+ branch + "'";
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/merge/)) {
-      var cmd = "~/lively4-server/bin/lively4merge.sh '" + repository + "' '"
-    + username + "' '" + password + "' '" +email +"' '"+ branch + "'"
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = "~/lively4-server/bin/lively4merge.sh '" + repository + "' '" +
+      username + "' '" + password + "' '" +email +"' '"+ branch + "'";
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/delete/)) {
-      var cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'"
-      respondWithCMD(cmd, res, null, dryrun)
+      cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'";
+      respondWithCMD(cmd, res, null, dryrun);
 
   } else {
       res.writeHead(200);
@@ -437,19 +442,19 @@ http.createServer(function(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Request-Method', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET');
+  res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT');
   res.setHeader('Access-Control-Allow-Headers', '*');
 
   var oUrl = url.parse(req.url, true, false);
   console.log("pathname: " + oUrl.pathname);
 
-  var pathname = oUrl.pathname
+  var pathname = oUrl.pathname;
 
   // use slash to avoid conversion from '\' to '/' on Windows
   var sPath = slash(path.normalize(oUrl.pathname));
   // console.log("normalize: " + sPath);
 
-  if (breakOutRegex.test(sPath) == true) {
+  if (breakOutRegex.test(sPath) === true) {
     res.writeHead(500);
     res.end("Your not allowed to access files outside the pages storage area\n");
     return;
@@ -467,29 +472,29 @@ http.createServer(function(req, res) {
 
   if (pathname.match(/\/_meta\//)) {
       if (pathname.match(/_meta\/exit/)) {
-        res.end("goodbye, we hope for the best!")
-        process.exit()
+        res.end("goodbye, we hope for the best!");
+        process.exit();
       } else if (pathname.match(/_meta\/hello/)) {
-        res.end("Hello World!")
+        res.end("Hello World!");
       } else if (pathname.match(/_meta\/play/)) {
-        var filename = '~/lively4/' +req.headers["filepath"]
-        var cmd = "play '" +  filename + "'"
-        respondWithCMD(cmd, res)
+        var filename = '~/lively4/' + req.headers["filepath"];
+        var cmd = "play '" +  filename + "'";
+        respondWithCMD(cmd, res);
       } else {
         res.writeHead(500);
         res.end("meta: " + pathname + " not implemented!" );
       }
-      return
+      return;
   }
 
   if (pathname.match(/\/_search\//)) {
-    searchFiles(pathname, req, res)
-    return
+    searchFiles(pathname, req, res);
+    return;
   }
 
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
-    readFile(sPath, res)
+    readFile(sPath, res);
   } else if (req.method == "PUT") {
     //writes go to shadow dir if selected
     if (sShadowDir) {
@@ -505,13 +510,15 @@ http.createServer(function(req, res) {
       writeFile(sPath, req, res);
     }
   } else if (req.method == "DELETE") {
-      deleteFile(sPath, res)
+      deleteFile(sPath, res);
+  } else if (req.method == "MKCOL") {
+      createDirectory(sPath, res);
   } else if (req.method == "OPTIONS") {
     console.log("doing a stat on " + sSourcePath);
     // statFile was called by client
     fs.stat(sSourcePath, function(err, stats) {
-      if (err != null) {
-        console.log("stat ERROR: " + err)
+      if (err !== null) {
+        console.log("stat ERROR: " + err);
         if (err.code == 'ENOENT') {
             res.writeHead(404);
             res.end();
@@ -521,7 +528,7 @@ http.createServer(function(req, res) {
         return;
       }
       if (stats.isDirectory()) {
-        readDirectory(sSourcePath, res)
+        readDirectory(sSourcePath, res);
       } else if (stats.isFile()) {
           res.writeHead(200, {
             'content-type': 'text/plain'
@@ -536,6 +543,6 @@ http.createServer(function(req, res) {
   }
   console.log("Server running on port " + port + " in directory " + sSourceDir);
   if (sShadowDir) {
-    console.log("Using shadow dir " + sShadowDir)
+    console.log("Using shadow dir " + sShadowDir);
   }
 });
