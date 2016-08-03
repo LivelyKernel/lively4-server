@@ -355,7 +355,7 @@ function gitControl(sPath, req, res) {
 
   } else if (sPath.match(/\/_git\/clone/)) {
       cmd = 'cd '+lively4dir+'; \n' +
-    "git clone " + repositoryurl + " "+ repository;
+    "git clone --recursive " + repositoryurl + " "+ repository;
       respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/npminstall/)) {
