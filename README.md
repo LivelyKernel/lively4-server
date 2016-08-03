@@ -1,10 +1,6 @@
 # lively4-server
 Alternative to accessing GitHub directly
 
-After cloning the repo, cd into `lively4-server`. 
-Run `npm install` to install all required packages.
-Run `node httpServer.js -h` for command line argument information.
-
 ## Publict Example Instances ...
 
 - https://lively-kernel.org/lively4/
@@ -12,7 +8,37 @@ Run `node httpServer.js -h` for command line argument information.
 
 # Setup
 
-`npm install`.
+`gulp` is needed to run the babel transpilation tasks and to start the server. Therefore install it (globally), then install the dependencies.
+
+```
+cd lively4-server
+npm install -g gulp
+npm install
+```
+
+The server search exists in an external repository and is included as a git submodule. Therefore:
+```
+git submodule init
+git submodule update
+```
+
+Then run 
+```
+gulp
+```
+This will first transpile the code in the `src` folder and write it to `dist`, then start the server. You can also configure the served directory and the port, e.g.
+```
+gulp -p 8080 -d ../foo/bar
+```
+
+During development you can use 
+```
+gulp watch -p 8080 -d ../foo/bar
+```
+which will automatically watch files in `src` folder and initiate a transpilation and server restart on changes.
+
+**!!!Update the rest of this readme!!!**
+
 
 Then, either run `node httpServer.js` directly, or use a script like bin/lively4S1.sh
 
