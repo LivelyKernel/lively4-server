@@ -8,5 +8,8 @@
     "transform-regenerator",
     "syntax-async-functions",
     "syntax-async-generators"
+  ],
+  "ignore": [
+    "src/lively4-search/external"
   ]
 }
