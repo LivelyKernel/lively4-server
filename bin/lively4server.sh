@@ -23,7 +23,7 @@ pushd $LIVELY
 
 export PATH=$SERVER/bin:$PATH
 
-$SERVER/bin/watch.sh $SERVER/httpServer.js 'kill -USR1 '$$ &
+$SERVER/bin/watch.sh $SERVER/dist/httpServer.js 'kill -USR1 '$$ &
 WATCHERPID=$!
 
 if [ "$OS" == "Windows_NT" ]; then
@@ -47,10 +47,10 @@ while true; do
     popd
   fi
   # start server and filter secret tokens out before logging
-  
-  
-  node $SERVER/httpServer.js --directory=$LIVELY4 --port=$PORT 2>&1 > >(\
-	  sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
+
+  pushd $SERVER; gulp babel; popd 
+  node $SERVER/dist/httpServer.js --directory=$LIVELY4 --port=$PORT 2>&1 > >(\
+  	  sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
 	  sed -u 's/lively4sync.*/lively4sync.../' | \
 	  tee -a $LOGFILE ) & 
 	NODEPID=$!
