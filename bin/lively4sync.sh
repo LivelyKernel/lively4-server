@@ -28,6 +28,7 @@ echo COMMIT $COMMIT
 git commit -m "$COMMIT" -a ; 
 echo "PULL"
 git pull --no-edit origin "$BRANCH" ; 
+git submodule update
 
 # ALT: #Issue6
 # git pull --rebase --no-edit origin "$BRANCH" ; 
