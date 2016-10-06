@@ -89,7 +89,11 @@ function writeFile(sPath, req, res) {
           console.log(err);
           return;
         }
-        lunrSearch.addFile(sPath);
+        try {
+          lunrSearch.addFile(sPath);
+        } catch(e) {
+          console.log("Error indexing file, but conitue anyway: " + e)
+        }
         console.log("saved " + sSourcePath);
         res.writeHead(200, "OK");
         res.end();
