@@ -53,6 +53,7 @@ if (sShadowDir) {
   });
 }
 
+console.log("[search] setRootFolder " + sSourceDir)
 lunrSearch.setRootFolder(sSourceDir);
 
 // this adds a timestamp to all log messages
@@ -409,9 +410,9 @@ function searchFilesWithIndex(sPath, req, res) {
       console.log("[Search] index available in location: " + location);
       res.writeHead(200, {"Content-Type": "application/json"});
       res.end(JSON.stringify({indexStatus: "available"}));
-    }, () => {
+    }, (err) => {
       // index not available yet
-      console.log("[Search] index not yet available in location: " + location);
+      console.log("[Search] index not yet available in location: " + location + " Error: " + err);
       res.writeHead(200, {"Content-Type": "application/json"});
       res.end(JSON.stringify({indexStatus: "indexing"}));
     });
