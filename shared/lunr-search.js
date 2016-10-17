@@ -74,6 +74,7 @@ export function setRootFolder(filepath) {
 }
 
 export function startWorker(subdir) {
+  console.log("[Indexing] startWorker on " + subdir)
   return new Promise((resolve, reject) => {
     if (!rootFolder) {
       throw new Error("startWorker: no root folder set");

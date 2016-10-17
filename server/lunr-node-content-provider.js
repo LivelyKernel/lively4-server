@@ -11,6 +11,8 @@ export function isIndexable(filepath) {
 
 // this function throws an error if the index file does not exist
 export function loadIndexJson(l4idxFile) {
+  console.log("[search] loadIndexJson " + l4idxFile )
+
   fs.accessSync(l4idxFile, fs.R_OK | fs.W_OK);
   // l4idxFile exists and is accessible to rw, load it
   return new Promise( (resolve, reject) => {
@@ -21,6 +23,8 @@ export function loadIndexJson(l4idxFile) {
 }
 
 export function saveIndexJson(jsonIndex, filename) {
+  console.log("[search] saveIndexFile " + filename )
+
   var serialized = JSON.stringify(jsonIndex);
   return new Promise( (resolve, reject) => {
     fs.writeFile(filename, serialized, (err, data) => {
@@ -30,6 +34,7 @@ export function saveIndexJson(jsonIndex, filename) {
 }
 
 export function removeIndexFile(filename) {
+  console.log("[search] removeIndexFile " + filename )
   return new Promise( (resolve, reject) => {
     fs.unlink(filename, (err) => {
       resolve();
@@ -71,6 +76,8 @@ function getFilepaths() {
 }
 
 export async function* FileReader(filepath) {
+  console.log("[search] FileReader " + filepath )
+  
   let filepaths;
   if (filepath === undefined) {
     filepaths = getFilepaths();
