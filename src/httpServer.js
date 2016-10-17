@@ -8,7 +8,6 @@ var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process");
 var slash = require("slash");
-var lunrSearch = require("./lively4-search/shared/lunr-search.js");
 
 
 var lively4dir = "~/lively4/"; // #TODO replace magic string... lively4
@@ -33,7 +32,14 @@ var options = [{
   type: "path",
   description: "if set, reads and writes go to a shadow file system",
   example: "'node httpServer.js -s ../shadow' or 'node httpServer.js --shadow ../shadow'"
+},{
+  name: "index-files",
+  long: "i",
+  type: "boolean",
+  description: "indexing files for search",
+  example: "'node --index-files=true'"
 }];
+
 
 console.log("Welcome to Lively!");
 
@@ -43,6 +49,14 @@ var args = argv.option(options).run();
 var port = args.options.port || 8080;
 var sSourceDir = args.options.directory || ".";
 var sShadowDir = args.options.shadow;
+var indexFiles = args.options['index-files'];
+
+// use-case cof #ContextJS ?
+if (indexFiles) {
+ var lunrSearch = require("./lively4-search/shared/lunr-search.js");
+} else {
+  console.log("[search] indexing files is disabled");  
+}
 
 if (sShadowDir) {
   mkdirp(sShadowDir, function(err) {
@@ -53,8 +67,10 @@ if (sShadowDir) {
   });
 }
 
-console.log("[search] setRootFolder " + sSourceDir)
-lunrSearch.setRootFolder(sSourceDir);
+if (indexFiles) {
+  console.log("[search] setRootFolder " + sSourceDir)
+  lunrSearch.setRootFolder(sSourceDir);
+}
 
 // this adds a timestamp to all log messages
 require("log-timestamp");
@@ -90,10 +106,13 @@ function writeFile(sPath, req, res) {
           console.log(err);
           return;
         }
-        try {
-          lunrSearch.addFile(sPath);
-        } catch(e) {
-          console.log("Error indexing file, but conitue anyway: " + e)
+        
+        if (indexFiles) {
+          try {
+            lunrSearch.addFile(sPath);
+          } catch(e) {
+            console.log("Error indexing file, but conitue anyway: " + e)
+          }
         }
         console.log("saved " + sSourcePath);
         res.writeHead(200, "OK");
@@ -261,10 +280,12 @@ function respondWithCMD(cmd, res, finish, dryrun) {
 
 function deleteFile(sPath, res) {
     sPath = sPath.replace(/['"; &|]/g,"");
-    try {
-      lunrSearch.removeFile(sPath);
-    } catch(e) {
-      console.log("[search] Error removing file, but conitue anyway: " + e)
+    if (indexFiles) {
+      try {
+        lunrSearch.removeFile(sPath);
+      } catch(e) {
+        console.log("[search] Error removing file, but conitue anyway: " + e)
+      }
     }
     return respondWithCMD(
       "f=~/lively4'" +sPath + "';" +
@@ -404,6 +425,10 @@ function gitControl(sPath, req, res) {
 
 
 function searchFilesWithIndex(sPath, req, res) {
+  if (!indexFiles) {
+      res.writeHead(503);
+      return res.end("Index server not running ");
+  }
   var urlParts = url.parse(req.url, true);
   var query = urlParts.query;
   var location = query.location;

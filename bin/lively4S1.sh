@@ -2,6 +2,7 @@
 
 LIVELY=~/lively4
 SERVER=~/lively4-server
+INDEX_Files=true
 PORT=9005
 GITPULL=true
 
