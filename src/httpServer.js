@@ -302,12 +302,17 @@ var RepositoryInSync = {}; // cheap semaphore
 
 function searchFiles(sPath, req, res) {
   var pattern = req.headers["searchpattern"];
-  var rootdir = req.headers["rootdir"];
+  var rootdirs = req.headers["rootdirs"];
+  var excludes = ".git,"+req.headers["excludes"];
 
   if (sPath.match(/\/_search\/files/)) {
-    return respondWithCMD("cd " +  lively4dir + "; " +
-    (rootdir ? "cd '" + rootdir + "'; " : "") +
-    "grep -R '"+ pattern +"'", res);
+    var cmd = "cd " +  lively4dir + "; " 
+    cmd += "find " + rootdirs.replace(/,/g," ") + " -type f " 
+    cmd += excludes.split(",").map( function(ea) { return ' -not -wholename "*' + ea + '*"' }).join(" ")
+    cmd += ' | while read file; do grep -H "' + pattern + '" "$file" ; done | cut -b 1-200' 
+  return respondWithCMD(cmd, res)
+//    return respondWithCMD("cd " +  lively4dir + "; " +
+//     (rootdir ? "cd '" + rootdir + "'; " : "") + "grep -R '"+ pattern +"'", res);
   } else {
       res.writeHead(200);
       res.end("Lively4 Search! " + sPath + " not implemented!");
@@ -404,6 +409,7 @@ function gitControl(sPath, req, res) {
       respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/branch/)) {
+     // #TODO get rud of absolute paths...
       cmd = "~/lively4-server/bin/lively4branch.sh '" + repository + "' '" +
       username + "' '" + password + "' '" +email +"' '"+ branch + "'";
       respondWithCMD(cmd, res, null, dryrun);
