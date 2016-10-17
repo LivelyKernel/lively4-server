@@ -67,3 +67,26 @@ The second server allows for a very short feedback loops of changing code and re
 Once the new code is on github the first server can be asked to restart itself and before doing so, the new code gets pulled from github. If by any chances the server crashes, it will continously try to pull changes from github, allowing to push fixes from the second server to github or make the changes directly on github. 
 
 There might be problems that will require admin access or similar to the server, but these occasions should be minimalized with the new development workflow. 
+
+
+## Submodules
+
+### Add
+
+```
+git subtree add -P src/lively4-search https://github.com/LivelyKernel/lively4-search.git master
+```
+
+## Pull
+
+```
+git subtree pull -P src/lively4-search https://github.com/LivelyKernel/lively4-search.git master
+```
+
+## Push
+
+```
+git subtree push -P src/lively4-search https://github.com/LivelyKernel/lively4-search.git master
+```
+
+
