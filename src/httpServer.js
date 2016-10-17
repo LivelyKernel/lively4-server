@@ -261,7 +261,11 @@ function respondWithCMD(cmd, res, finish, dryrun) {
 
 function deleteFile(sPath, res) {
     sPath = sPath.replace(/['"; &|]/g,"");
-    lunrSearch.removeFile(sPath);
+    try {
+      lunrSearch.removeFile(sPath);
+    } catch(e) {
+      console.log("[search] Error removing file, but conitue anyway: " + e)
+    }
     return respondWithCMD(
       "f=~/lively4'" +sPath + "';" +
       'if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi', res);
@@ -405,17 +409,26 @@ function searchFilesWithIndex(sPath, req, res) {
   var location = query.location;
 
   if (sPath.match(/\/api\/search\/createIndex.*/)) {
-    lunrSearch.createIndex(location).then(() => {
-      // index is available
-      console.log("[Search] index available in location: " + location);
-      res.writeHead(200, {"Content-Type": "application/json"});
-      res.end(JSON.stringify({indexStatus: "available"}));
-    }, (err) => {
-      // index not available yet
-      console.log("[Search] index not yet available in location: " + location + " Error: " + err);
-      res.writeHead(200, {"Content-Type": "application/json"});
-      res.end(JSON.stringify({indexStatus: "indexing"}));
-    });
+    
+    try {
+      lunrSearch.createIndex(location).then(() => {
+        // index is available
+        console.log("[Search] index available in location: " + location);
+        res.writeHead(200, {"Content-Type": "application/json"});
+        res.end(JSON.stringify({indexStatus: "available"}));
+      }, (err) => {
+        // index not available yet
+        console.log("[Search] index not yet available in location: " + location + " Error: " + err);
+        res.writeHead(200, {"Content-Type": "application/json"});
+        res.end(JSON.stringify({indexStatus: "indexing"}));
+      });
+    } catch(e) {
+      console.log("[Search] could not create index, but conitue anyway: " + e)
+      res.writeHead(500, {"Content-Type": "application/json"});
+      res.end("Creating index failed due: " + e);
+      return
+    }
+
   } else if (sPath.match(/\/api\/search\/statusIndex.*/)) {
     lunrSearch.getStatus(location).then(status => {
       console.log(`[Search] check index status for ${location}: ${status}`);
