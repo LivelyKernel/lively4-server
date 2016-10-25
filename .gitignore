@@ -4,6 +4,8 @@ COMMIT
 server.log
 server.log.last
 
+*.l4idx
+
 # Emacs backup files
 *~
 

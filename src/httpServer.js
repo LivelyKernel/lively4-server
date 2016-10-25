@@ -326,16 +326,18 @@ function gitControl(sPath, req, res) {
   dryrun = dryrun && dryrun == "true";
   // #TODO replace it with something more secure... #Security #Prototype
   // Set CORS headers
-  var repository = req.headers["gitrepository"];
+  var repository =    req.headers["gitrepository"];
   var repositoryurl = req.headers["gitrepositoryurl"];
-  var username = req.headers["gitusername"];
-  var password = req.headers["gitpassword"];
-  var email = req.headers["gitemail"];
-  var branch = req.headers["gitrepositorybranch"];
-  var msg = req.headers["gitcommitmessage"];
+  var username =      req.headers["gitusername"];
+  var password =      req.headers["gitpassword"];
+  var email =         req.headers["gitemail"];
+  var branch =        req.headers["gitrepositorybranch"];
+  var msg =           req.headers["gitcommitmessage"];
+  var filepath =      req.headers["gitfilepath"];
+
 
   if (!email) {
-    return res.end("please provide email");
+    return res.end("please provide email!");
   }
   if (!username) {
     return res.end("please provide username");
@@ -423,6 +425,10 @@ function gitControl(sPath, req, res) {
       cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'";
       respondWithCMD(cmd, res, null, dryrun);
 
+  } else if (sPath.match(/\/_git\/versions/)) {
+      cmd = 'cd ~/lively4/' +  repository + ";\n" +
+      'git log '+filepath;
+      respondWithCMD(cmd, res, null, dryrun);
   } else {
       res.writeHead(200);
       res.end("Lively4 git Control! " + sPath + " not implemented!");
