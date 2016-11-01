@@ -425,10 +425,6 @@ function gitControl(sPath, req, res) {
       cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'";
       respondWithCMD(cmd, res, null, dryrun);
 
-  } else if (sPath.match(/\/_git\/versions/)) {
-      cmd = 'cd ~/lively4/' +  repository + ";\n" +
-      'git log '+filepath;
-      respondWithCMD(cmd, res, null, dryrun);
   } else {
       res.writeHead(200);
       res.end("Lively4 git Control! " + sPath + " not implemented!");
@@ -585,10 +581,36 @@ http.createServer(function(req, res) {
       if (stats.isDirectory()) {
         readDirectory(sSourcePath, res);
       } else if (stats.isFile()) {
+          if (req.headers["showversions"] == "true") {
+            
+            var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+            var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
+            
+            respondWithCMD(
+              'cd ' + repositorypath + '; echo "{ \\"versions\\": ["; ' +
+              'git log --pretty=format:\\{\\"version\\":\\"%h\\",\\"date\\":\\"%ad\\",\\"author\\":\\"%an\\"\\,\\"comment\\":\\"%s\\"}, '+filepath+'; echo null\\]}', res)
+              // #TODO rewrite artificial json formatting and for example get rit of trailing "null"
+            return
+          }
+
+          // type, name, size
+          var result = {type: "file"}
+          result.name = sSourcePath.replace(/.*\//,"")
+          result.size = stats.size
+
+           
+          
+          // for(var i in stats) {
+          //   result[i] = "" 
+          // }
+        
+          var data = JSON.stringify(result, null, 2);
+          // github return text/plain, therefore we need to do the same
           res.writeHead(200, {
             'content-type': 'text/plain'
           });
-          res.end('stat on file not implemented yet');
+          res.end(data);
+          // res.end('stat on file not implemented yet');
       }
     });
   }
