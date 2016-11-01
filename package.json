@@ -1,11 +1,12 @@
 {
   "name": "lively4-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Alternative to accessing GitHub directly",
   "main": "httpServer.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node httpServer.js"
+    "start": "node httpServer.js",
+    "postinstall": "gulp babel"
   },
   "repository": {
     "type": "git",
