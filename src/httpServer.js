@@ -488,6 +488,12 @@ function searchFilesWithIndex(sPath, req, res) {
   }
 }
 
+/* load a specific version of a file through git */
+function readFileVersion(repositorypath, filepath, fileversion, res) {
+  respondWithCMD(
+    'cd ' + repositorypath + ';' +
+    'git show '+fileversion +':' + filepath, res)
+}
 
 http.createServer(function(req, res) {
   // Set CORS headers
@@ -501,9 +507,17 @@ http.createServer(function(req, res) {
 
   var pathname = oUrl.pathname;
 
+
+
   // use slash to avoid conversion from '\' to '/' on Windows
   var sPath = slash(path.normalize(oUrl.pathname));
   // console.log("normalize: " + sPath);
+
+  var fileversion =  req.headers["fileversion"]
+  console.log("fileversion: " + fileversion)
+  var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+  var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
+
 
   if (breakOutRegex.test(sPath) === true) {
     res.writeHead(500);
@@ -545,7 +559,11 @@ http.createServer(function(req, res) {
 
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
-    readFile(sPath, res);
+    if (fileversion != "undefined") {
+      console.log("load file version: " + fileversion)
+      readFileVersion(repositorypath, filepath, fileversion, res)
+    } else
+      readFile(sPath, res);
   } else if (req.method == "PUT") {
     //writes go to shadow dir if selected
     if (sShadowDir) {
