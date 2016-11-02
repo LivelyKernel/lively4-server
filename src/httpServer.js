@@ -588,7 +588,7 @@ http.createServer(function(req, res) {
             
             respondWithCMD(
               'cd ' + repositorypath + '; echo "{ \\"versions\\": ["; ' +
-              'git log --pretty=format:\\{\\"version\\":\\"%h\\",\\"date\\":\\"%ad\\",\\"author\\":\\"%an\\"\\,\\"comment\\":\\"%s\\"}, '+filepath+'; echo null\\]}', res)
+              'git log --pretty=format:\\{\\"version\\":\\"%h\\",\\"date\\":\\"%ad\\",\\"author\\":\\"%an\\"\\,\\"comment\\":\\"%f\\"}, '+filepath+' ; echo null\\]}', res)
               // #TODO rewrite artificial json formatting and for example get rit of trailing "null"
             return
           }
