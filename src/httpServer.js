@@ -559,7 +559,7 @@ http.createServer(function(req, res) {
 
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
-    if (fileversion != "undefined") {
+    if (fileversion && fileversion != "undefined") {
       console.log("load file version: " + fileversion)
       readFileVersion(repositorypath, filepath, fileversion, res)
     } else
