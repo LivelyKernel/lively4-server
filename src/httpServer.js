@@ -416,20 +416,19 @@ function gitControl(sPath, req, res) {
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/branch/)) {
-    // #TODO get rud of absolute paths...
-    cmd = "~/lively4-server/bin/lively4branch.sh '" + repository + "' '" +
-    username + "' '" + password + "' '" +email +"' '"+ branch + "'";
+    cmd = `${server}/bin/lively4branch.sh '${repository}' `+
+      `'${username}' '${password}' '${email}' '${branch}'`;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/merge/)) {
-    cmd = "~/lively4-server/bin/lively4merge.sh '" + repository + "' '" +
-    username + "' '" + password + "' '" +email +"' '"+ branch + "'";
+    cmd = `${server}/bin/lively4merge.sh '${repository}' `+
+      `'${username}' '${password}' '${email}' '${branch}'`;;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/delete/)) {
-    cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'";
+    cmd = `${server}/bin/lively4deleterepository.sh '${repository}'`;
     respondWithCMD(cmd, res, null, dryrun);
-
+    
   } else {
     res.writeHead(200);
     res.end("Lively4 git Control! " + sPath + " not implemented!");
