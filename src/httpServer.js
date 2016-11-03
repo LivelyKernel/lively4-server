@@ -7,6 +7,7 @@ var mkdirp = require("mkdirp");
 var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process");
+var exec = child_process.exec; 
 var slash = require("slash");
 
 // this adds a timestamp to all log messages
@@ -117,7 +118,8 @@ function writeFile(sPath, req, res) {
   });
 }
 
-function _readFile(sPath, res) {
+function readFile(repositorypath, filepath, res) {
+  var sPath = repositorypath + "/" +filepath;
   console.log("read file " + sPath);
   fs.exists(sPath, function(exists) {
     if (!exists) {
@@ -125,7 +127,6 @@ function _readFile(sPath, res) {
       res.end("File not found!\n");
     } else {
       fs.stat(sPath, function(err, stats) {
-        // console.log("stat " + sPath + " " + err + " "  + stats)
         if (err !== null) {
           if (err.code == 'ENOENT') {
               res.writeHead(404);
@@ -138,17 +139,23 @@ function _readFile(sPath, res) {
         if (stats.isDirectory()) {
           readDirectory(sPath, res, "text/html");
         } else {
-          res.writeHead(200, {
-            'content-type': mime.lookup(sPath)
-          });
-          var stream = fs.createReadStream(sPath, {
-            bufferSize: 64 * 1024
-          });
-          stream.on('error', function (err) {
-            console.log("error reading: " + sPath + " error: " + err);
-            res.end("Error reading file\n");
-          });
-          stream.pipe(res);
+          var cmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
+          console.log("run: " + cmd);
+          exec(cmd, (error, stdout, stderr) => {
+            console.log("commithash " + stdout);
+            res.writeHead(200, {
+              'content-type': mime.lookup(sPath),
+              'fileversion': stdout
+            });
+            var stream = fs.createReadStream(sPath, {
+              bufferSize: 64 * 1024
+            });
+            stream.on('error', function (err) {
+              console.log("error reading: " + sPath + " error: " + err);
+              res.end("Error reading file\n");
+            });
+            stream.pipe(res);
+           });
         }
       });
     }
@@ -218,9 +225,6 @@ function readDirectory(aPath, res, contentType){
   });
 }
 
-var readFile = function(sPath, res) {
-  return _readFile(path.join(sSourceDir, sPath), res);
-};
 
 function respondWithCMD(cmd, res, finish, dryrun) {
   console.log(cmd);
@@ -441,6 +445,20 @@ function gitControl(sPath, req, res) {
   }
 }
 
+function metaControl(pathname, res) {
+  if (pathname.match(/_meta\/exit/)) {
+    res.end("goodbye, we hope for the best!");
+    process.exit();
+  } else if (pathname.match(/_meta\/play/)) {
+    var filename = lively4dir + "/" + req.headers["filepath"];
+    var cmd = "play '" +  filename + "'";
+    respondWithCMD(cmd, res);
+  } else {
+    res.writeHead(500);
+    res.end("meta: " + pathname + " not implemented!" );
+  }
+}
+
 function searchFilesWithIndex(sPath, req, res) {
   if (!indexFiles) {
       res.writeHead(503);
@@ -517,7 +535,6 @@ http.createServer(function(req, res) {
 
   // use slash to avoid conversion from '\' to '/' on Windows
   var sPath = slash(path.normalize(oUrl.pathname));
-  // console.log("normalize: " + sPath);
 
   var fileversion =  req.headers["fileversion"]
   console.log("fileversion: " + fileversion)
@@ -530,42 +547,24 @@ http.createServer(function(req, res) {
     return;
   }
 
-  if (sPath.match(/\/_git.*/)) {
-    gitControl(sPath, req, res);
-    return;
-  }
-
-  if (pathname.match(/\/api\/search.*/)) {
-    searchFilesWithIndex(sPath, req, res);
-    return;
-  }
-
   if (pathname.match(/\/_meta\//)) {
-      if (pathname.match(/_meta\/exit/)) {
-        res.end("goodbye, we hope for the best!");
-        process.exit();
-      } else if (pathname.match(/_meta\/play/)) {
-        var filename = lively4dir + "/" + req.headers["filepath"];
-        var cmd = "play '" +  filename + "'";
-        respondWithCMD(cmd, res);
-      } else {
-        res.writeHead(500);
-        res.end("meta: " + pathname + " not implemented!" );
-      }
-      return;
+    return metaControl(pathname, res)
   }
-
+  if (sPath.match(/\/_git.*/)) {
+    return gitControl(sPath, req, res);
+  }
+  if (pathname.match(/\/api\/search.*/)) {
+    return searchFilesWithIndex(sPath, req, res);
+  }
   if (pathname.match(/\/_search\//)) {
-    searchFiles(pathname, req, res);
-    return;
+    return searchFiles(pathname, req, res);
   }
-
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
     if (fileversion && fileversion != "undefined") {
       readFileVersion(repositorypath, filepath, fileversion, res)
     } else {
-      readFile(sPath, res);
+      readFile(repositorypath, filepath, res);
     }
   } else if (req.method == "PUT") {
     writeFile(sPath, req, res);
