@@ -48,8 +48,9 @@ while true; do
   fi
   # start server and filter secret tokens out before logging
 
-  pushd $SERVER; gulp babel; popd 
-  node $SERVER/dist/httpServer.js --index-files=$INDEX_Files --directory=$LIVELY4 --port=$PORT 2>&1 > >(\
+  # transpile javascript
+  pushd $SERVER; gulp babel; popd
+  node $SERVER/dist/httpServer.js --index-files="$INDEX_Files" --server="$SERVER" --directory="$LIVELY4" --port="$PORT" 2>&1 > >(\
   	  sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
 	  sed -u 's/lively4sync.*/lively4sync.../' | \
 	  tee -a $LOGFILE ) & 

@@ -9,8 +9,8 @@ var argv = require("argv");
 var child_process = require("child_process");
 var slash = require("slash");
 
-
-var lively4dir = "~/lively4/"; // #TODO replace magic string... lively4
+// this adds a timestamp to all log messages
+require("log-timestamp");
 
 
 // define command line options
@@ -26,6 +26,11 @@ var options = [{
   type: "path",
   description: "root directory from which the server will serve files",
   example: "'node httpServer.js -d ../foo/bar' or node httpServer.js --directory=../foo/bar'"
+}, {
+  name: "server",
+  type: "path",
+  description: "directory where the server looks for its scripts",
+  example: "'node httpServer.js --server ~/lively4-server'"
 }, {
   name: "shadow",
   short: "s",
@@ -45,11 +50,19 @@ console.log("Welcome to Lively!");
 
 // parse command line arguments
 var args = argv.option(options).run();
-
 var port = args.options.port || 8080;
 var sSourceDir = args.options.directory || ".";
 var sShadowDir = args.options.shadow;
 var indexFiles = args.options['index-files'];
+var lively4dir = args.options.directory; 
+var server = args.options.server || "~/lively4-server";
+
+var RepositoryInSync = {}; // cheap semaphore
+
+console.log("Server: "+ server);
+console.log("Lively4: "+ lively4dir);
+console.log("Port: "+ port);
+console.log("Indexing: "+ indexFiles);
 
 // use-case cof #ContextJS ?
 if (indexFiles) {
@@ -68,12 +81,10 @@ if (sShadowDir) {
 }
 
 if (indexFiles) {
-  console.log("[search] setRootFolder " + sSourceDir)
+  console.log("[search] setRootFolder " + sSourceDir);
   lunrSearch.setRootFolder(sSourceDir);
 }
 
-// this adds a timestamp to all log messages
-require("log-timestamp");
 
 var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 
@@ -111,7 +122,7 @@ function writeFile(sPath, req, res) {
           try {
             lunrSearch.addFile(sPath);
           } catch(e) {
-            console.log("Error indexing file, but conitue anyway: " + e)
+            console.log("Error indexing file, but conitue anyway: " + e);
           }
         }
         console.log("saved " + sSourcePath);
@@ -249,56 +260,55 @@ var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
 };
 
 function respondWithCMD(cmd, res, finish, dryrun) {
-    console.log(cmd);
+  console.log(cmd);
 
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Transfer-Encoding', 'chunked');
-    res.writeHead(200);
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Transfer-Encoding', 'chunked');
+  res.writeHead(200);
 
-    if (dryrun) {
-      return res.end("dry run:\n" + cmd);
-    }
+  if (dryrun) {
+    return res.end("dry run:\n" + cmd);
+  }
 
-    var process = child_process.spawn("bash", ["-c", cmd]);
+  var process = child_process.spawn("bash", ["-c", cmd]);
 
-    process.stdout.on('data', function (data) {
-      console.log('STDOUT: ' + data);
-      res.write(data, undefined, function() {console.log("FLUSH");} );
-    });
+  process.stdout.on('data', function (data) {
+    console.log('STDOUT: ' + data);
+    res.write(data, undefined, function() {console.log("FLUSH");} );
+  });
 
-    process.stderr.on('data', function (data) {
-    console.log('stderr: ' + data);
-    res.write(data);
-    });
+  process.stderr.on('data', function (data) {
+  console.log('stderr: ' + data);
+  res.write(data);
+  });
 
-    process.on('close', function (code) {
-      res.end();
-      if (finish) finish();
-    });
+  process.on('close', function (code) {
+    res.end();
+    if (finish) finish();
+  });
 }
 
 
 function deleteFile(sPath, res) {
-    sPath = sPath.replace(/['"; &|]/g,"");
-    if (indexFiles) {
-      try {
-        lunrSearch.removeFile(sPath);
-      } catch(e) {
-        console.log("[search] Error removing file, but conitue anyway: " + e)
-      }
+  sPath = sPath.replace(/['"; &|]/g,"");
+  if (indexFiles) {
+    try {
+      lunrSearch.removeFile(sPath);
+    } catch(e) {
+      console.log("[search] Error removing file, but conitue anyway: " + e)
     }
-    return respondWithCMD(
-      "f=~/lively4'" +sPath + "';" +
-      'if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi', res);
+  }
+  return respondWithCMD(
+    `f=${lively4dir}/"${sPath}";
+    if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi`, res);
 }
 
 function createDirectory(sPath, res) {
   console.log("create directory " + sPath);
   sPath = sPath.replace(/['"; &|]/g,"");
-  return respondWithCMD("mkdir ~/lively4'" +sPath + "'", res);
+  return respondWithCMD(`mkdir ${lively4dir}/"${sPath}"`, res);
 }
 
-var RepositoryInSync = {}; // cheap semaphore
 
 function searchFiles(sPath, req, res) {
   var pattern = req.headers["searchpattern"];
@@ -310,9 +320,7 @@ function searchFiles(sPath, req, res) {
     cmd += "find " + rootdirs.replace(/,/g," ") + " -type f " 
     cmd += excludes.split(",").map( function(ea) { return ' -not -wholename "*' + ea + '*"' }).join(" ")
     cmd += ' | while read file; do grep -H "' + pattern + '" "$file" ; done | cut -b 1-200' 
-  return respondWithCMD(cmd, res)
-//    return respondWithCMD("cd " +  lively4dir + "; " +
-//     (rootdir ? "cd '" + rootdir + "'; " : "") + "grep -R '"+ pattern +"'", res);
+    return respondWithCMD(cmd, res)
   } else {
       res.writeHead(200);
       res.end("Lively4 Search! " + sPath + " not implemented!");
@@ -335,7 +343,6 @@ function gitControl(sPath, req, res) {
   var msg =           req.headers["gitcommitmessage"];
   var filepath =      req.headers["gitfilepath"];
 
-
   if (!email) {
     return res.end("please provide email!");
   }
@@ -348,89 +355,86 @@ function gitControl(sPath, req, res) {
 
   var cmd;
   if (sPath.match(/\/_git\/sync/)) {
-      // return repsondWithCMD("echo Sync " + repository + " " + RepositoryInSync[repository], res)
-      // #TODO finish it... does not work yet
-      console.log("SYNC REPO " + RepositoryInSync[repository]);
-      if (RepositoryInSync[repository]) {
-        return respondWithCMD("echo Sync in progress: " +
-        repository, res, null, dryrun);
-      }
-      RepositoryInSync[repository] = true;
-      cmd = "lively4sync.sh '" + repository + "' '" +
-        username + "' '" + password + "' '" +email + "' '"+branch +"' '"+msg+"'";
-      respondWithCMD(cmd, res, function() {
-      RepositoryInSync[repository] = undefined;
-      }, dryrun);
-
+    console.log("SYNC REPO " + RepositoryInSync[repository]);
+    if (RepositoryInSync[repository]) {
+      return respondWithCMD("echo Sync in progress: " +
+      repository, res, null, dryrun);
+    }
+    RepositoryInSync[repository] = true;
+    cmd = "lively4sync.sh '" + repository + "' '" +
+      username + "' '" + password + "' '" +email + "' '"+branch +"' '"+msg+"'";
+    respondWithCMD(cmd, res, function() {
+    RepositoryInSync[repository] = undefined;
+    }, dryrun);
+    
   } else if (sPath.match(/\/_git\/resolve/)) {
-      cmd = "lively4resolve.sh '" + repository + "'";
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = "lively4resolve.sh '" + repository + "'";
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/status/)) {
-      cmd = 'cd ' + repository + "; git status ";
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = `cd ${lively4dir}/${repository}; git status `;
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/log/)) {
-      cmd = 'cd ' + repository + "; git log ";
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = 'cd ' + repository + "; git log ";
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/commit/)) {
-      if (msg) {
-        msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'";
-      } else {
-         return res.end("Please provide a commit message!");
-      }
-      cmd = 'cd ' + repository + ";\n"+
-        "git config user.name "+username + ";\n"+
-        "git config user.email "+email + ";\n"+
-        "git commit "+ msg +" -a ";
-      respondWithCMD(cmd, res, null, dryrun);
+    if (msg) {
+      msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'";
+    } else {
+       return res.end("Please provide a commit message!");
+    }
+    cmd = 'cd ' + repository + ";\n"+
+      "git config user.name "+username + ";\n"+
+      "git config user.email "+email + ";\n"+
+      "git commit "+ msg +" -a ";
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/diff/)) {
-      cmd = 'cd ' + repository + "; git diff ";
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd =  `cd ${lively4dir}/${repository}; git diff `;
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/clone/)) {
-      cmd = 'cd '+lively4dir+'; \n' +
-    "git clone --recursive " + repositoryurl + " "+ repository;
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = `cd ${lively4dir}; \n` +
+      "git clone --recursive " + repositoryurl + " "+ repository;
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/npminstall/)) {
-      cmd = 'cd ~/lively4/' +  repository + ";\n" +
-    'npm install';
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = `cd ${lively4dir}/${repository};\n` +
+      'npm install';
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/remoteurl/)) {
-      cmd = 'cd ~/lively4/' +  repository + ";\n" +
-    'git config --get remote.origin.url';
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = `cd ${lively4dir}/${repository};\n` +
+      'git config --get remote.origin.url';
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/branches/)) {
-      cmd = 'cd ~/lively4/' +  repository + ";\n" +
-    'git branch -a ';
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = `cd ${lively4dir}/${repository};\n` +
+      'git branch -a ';
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/branch/)) {
-     // #TODO get rud of absolute paths...
-      cmd = "~/lively4-server/bin/lively4branch.sh '" + repository + "' '" +
-      username + "' '" + password + "' '" +email +"' '"+ branch + "'";
-      respondWithCMD(cmd, res, null, dryrun);
+    // #TODO get rud of absolute paths...
+    cmd = "~/lively4-server/bin/lively4branch.sh '" + repository + "' '" +
+    username + "' '" + password + "' '" +email +"' '"+ branch + "'";
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/merge/)) {
-      cmd = "~/lively4-server/bin/lively4merge.sh '" + repository + "' '" +
-      username + "' '" + password + "' '" +email +"' '"+ branch + "'";
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = "~/lively4-server/bin/lively4merge.sh '" + repository + "' '" +
+    username + "' '" + password + "' '" +email +"' '"+ branch + "'";
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/delete/)) {
-      cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'";
-      respondWithCMD(cmd, res, null, dryrun);
+    cmd = "~/lively4-server/bin/lively4deleterepository.sh '" + repository + "'";
+    respondWithCMD(cmd, res, null, dryrun);
 
   } else {
-      res.writeHead(200);
-      res.end("Lively4 git Control! " + sPath + " not implemented!");
+    res.writeHead(200);
+    res.end("Lively4 git Control! " + sPath + " not implemented!");
   }
 }
-
 
 function searchFilesWithIndex(sPath, req, res) {
   if (!indexFiles) {
@@ -504,10 +508,7 @@ http.createServer(function(req, res) {
 
   var oUrl = url.parse(req.url, true, false);
   console.log("pathname: " + oUrl.pathname);
-
   var pathname = oUrl.pathname;
-
-
 
   // use slash to avoid conversion from '\' to '/' on Windows
   var sPath = slash(path.normalize(oUrl.pathname));
@@ -517,7 +518,6 @@ http.createServer(function(req, res) {
   console.log("fileversion: " + fileversion)
   var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
   var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
-
 
   if (breakOutRegex.test(sPath) === true) {
     res.writeHead(500);
@@ -539,10 +539,8 @@ http.createServer(function(req, res) {
       if (pathname.match(/_meta\/exit/)) {
         res.end("goodbye, we hope for the best!");
         process.exit();
-      } else if (pathname.match(/_meta\/hello/)) {
-        res.end("Hello World!");
       } else if (pathname.match(/_meta\/play/)) {
-        var filename = '~/lively4/' + req.headers["filepath"];
+        var filename = lively4dir + "/" + req.headers["filepath"];
         var cmd = "play '" +  filename + "'";
         respondWithCMD(cmd, res);
       } else {
@@ -616,12 +614,6 @@ http.createServer(function(req, res) {
           result.name = sSourcePath.replace(/.*\//,"")
           result.size = stats.size
 
-           
-          
-          // for(var i in stats) {
-          //   result[i] = "" 
-          // }
-        
           var data = JSON.stringify(result, null, 2);
           // github return text/plain, therefore we need to do the same
           res.writeHead(200, {
