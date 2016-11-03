@@ -273,6 +273,49 @@ function createDirectory(sPath, res) {
 }
 
 
+function listVersions(repositorypath, filepath, res) {
+  // #TODO rewrite artificial json formatting and for example get rit of trailing "null"
+  respondWithCMD(  'cd ' + repositorypath + '; echo "{ \\"versions\\": ["; ' +
+    'git log --pretty=format:\\{\\"version\\":\\"%h\\",\\"date\\":\\"%ad\\",\\"author\\":\\"%an\\"\\,\\"comment\\":\\"%f\\"}, '+filepath+' ; echo null\\]}', res)
+}
+
+function listOptions(sSourcePath, sPath, req, res) {
+  console.log("doing a stat on " + sSourcePath);
+  // statFile was called by client
+  fs.stat(sSourcePath, function(err, stats) {
+    if (err !== null) {
+      console.log("stat ERROR: " + err);
+      if (err.code == 'ENOENT') {
+          res.writeHead(404);
+          res.end();
+      } else {
+        console.log(err);
+      }
+      return;
+    }
+    if (stats.isDirectory()) {
+      readDirectory(sSourcePath, res);
+    } else if (stats.isFile()) {
+      if (req.headers["showversions"] == "true") {
+        var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+        var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
+        return listVersions(repositorypath, filepath, res)
+      }
+      // type, name, size
+      var result = {type: "file"}
+      result.name = sSourcePath.replace(/.*\//,"")
+      result.size = stats.size
+
+      var data = JSON.stringify(result, null, 2);
+      // github return text/plain, therefore we need to do the same
+      res.writeHead(200, {
+        'content-type': 'text/plain'
+      });
+      res.end(data);
+    }
+  });
+}
+
 function searchFiles(sPath, req, res) {
   var pattern = req.headers["searchpattern"];
   var rootdirs = req.headers["rootdirs"];
@@ -520,59 +563,18 @@ http.createServer(function(req, res) {
   var sSourcePath = path.join(sSourceDir, sPath);
   if (req.method == "GET") {
     if (fileversion && fileversion != "undefined") {
-      console.log("load file version: " + fileversion)
       readFileVersion(repositorypath, filepath, fileversion, res)
-    } else
+    } else {
       readFile(sPath, res);
+    }
   } else if (req.method == "PUT") {
     writeFile(sPath, req, res);
   } else if (req.method == "DELETE") {
-      deleteFile(sPath, res);
+    deleteFile(sPath, res);
   } else if (req.method == "MKCOL") {
-      createDirectory(sPath, res);
+    createDirectory(sPath, res);
   } else if (req.method == "OPTIONS") {
-    console.log("doing a stat on " + sSourcePath);
-    // statFile was called by client
-    fs.stat(sSourcePath, function(err, stats) {
-      if (err !== null) {
-        console.log("stat ERROR: " + err);
-        if (err.code == 'ENOENT') {
-            res.writeHead(404);
-            res.end();
-        } else {
-          console.log(err);
-        }
-        return;
-      }
-      if (stats.isDirectory()) {
-        readDirectory(sSourcePath, res);
-      } else if (stats.isFile()) {
-          if (req.headers["showversions"] == "true") {
-            
-            var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
-            var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
-            
-            respondWithCMD(
-              'cd ' + repositorypath + '; echo "{ \\"versions\\": ["; ' +
-              'git log --pretty=format:\\{\\"version\\":\\"%h\\",\\"date\\":\\"%ad\\",\\"author\\":\\"%an\\"\\,\\"comment\\":\\"%f\\"}, '+filepath+' ; echo null\\]}', res)
-              // #TODO rewrite artificial json formatting and for example get rit of trailing "null"
-            return
-          }
-
-          // type, name, size
-          var result = {type: "file"}
-          result.name = sSourcePath.replace(/.*\//,"")
-          result.size = stats.size
-
-          var data = JSON.stringify(result, null, 2);
-          // github return text/plain, therefore we need to do the same
-          res.writeHead(200, {
-            'content-type': 'text/plain'
-          });
-          res.end(data);
-          // res.end('stat on file not implemented yet');
-      }
-    });
+    listOptions(sSourcePath, sPath, req, res)
   }
 }).listen(port, function(err) {
   if (err) {
