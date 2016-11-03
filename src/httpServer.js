@@ -32,12 +32,6 @@ var options = [{
   description: "directory where the server looks for its scripts",
   example: "'node httpServer.js --server ~/lively4-server'"
 }, {
-  name: "shadow",
-  short: "s",
-  type: "path",
-  description: "if set, reads and writes go to a shadow file system",
-  example: "'node httpServer.js -s ../shadow' or 'node httpServer.js --shadow ../shadow'"
-},{
   name: "index-files",
   long: "i",
   type: "boolean",
@@ -46,13 +40,12 @@ var options = [{
 }];
 
 
-console.log("Welcome to Lively!");
+console.log("Welcome to Lively4!");
 
 // parse command line arguments
 var args = argv.option(options).run();
 var port = args.options.port || 8080;
 var sSourceDir = args.options.directory || ".";
-var sShadowDir = args.options.shadow;
 var indexFiles = args.options['index-files'];
 var lively4dir = args.options.directory; 
 var server = args.options.server || "~/lively4-server";
@@ -69,15 +62,6 @@ if (indexFiles) {
  var lunrSearch = require("./lively4-search/shared/lunr-search.js");
 } else {
   console.log("[search] indexing files is disabled");  
-}
-
-if (sShadowDir) {
-  mkdirp(sShadowDir, function(err) {
-    if (err) {
-      console.log("Error creating shadow dir: " + err);
-      sShadowDir = null;
-    }
-  });
 }
 
 if (indexFiles) {
@@ -104,7 +88,7 @@ function writeFile(sPath, req, res) {
     if (sSourcePath.match(/\/$/)){
       mkdirp(sSourcePath, function(err) {
         if (err) {
-          console.log("Error creating shadow dir: " + err);
+          console.log("Error creating dir: " + err);
         }
         console.log("mkdir " + sSourcePath);
         res.writeHead(200, "OK");
@@ -165,27 +149,6 @@ function _readFile(sPath, res) {
             res.end("Error reading file\n");
           });
           stream.pipe(res);
-        }
-      });
-    }
-  });
-}
-
-function _readShadowFile(sPath, res) {
-  var sShadowPath = path.join(sShadowDir, sPath),
-    sSourcePath = path.join(sSourceDir, sPath);
-  fs.access(sShadowPath, fs.R_OK, function(err) {
-    if (err)
-      _readFile(sSourcePath, res);
-    else {
-      async.map([sSourcePath, sShadowPath], fs.stat, function(err, results) {
-        if (err)
-          console.log("Error reading file stats");
-        else if (results[0].mtime > results[1].mtime)
-          _readFile(sSourcePath, res);
-        else {
-          _readFile(sShadowPath, res);
-          console.log("Loading from ShadowPath");
         }
       });
     }
@@ -255,7 +218,7 @@ function readDirectory(aPath, res, contentType){
   });
 }
 
-var readFile = sShadowDir ? _readShadowFile : function(sPath, res) {
+var readFile = function(sPath, res) {
   return _readFile(path.join(sSourceDir, sPath), res);
 };
 
@@ -562,19 +525,7 @@ http.createServer(function(req, res) {
     } else
       readFile(sPath, res);
   } else if (req.method == "PUT") {
-    //writes go to shadow dir if selected
-    if (sShadowDir) {
-      var sShadowPath = path.join(sShadowDir, sPath);
-      mkdirp(path.dirname(sShadowPath), function(err) {
-        if (err) {
-          console.log("error creating path " + sShadowPath);
-        } else {
-          writeFile(sShadowPath, req, res);
-        }
-      });
-    } else {
-      writeFile(sPath, req, res);
-    }
+    writeFile(sPath, req, res);
   } else if (req.method == "DELETE") {
       deleteFile(sPath, res);
   } else if (req.method == "MKCOL") {
@@ -628,7 +579,4 @@ http.createServer(function(req, res) {
     throw err;
   }
   console.log("Server running on port " + port + " in directory " + sSourceDir);
-  if (sShadowDir) {
-    console.log("Using shadow dir " + sShadowDir);
-  }
 });
