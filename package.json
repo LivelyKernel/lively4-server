@@ -4,8 +4,8 @@
   "description": "Alternative to accessing GitHub directly",
   "main": "httpServer.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node httpServer.js",
+    "test": "node dist/testServer.js",
+    "start": "node dist/httpServer.js",
     "postinstall": "gulp babel"
   },
   "repository": {
