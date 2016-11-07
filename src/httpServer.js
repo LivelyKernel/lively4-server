@@ -38,6 +38,11 @@ var options = [{
   type: "boolean",
   description: "indexing files for search",
   example: "'node --index-files=true'"
+}, {
+  name: "auto-commit",
+  type: "boolean",
+  description: "auto commit on every PUT file",
+  example: "'node --auto-commit=true'"
 }];
 
 
@@ -51,12 +56,16 @@ var indexFiles = args.options['index-files'];
 var lively4dir = args.options.directory; 
 var server = args.options.server || "~/lively4-server";
 
+var autoCommit = args.options['auto-commit'] || false;
+
 var RepositoryInSync = {}; // cheap semaphore
+
 
 console.log("Server: "+ server);
 console.log("Lively4: "+ lively4dir);
 console.log("Port: "+ port);
 console.log("Indexing: "+ indexFiles);
+console.log("Auto-commit: "+ autoCommit);
 
 // use-case cof #ContextJS ?
 if (indexFiles) {
@@ -74,9 +83,9 @@ if (indexFiles) {
 var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 
 //write file to disk
-function writeFile(sPath, req, res) {
-  var sSourcePath = path.join(sSourceDir, sPath);
-  console.log("write file: " + sSourcePath);
+function writeFile(repositorypath, filepath, req, res) {
+  var fullpath = path.join(repositorypath, filepath);
+  console.log("write file: " + fullpath);
   var fullBody = '';
 
   //read chunks of data and store it in buffer
@@ -86,17 +95,17 @@ function writeFile(sPath, req, res) {
 
   //after transmission, write file to disk
   req.on('end', function() {
-    if (sSourcePath.match(/\/$/)){
-      mkdirp(sSourcePath, function(err) {
+    if (fullpath.match(/\/$/)){
+      mkdirp(fullpath, function(err) {
         if (err) {
           console.log("Error creating dir: " + err);
         }
-        console.log("mkdir " + sSourcePath);
+        console.log("mkdir " + fullpath);
         res.writeHead(200, "OK");
         res.end();
       });
     } else {
-      fs.writeFile(sSourcePath, fullBody, function(err) {
+      fs.writeFile(fullpath, fullBody, function(err) {
         if (err) {
           // throw err;
           console.log(err);
@@ -105,14 +114,31 @@ function writeFile(sPath, req, res) {
         
         if (indexFiles) {
           try {
-            lunrSearch.addFile(sPath);
+            lunrSearch.addFile(fullpath); // #TODO #BUG what path does lunr accept?
           } catch(e) {
             console.log("Error indexing file, but conitue anyway: " + e);
           }
         }
-        console.log("saved " + sSourcePath);
-        res.writeHead(200, "OK");
-        res.end();
+        if (autoCommit) {
+          // #TODO maybe we should ask for github credetials here too?
+          let cmd  = `cd "${repositorypath}"; git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
+          console.log("[AUTO-COMMIT] " + cmd)
+          exec(cmd, (error, stdout, stderr) => {
+            console.log("stdout: " + stdout)
+            console.log("stderr: " + stderr)
+            if (error) {
+              res.writeHead(500, "" + err);
+              res.end(stderr);
+            } else {
+              res.writeHead(200, "");
+              res.end(stdout);
+            }
+          });
+        } else {
+          console.log("saved " + fullpath);
+          res.writeHead(200, "OK");
+          res.end();
+        }
       });
     }
   });
@@ -337,7 +363,7 @@ function searchFiles(sPath, req, res) {
   }
 }
 
-function gitControl(sPath, req, res) {
+function gitControl(sPath, req, res, cb) {
   console.log("git control: " + sPath);
 
   var dryrun = req.headers["dryrun"];
@@ -382,7 +408,8 @@ function gitControl(sPath, req, res) {
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/status/)) {
-    cmd = `cd ${lively4dir}/${repository}; git status `;
+    cmd = `cd ${lively4dir}/${repository}; 
+      git status; git log HEAD...origin/${branch}  --pretty="format:%h\t%aN\t%cD\t%f"`;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/log/)) {
@@ -402,7 +429,7 @@ function gitControl(sPath, req, res) {
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/diff/)) {
-    cmd =  `cd ${lively4dir}/${repository}; git diff `;
+    cmd =  `cd ${lively4dir}/${repository}; git diff origin/${branch}`;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/clone/)) {
@@ -433,6 +460,11 @@ function gitControl(sPath, req, res) {
   } else if (sPath.match(/\/_git\/merge/)) {
     cmd = `${server}/bin/lively4merge.sh '${repository}' `+
       `'${username}' '${password}' '${email}' '${branch}'`;;
+    respondWithCMD(cmd, res, null, dryrun);
+
+  } else if (sPath.match(/\/_git\/squash/)) {
+    cmd = `${server}/bin/lively4squash.sh '${lively4dir}' '${repository}' `+
+      `'${username}' '${password}' '${email}' '${branch}' '${msg}'`;;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/delete/)) {
@@ -567,7 +599,7 @@ http.createServer(function(req, res) {
       readFile(repositorypath, filepath, res);
     }
   } else if (req.method == "PUT") {
-    writeFile(sPath, req, res);
+    writeFile(repositorypath, filepath, req, res);
   } else if (req.method == "DELETE") {
     deleteFile(sPath, res);
   } else if (req.method == "MKCOL") {
