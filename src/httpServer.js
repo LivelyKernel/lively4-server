@@ -105,6 +105,9 @@ function writeFile(repositorypath, filepath, req, res) {
         res.end();
       });
     } else {
+      var lastversion =  req.headers["lastversion"];
+      console.log("last version: " + lastversion);
+      
       fs.writeFile(fullpath, fullBody, function(err) {
         if (err) {
           // throw err;
@@ -122,16 +125,31 @@ function writeFile(repositorypath, filepath, req, res) {
         if (autoCommit) {
           // #TODO maybe we should ask for github credetials here too?
           let cmd  = `cd "${repositorypath}"; git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
-          console.log("[AUTO-COMMIT] " + cmd)
+          console.log("[AUTO-COMMIT] " + cmd);
           exec(cmd, (error, stdout, stderr) => {
-            console.log("stdout: " + stdout)
-            console.log("stderr: " + stderr)
+            console.log("stdout: " + stdout);
+            console.log("stderr: " + stderr);
             if (error) {
+              console.log("ERROR");
               res.writeHead(500, "" + err);
-              res.end(stderr);
+              res.end("ERROR: " + stderr);
             } else {
-              res.writeHead(200, "");
-              res.end(stdout);
+              // return the hash for the commit, we just created
+              let fileVersionCmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
+              console.log("cmd: " + fileVersionCmd);
+              exec(fileVersionCmd, (error, stdout, stderr) => {
+                console.log("New version: " + stdout);
+                if (error) {
+                  res.writeHead(500);
+                  res.end("could not retrieve new version... somthing went wrong: " + stdout + " " +stderr);
+                } else {
+                  res.writeHead(200, {
+                    'content-type': 'text/plain',
+                    'fileversion': stdout
+                  });
+                  res.end("Created new version: " + stdout);
+                }
+              });
             }
           });
         } else {

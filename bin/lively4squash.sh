@@ -10,8 +10,8 @@ MSG="$7"
 
 pushd "$LIVELY4"/"$REPOSITORY" > /dev/null
 
-MSG=$MSG" SQUASHED: `git log HEAD...origin/$BRANCH --pretty=format:%f | sort | uniq | tr '\n' ', '`"
+MSG2="SQUASHED: `git log HEAD...origin/$BRANCH --pretty=format:%f | sort | uniq | tr '\n' ', '`"
 
-git reset --soft origin/$BRANCH && git commit -m "$MSG"
+git reset --soft origin/$BRANCH && git commit -m "$MSG" -m "$MSG2"
 
 popd > /dev/null
