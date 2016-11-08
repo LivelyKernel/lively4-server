@@ -82,6 +82,17 @@ if (indexFiles) {
 
 var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 
+function getVersion(repositorypath, filepath) {
+  let cmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
+  console.log("version cmd: " + cmd);
+  return new Promise((resolve, reject) => {
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) resolve(null) // no version found
+      else resolve(stdout)
+    })
+  })
+}
+
 //write file to disk
 function writeFile(repositorypath, filepath, req, res) {
   var fullpath = path.join(repositorypath, filepath);
@@ -94,7 +105,7 @@ function writeFile(repositorypath, filepath, req, res) {
   });
 
   //after transmission, write file to disk
-  req.on('end', function() {
+  req.on('end', async function() {
     if (fullpath.match(/\/$/)){
       mkdirp(fullpath, function(err) {
         if (err) {
@@ -105,8 +116,23 @@ function writeFile(repositorypath, filepath, req, res) {
         res.end();
       });
     } else {
-      var lastversion =  req.headers["lastversion"];
-      console.log("last version: " + lastversion);
+      var lastVersion =  req.headers["lastversion"];
+      var currentVersion = await getVersion(repositorypath, filepath)
+      
+      
+      console.log("last version: " + lastVersion);
+      console.log("current version: " + currentVersion);
+      
+      // we have version information and there is a conflict
+      if (lastVersion && currentVersion && lastVersion !== currentVersion) {
+        console.log("[writeFile] CONFLICT DETECTED")
+        res.writeHead(409, { // HTTP CONFLICT
+          'content-type': 'text/plain',
+          'conflictversion': currentVersion
+        });
+        res.end("Writing conflict detected: " + currentVersion);
+        return 
+      } 
       
       fs.writeFile(fullpath, fullBody, function(err) {
         if (err) {
