@@ -7,6 +7,6 @@ PORT=9005
 GITPULL=true
 
 LOGFILE=$SERVER/server.log
-AUTOCOMMIT=false
+AUTOCOMMIT=true
 
 source $SERVER/bin/lively4server.sh
