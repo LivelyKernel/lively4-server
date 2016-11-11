@@ -1,6 +1,8 @@
 # logfiles
 COMMIT
 
+tmp
+
 server.log
 server.log.last
 

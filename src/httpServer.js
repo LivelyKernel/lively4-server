@@ -61,11 +61,6 @@ var autoCommit = args.options['auto-commit'] || false;
 var RepositoryInSync = {}; // cheap semaphore
 
 
-console.log("Server: "+ server);
-console.log("Lively4: "+ lively4dir);
-console.log("Port: "+ port);
-console.log("Indexing: "+ indexFiles);
-console.log("Auto-commit: "+ autoCommit);
 
 // use-case cof #ContextJS ?
 if (indexFiles) {
@@ -598,62 +593,94 @@ function readFileVersion(repositorypath, filepath, fileversion, res) {
     'git show '+fileversion +':' + filepath, res)
 }
 
-http.createServer(function(req, res) {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Request-Method', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT');
-  res.setHeader('Access-Control-Allow-Headers', '*');
+class Server {
 
-  var oUrl = url.parse(req.url, true, false);
-  console.log("pathname: " + oUrl.pathname);
-  var pathname = oUrl.pathname;
+  static setup() {
+    this.port = port
+  }
+  
+  static get lively4dir() {
+    return lively4dir
+  }
+  
+  static set lively4dir(path) {
+    console.log("set lively4dir to:" + path)
+    sSourceDir = path;
+    lively4dir = path;
+    return lively4dir
+  }
+  
+  static start() {
+    console.log("Server: "+ this.server);
+    console.log("Lively4: "+ lively4dir);
+    console.log("Port: "+ this.port);
+    console.log("Indexing: "+ indexFiles);
+    console.log("Auto-commit: "+ autoCommit);
+    
+    http.createServer(function(req, res) {
+      // Set CORS headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Request-Method', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT');
+      res.setHeader('Access-Control-Allow-Headers', '*');
+    
+      var oUrl = url.parse(req.url, true, false);
+      console.log("pathname: " + oUrl.pathname);
+      var pathname = oUrl.pathname;
+    
+      // use slash to avoid conversion from '\' to '/' on Windows
+      var sPath = slash(path.normalize(oUrl.pathname));
+    
+      var fileversion =  req.headers["fileversion"]
+      console.log("fileversion: " + fileversion)
+      var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+      var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
+    
+      if (breakOutRegex.test(sPath) === true) {
+        res.writeHead(500);
+        res.end("Your not allowed to access files outside the pages storage area\n");
+        return;
+      }
+    
+      if (pathname.match(/\/_meta\//)) {
+        return metaControl(pathname, res)
+      }
+      if (sPath.match(/\/_git.*/)) {
+        return gitControl(sPath, req, res);
+      }
+      if (pathname.match(/\/api\/search.*/)) {
+        return searchFilesWithIndex(sPath, req, res);
+      }
+      if (pathname.match(/\/_search\//)) {
+        return searchFiles(pathname, req, res);
+      }
+      var sSourcePath = path.join(sSourceDir, sPath);
+      if (req.method == "GET") {
+        if (fileversion && fileversion != "undefined") {
+          readFileVersion(repositorypath, filepath, fileversion, res)
+        } else {
+          readFile(repositorypath, filepath, res);
+        }
+      } else if (req.method == "PUT") {
+        writeFile(repositorypath, filepath, req, res);
+      } else if (req.method == "DELETE") {
+        deleteFile(sPath, res);
+      } else if (req.method == "MKCOL") {
+        createDirectory(sPath, res);
+      } else if (req.method == "OPTIONS") {
+        listOptions(sSourcePath, sPath, req, res)
+      }
+    }).listen(this.port, function(err) {
+      if (err) {
+        throw err;
+      }
+      console.log("Server running on port " + port + " in directory " + sSourceDir);
+    });
+  }
+}
+Server.setup()
 
-  // use slash to avoid conversion from '\' to '/' on Windows
-  var sPath = slash(path.normalize(oUrl.pathname));
-
-  var fileversion =  req.headers["fileversion"]
-  console.log("fileversion: " + fileversion)
-  var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
-  var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
-
-  if (breakOutRegex.test(sPath) === true) {
-    res.writeHead(500);
-    res.end("Your not allowed to access files outside the pages storage area\n");
-    return;
-  }
-
-  if (pathname.match(/\/_meta\//)) {
-    return metaControl(pathname, res)
-  }
-  if (sPath.match(/\/_git.*/)) {
-    return gitControl(sPath, req, res);
-  }
-  if (pathname.match(/\/api\/search.*/)) {
-    return searchFilesWithIndex(sPath, req, res);
-  }
-  if (pathname.match(/\/_search\//)) {
-    return searchFiles(pathname, req, res);
-  }
-  var sSourcePath = path.join(sSourceDir, sPath);
-  if (req.method == "GET") {
-    if (fileversion && fileversion != "undefined") {
-      readFileVersion(repositorypath, filepath, fileversion, res)
-    } else {
-      readFile(repositorypath, filepath, res);
-    }
-  } else if (req.method == "PUT") {
-    writeFile(repositorypath, filepath, req, res);
-  } else if (req.method == "DELETE") {
-    deleteFile(sPath, res);
-  } else if (req.method == "MKCOL") {
-    createDirectory(sPath, res);
-  } else if (req.method == "OPTIONS") {
-    listOptions(sSourcePath, sPath, req, res)
-  }
-}).listen(port, function(err) {
-  if (err) {
-    throw err;
-  }
-  console.log("Server running on port " + port + " in directory " + sSourceDir);
-});
+if (!module.parent) {
+  Server.start()
+}
+module.exports = Server // { start }
