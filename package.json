@@ -4,7 +4,7 @@
   "description": "Alternative to accessing GitHub directly",
   "main": "httpServer.js",
   "scripts": {
-    "test": "node dist/testServer.js",
+    "test": "mocha",
     "start": "node dist/httpServer.js",
     "postinstall": "gulp babel"
   },
