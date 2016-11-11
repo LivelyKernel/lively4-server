@@ -481,6 +481,11 @@ function gitControl(sPath, req, res, cb) {
       'npm install';
     respondWithCMD(cmd, res, null, dryrun);
 
+  } else if (sPath.match(/\/_git\/npmtest/)) {
+    cmd = `cd ${lively4dir}/${repository};\n` +
+      'npm test';
+    respondWithCMD(cmd, res, null, dryrun);
+
   } else if (sPath.match(/\/_git\/remoteurl/)) {
     cmd = `cd ${lively4dir}/${repository};\n` +
       'git config --get remote.origin.url';
