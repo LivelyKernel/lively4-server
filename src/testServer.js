@@ -7,18 +7,21 @@ var exec = child_process.exec;
 process.env.NODE_ENV = 'test';
 
 var Server = require('./httpServer');
-
-var port = 8081
+var port = 8081;
 
 describe("Lively4 Server", function() {
-
+  
+  var tmp = "tmp/";
+  var testrepo = "lively4-dummy";
+  var url = "http://localhost:" + port+"/";
+  
   before(function(done) {
-    Server.lively4dir = "tmp/"
-    Server.port = port
+    Server.lively4dir = tmp;
+    Server.port = port;
     
-    var cmd = "mkdir -v tmp; cd tmp;" +
-      "git clone https://github.com/LivelyKernel/lively4-dummy;" +
-      "cd lively4-dummy; git --reset hard"
+    var cmd = `mkdir -v "${tmp}"; cd "${tmp}";` +
+      `git clone https://github.com/LivelyKernel/${testrepo};` +
+      `cd ${testrepo}; git --reset hard`;
     exec(cmd, (error, stdout, stderr) => {
       console.log("stdout: " + stdout);
       Server.start();
@@ -27,8 +30,6 @@ describe("Lively4 Server", function() {
   });
 
   describe("List Livel4 directory", function() {
-
-    var url = "http://localhost:" + port+"/";
 
     it("returns status 200", function(done) {
       request(url, function(error, response, body) {
@@ -52,4 +53,21 @@ describe("Lively4 Server", function() {
     });
   });
   
-})
+  it("write file", function(done) {
+    var filename = 'testwrite.txt';
+    var content = "The test says hello!";
+    request.put({
+      url: url + testrepo + "/" + filename,
+      body: content,
+      headers: {
+      }
+    }, function(error, response, body) {
+      if (error) return done(error);
+      exec(`cd ${tmp}${testrepo}; cat ${filename}`, (error, stdout, stderr) => {
+        if (error) done(error);
+        expect(stdout).to.be.equal(content);
+        done();
+      });
+    });
+  });
+});
