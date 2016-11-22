@@ -144,8 +144,18 @@ function writeFile(repositorypath, filepath, req, res) {
           }
         }
         if (autoCommit) {
+        
+          var username =      req.headers.gitusername;
+          var email =         req.headers.gitemail;
+          // var password =      req.headers.gitpassword; // not used yet
+        
+          var authCmd = "";
+          if (username) authCmd += `git config user.name '${username}'; `
+          if (email) authCmd += `git config user.email '${email}'; `
+          
+          
           // #TODO maybe we should ask for github credetials here too?
-          let cmd  = `cd "${repositorypath}"; git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
+          let cmd  = `cd "${repositorypath}"; ${authCmd} git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
           console.log("[AUTO-COMMIT] " + cmd);
           exec(cmd, (error, stdout, stderr) => {
             console.log("stdout: " + stdout);
@@ -156,6 +166,7 @@ function writeFile(repositorypath, filepath, req, res) {
               res.end("ERROR: " + stderr);
             } else {
               // return the hash for the commit, we just created
+              
               let fileVersionCmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
               console.log("cmd: " + fileVersionCmd);
               exec(fileVersionCmd, (error, stdout, stderr) => {
@@ -615,6 +626,16 @@ class Server {
     return lively4dir
   }
   
+  static get autoCommit() {
+    return autoCommit
+  }
+  
+  static set autoCommit(bool) {
+    console.log("set autoCommit to: " + bool)
+    return autoCommit = bool
+  }
+
+
   static start() {
     console.log("Server: "+ this.server);
     console.log("Lively4: "+ lively4dir);

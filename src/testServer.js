@@ -18,8 +18,9 @@ describe("Lively4 Server", function() {
   before(function(done) {
     Server.lively4dir = tmp;
     Server.port = port;
+    Server.autoCommit = true
     
-    var cmd = `mkdir -v "${tmp}"; cd "${tmp}";` +
+    var cmd = `rm -rv "${tmp}"; mkdir -v "${tmp}"; cd "${tmp}";` +
       `git clone https://github.com/LivelyKernel/${testrepo};` +
       `cd ${testrepo}; git --reset hard`;
     exec(cmd, (error, stdout, stderr) => {
@@ -52,22 +53,37 @@ describe("Lively4 Server", function() {
       });
     });
   });
+
+  function expectResultMatch(cmd, regexString) {
+    return new Promise((resolve, reject) => {
+      cmd =`cd ${tmp}${testrepo};` + cmd; 
+      // console.log("run: " + cmd)
+      exec(cmd, (error, stdout, stderr) => {
+        expect(stdout).match(new RegExp(regexString));
+        resolve();
+      });
+    });
+  }
   
   it("write file", function(done) {
     var filename = 'testwrite.txt';
+    var authorName = 'Joe';
+    var authorEmail = "joe@lively-kernel.org";
     var content = "The test says hello!";
     request.put({
       url: url + testrepo + "/" + filename,
       body: content,
       headers: {
+          gitusername: authorName,
+          gitemail: authorEmail
       }
-    }, function(error, response, body) {
+    }, async (error, response, body) => {
       if (error) return done(error);
-      exec(`cd ${tmp}${testrepo}; cat ${filename}`, (error, stdout, stderr) => {
-        if (error) done(error);
-        expect(stdout).to.be.equal(content);
-        done();
-      });
+      await expectResultMatch("cat " + filename, content);
+      await expectResultMatch("git status" , /nothing to commit/);
+      await expectResultMatch("git log -n 1 --format='%aN' "+ filename , authorName);
+      await expectResultMatch("git log -n 1 --format='%aE' " + filename, authorEmail);
+      done()
     });
   });
 });
