@@ -60,8 +60,6 @@ var autoCommit = args.options['auto-commit'] || false;
 
 var RepositoryInSync = {}; // cheap semaphore
 
-
-
 // use-case cof #ContextJS ?
 if (indexFiles) {
  var lunrSearch = require("./lively4-search/shared/lunr-search.js");
@@ -114,7 +112,6 @@ function writeFile(repositorypath, filepath, req, res) {
       var lastVersion =  req.headers["lastversion"];
       var currentVersion = await getVersion(repositorypath, filepath)
       
-      
       console.log("last version: " + lastVersion);
       console.log("current version: " + currentVersion);
       
@@ -129,6 +126,7 @@ function writeFile(repositorypath, filepath, req, res) {
         return 
       } 
       
+      // console.log("fullBody: " + fullBody)
       fs.writeFile(fullpath, fullBody, function(err) {
         if (err) {
           // throw err;
@@ -152,7 +150,7 @@ function writeFile(repositorypath, filepath, req, res) {
           var authCmd = "";
           if (username) authCmd += `git config user.name '${username}'; `
           if (email) authCmd += `git config user.email '${email}'; `
-          
+          console.log("EMAIL " + email + " USER " + username)
           
           // #TODO maybe we should ask for github credetials here too?
           let cmd  = `cd "${repositorypath}"; ${authCmd} git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
