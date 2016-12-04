@@ -653,7 +653,6 @@ class Server {
     return autoCommit = bool
   }
 
-
   static start() {
     console.log("Server: "+ this.server);
     console.log("Lively4: "+ lively4dir);
