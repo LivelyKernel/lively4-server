@@ -2,6 +2,11 @@
 
 # The meta-circular version of running the lively4-server
 
+echo "LIVELY " $LIVELY
+echo "SERVER " $SERVER
+
+OPTIONS=""
+
 cd $LIVELY
 _term() { 
   echo "Caught kill signal! Kill watcher and node, too!" 
@@ -27,11 +32,13 @@ $SERVER/bin/watch.sh $SERVER/src/httpServer.js 'kill -USR1 '$$ &
 WATCHERPID=$!
 
 if [ "$OS" == "Windows_NT" ]; then
+    OPTIONS=$OPTIONS" --lively4dir-unix="$LIVELY" --cygwin --bash-bin="`cygpath -wa /usr/bin/bash`
+
     SERVER=`cygpath -wa $SERVER`
-    LIVELY4=`cygpath -wa $LIVELY4`
+    LIVELY=`cygpath -wa $LIVELY`
 
     echo "WIN SERVER "$SERVER
-    echo "WIN LIVELY "$LIVELY4
+    echo "WIN LIVELY "$LIVELY
 fi
 
 
@@ -50,7 +57,7 @@ while true; do
 
   # transpile javascript
   pushd $SERVER; gulp babel; popd
-  node $SERVER/dist/httpServer.js --index-files="$INDEX_Files" --server="$SERVER" --directory="$LIVELY4" --port="$PORT" --auto-commit="$AUTOCOMMIT" 2>&1 > >(\
+  node $SERVER/dist/httpServer.js $OPTIONS --index-files="$INDEX_Files" --server="$SERVER" --directory="$LIVELY4" --port="$PORT" --auto-commit="$AUTOCOMMIT" 2>&1 > >(\
   	  sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
 	  sed -u 's/lively4sync.*/lively4sync.../' | \
 	  tee -a $LOGFILE ) & 

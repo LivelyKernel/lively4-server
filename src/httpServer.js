@@ -43,8 +43,20 @@ var options = [{
   type: "boolean",
   description: "auto commit on every PUT file",
   example: "'node --auto-commit=true'"
+}, {
+  name: "bash-bin",
+  type: "string",
+  description: "path to bash executable",
+  example: "'node --bash-bin=\\cygwin64\\bin\\bash.exe'"
+}, {
+  name: "cygwin",
+  type: "boolean",
+  description: "run in cygwin"
+}, {
+  name: "lively4dir-unix",
+  type: "string",
+  description: "the directory in cygwin... FUCK IT!"
 }];
-
 
 console.log("Welcome to Lively4!");
 
@@ -55,10 +67,18 @@ var sSourceDir = args.options.directory || ".";
 var indexFiles = args.options['index-files'];
 var lively4dir = args.options.directory; 
 var server = args.options.server || "~/lively4-server";
+var bashBin = args.options['bash-bin'] || "bash";
+var cygwin = args.options['cygwin'];
+var lively4DirUnix = args.options['lively4dir-unix'] || lively4dir;
+
 
 var autoCommit = args.options['auto-commit'] || false;
 
 var RepositoryInSync = {}; // cheap semaphore
+
+if (cygwin) {
+  console.log("Lively4dir in unix: " + lively4DirUnix);
+}
 
 // use-case cof #ContextJS ?
 if (indexFiles) {
@@ -311,7 +331,7 @@ function respondWithCMD(cmd, res, finish, dryrun) {
     return res.end("dry run:\n" + cmd);
   }
 
-  var process = child_process.spawn("bash", ["-c", cmd]);
+  var process = child_process.spawn(bashBin, ["-c", cmd]);
 
   process.stdout.on('data', function (data) {
     console.log('STDOUT: ' + data);
@@ -340,14 +360,14 @@ function deleteFile(sPath, res) {
     }
   }
   return respondWithCMD(
-    `f=${lively4dir}/"${sPath}";
+    `f=${lively4DirUnix}/"${sPath}";
     if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi`, res);
 }
 
 function createDirectory(sPath, res) {
   console.log("create directory " + sPath);
   sPath = sPath.replace(/['"; &|]/g,"");
-  return respondWithCMD(`mkdir ${lively4dir}/"${sPath}"`, res);
+  return respondWithCMD(`mkdir ${lively4DirUnix}/"${sPath}"`, res);
 }
 
 
@@ -400,7 +420,7 @@ function searchFiles(sPath, req, res) {
   var excludes = ".git,"+req.headers["excludes"];
 
   if (sPath.match(/\/_search\/files/)) {
-    var cmd = "cd " +  lively4dir + "; " 
+    var cmd = "cd " +  lively4DirUnix + "; " 
     cmd += "find " + rootdirs.replace(/,/g," ") + " -type f " 
     cmd += excludes.split(",").map( function(ea) { return ' -not -wholename "*' + ea + '*"' }).join(" ")
     cmd += ' | while read file; do grep -H "' + pattern + '" "$file" ; done | cut -b 1-200' 
@@ -456,7 +476,7 @@ function gitControl(sPath, req, res, cb) {
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/status/)) {
-    cmd = `cd ${lively4dir}/${repository}; 
+    cmd = `cd ${lively4DirUnix}/${repository}; 
       git status; git log HEAD...origin/${branch}  --pretty="format:%h\t%aN\t%cD\t%f"`;
     respondWithCMD(cmd, res, null, dryrun);
 
@@ -477,31 +497,31 @@ function gitControl(sPath, req, res, cb) {
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/diff/)) {
-    cmd =  `cd ${lively4dir}/${repository}; git diff origin/${branch}`;
+    cmd =  `cd ${lively4DirUnix}/${repository}; git diff origin/${branch}`;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/clone/)) {
-    cmd = `cd ${lively4dir}; \n` +
+    cmd = `cd ${lively4DirUnix}; \n` +
       "git clone --recursive " + repositoryurl + " "+ repository;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/npminstall/)) {
-    cmd = `cd ${lively4dir}/${repository};\n` +
+    cmd = `cd ${lively4DirUnix}/${repository};\n` +
       'npm install';
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/npmtest/)) {
-    cmd = `cd ${lively4dir}/${repository};\n` +
+    cmd = `cd ${lively4DirUnix}/${repository};\n` +
       'npm test';
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/remoteurl/)) {
-    cmd = `cd ${lively4dir}/${repository};\n` +
+    cmd = `cd ${lively4DirUnix}/${repository};\n` +
       'git config --get remote.origin.url';
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/branches/)) {
-    cmd = `cd ${lively4dir}/${repository};\n` +
+    cmd = `cd ${lively4DirUnix}/${repository};\n` +
       'git branch -a ';
     respondWithCMD(cmd, res, null, dryrun);
 
@@ -516,7 +536,7 @@ function gitControl(sPath, req, res, cb) {
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/squash/)) {
-    cmd = `${server}/bin/lively4squash.sh '${lively4dir}' '${repository}' `+
+    cmd = `${server}/bin/lively4squash.sh '${lively4DirUnix}' '${repository}' `+
       `'${username}' '${password}' '${email}' '${branch}' '${msg}'`;;
     respondWithCMD(cmd, res, null, dryrun);
 
@@ -530,12 +550,12 @@ function gitControl(sPath, req, res, cb) {
   }
 }
 
-function metaControl(pathname, res) {
+function metaControl(pathname, req, res) {
   if (pathname.match(/_meta\/exit/)) {
     res.end("goodbye, we hope for the best!");
     process.exit();
   } else if (pathname.match(/_meta\/play/)) {
-    var filename = lively4dir + "/" + req.headers["filepath"];
+    var filename = lively4DirUnix + "/" + req.headers["filepath"];
     var cmd = "play '" +  filename + "'";
     respondWithCMD(cmd, res);
   } else {
@@ -654,6 +674,10 @@ class Server {
     
       // use slash to avoid conversion from '\' to '/' on Windows
       var sPath = slash(path.normalize(oUrl.pathname));
+      
+      
+      sPath = sPath.replace(/%20/g, " ")
+      console.log("sPath: " + sPath)
     
       var fileversion =  req.headers["fileversion"]
       console.log("fileversion: " + fileversion)
@@ -665,9 +689,10 @@ class Server {
         res.end("Your not allowed to access files outside the pages storage area\n");
         return;
       }
+      
     
       if (pathname.match(/\/_meta\//)) {
-        return metaControl(pathname, res)
+        return metaControl(pathname, req, res)
       }
       if (sPath.match(/\/_git.*/)) {
         return gitControl(sPath, req, res);
