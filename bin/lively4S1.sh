@@ -9,4 +9,4 @@ GITPULL=true
 LOGFILE=$SERVER/server.log
 AUTOCOMMIT=true
 
-$SERVER/bin/lively4server.sh
+source $SERVER/bin/lively4server.sh
