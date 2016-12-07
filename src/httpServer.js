@@ -262,31 +262,9 @@ function readDirectory(aPath, res, contentType){
       type: "directory",
       contents: []
     };
-
-    files.forEach(function(filename) {
-      var filePath = path.join(aPath, filename);
-      fs.stat(filePath, function(err, statObj) {
-        if (!statObj) {
-           dir.contents.push({
-            type: "file",
-            name: filename,
-            size: 0,
-          });
-        } else if (statObj.isDirectory()) {
-          dir.contents.push({
-            type: "directory",
-            name: filename,
-            size: 0
-          });
-        } else {
-          dir.contents.push({
-            type: "file",
-            name: filename,
-            size: statObj.size
-          });
-        }
-
-        // is there a better way for synchronization???
+    
+    var checkEnd = () => {
+         // is there a better way for synchronization???
         if (dir.contents.length === files.length) {
           var data;
           if (contentType == "text/html") {
@@ -314,6 +292,31 @@ function readDirectory(aPath, res, contentType){
             res.end(data);
           }
         }
+    }
+    checkEnd()
+    files.forEach(function(filename) {
+      var filePath = path.join(aPath, filename);
+      fs.stat(filePath, function(err, statObj) {
+        if (!statObj) {
+           dir.contents.push({
+            type: "file",
+            name: filename,
+            size: 0,
+          });
+        } else if (statObj.isDirectory()) {
+          dir.contents.push({
+            type: "directory",
+            name: filename,
+            size: 0
+          });
+        } else {
+          dir.contents.push({
+            type: "file",
+            name: filename,
+            size: statObj.size
+          });
+        }
+        checkEnd()
       });
     });
   });
