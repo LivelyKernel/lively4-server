@@ -644,6 +644,7 @@ class Server {
     console.log("set lively4dir to:" + path)
     sSourceDir = path;
     lively4dir = path;
+    lively4DirUnix = path;
     return lively4dir
   }
   

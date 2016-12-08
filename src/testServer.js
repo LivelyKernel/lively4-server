@@ -9,13 +9,13 @@ process.env.NODE_ENV = 'test';
 var Server = require('./httpServer');
 var port = 8081;
 
-describe("Lively4 Server", function() {
+describe("Lively4 Server", () => {
   
   var tmp = "tmp/";
   var testrepo = "lively4-dummy";
   var url = "http://localhost:" + port+"/";
   
-  before(function(done) {
+  before((done) => {
     Server.lively4dir = tmp;
     Server.port = port;
     Server.autoCommit = true
@@ -30,24 +30,38 @@ describe("Lively4 Server", function() {
     });
   });
 
-  describe("List Livel4 directory", function() {
+  describe("mkcol", () => {
+    it("creates a directory", (done) => {
+      request({
+        method: "MKCOL",
+        url: url + testrepo + "/newdir"
+      }, async (error, response, body) => {
+        expect(response.statusCode).to.equal(200);
+        await expectResultMatch("ls -d newdir", "newdir\n")
+        done();
+      });
+    })
 
-    it("returns status 200", function(done) {
-      request(url, function(error, response, body) {
+  })
+
+  describe("List Livel4 directory", () => {
+
+    it("returns status 200", (done) => {
+      request(url, (error, response, body) => {
         expect(response.statusCode).to.equal(200);
         done();
       });
     });
     
-    it("returns listing", function(done) {
-      request(url, function(error, response, body) {
+    it("returns listing", (done) => {
+      request(url, (error, response, body) => {
         expect(body).to.match(/lively4-dummy/);
         done();
       });
     });
     
-    it("read file", function(done) {
-      request(url + "lively4-dummy/README.md", function(error, response, body) {
+    it("read file", (done) => {
+      request(url + "lively4-dummy/README.md", (error, response, body) => {
         expect(body).to.match(/A dummy repository/);
         done();
       });
