@@ -111,7 +111,10 @@ function writeFile(repositorypath, filepath, req, res) {
   var fullpath = path.join(repositorypath, filepath);
   console.log("write file: " + fullpath);
   var fullBody = '';
-
+  // if (filepath.match(/png$/)) {
+    req.setEncoding('binary')
+  // }
+  
   //read chunks of data and store it in buffer
   req.on('data', function(chunk) {
     fullBody += chunk.toString();
@@ -146,8 +149,10 @@ function writeFile(repositorypath, filepath, req, res) {
         return 
       } 
       
+      console.log("size " + fullBody.length)
+      
       // console.log("fullBody: " + fullBody)
-      fs.writeFile(fullpath, fullBody, function(err) {
+      fs.writeFile(fullpath, fullBody, (fullpath.match(/png$/) ? "binary": undefined), function(err) {
         if (err) {
           // throw err;
           console.log(err);
