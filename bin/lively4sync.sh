@@ -33,8 +33,9 @@ git pull --no-edit origin "$BRANCH" ;
 # git pull --rebase --no-edit origin "$BRANCH" ; 
 
 
-echo "PUSH"
-git push $ORIGIN $BRANCH
+echo "PUSH2"
+echo git push "$ORIGIN" "$BRANCH"
+git push "$ORIGIN" "$BRANCH"
 
 echo "FETCH AGAIN"
 #git fetch origin "$BRANCH"
