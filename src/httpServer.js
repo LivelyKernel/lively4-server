@@ -112,7 +112,11 @@ function writeFile(repositorypath, filepath, req, res) {
   console.log("write file: " + fullpath);
   var fullBody = '';
   // if (filepath.match(/png$/)) {
+  if (filepath.match(/(txt)|(md)|(js)|(html)|(svg)$/)) {
+    // #TODO how do we better decide if we need this...
+  } else {
     req.setEncoding('binary')
+  }
   // }
   
   //read chunks of data and store it in buffer
