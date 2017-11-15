@@ -14,6 +14,7 @@ var slash = require("slash");
 require("log-timestamp");
 
 
+
 // define command line options
 var options = [{
   name: "port",
@@ -106,13 +107,15 @@ function getVersion(repositorypath, filepath) {
   })
 }
 
+var isTextRegEx = /(txt)|(md)|(js)|(html)|(svg)$/
+
 //write file to disk
 function writeFile(repositorypath, filepath, req, res) {
   var fullpath = path.join(repositorypath, filepath);
   console.log("write file: " + fullpath);
   var fullBody = '';
   // if (filepath.match(/png$/)) {
-  if (filepath.match(/(txt)|(md)|(js)|(html)|(svg)$/)) {
+  if (filepath.match(isTextRegEx)) {
     // #TODO how do we better decide if we need this...
   } else {
     req.setEncoding('binary')
@@ -156,7 +159,7 @@ function writeFile(repositorypath, filepath, req, res) {
       console.log("size " + fullBody.length)
       
       // console.log("fullBody: " + fullBody)
-      fs.writeFile(fullpath, fullBody, (fullpath.match(/png$/) ? "binary": undefined), function(err) {
+      fs.writeFile(fullpath, fullBody, (fullpath.match(isTextRegEx) ? undefined : "binary"), function(err) {
         if (err) {
           // throw err;
           console.log(err);
