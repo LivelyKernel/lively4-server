@@ -646,6 +646,7 @@ class Server {
 
   static setup() {
     this.port = port
+    this.server = server
   }
   
   static get lively4dir() {
