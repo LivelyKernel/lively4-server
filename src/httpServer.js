@@ -480,14 +480,14 @@ function gitControl(sPath, req, res, cb) {
       repository, res, null, dryrun);
     }
     RepositoryInSync[repository] = true;
-    cmd = "lively4sync.sh '" + repository + "' '" +
+    cmd = `${server}/bin/lively4sync.sh '` + repository + "' '" +
       username + "' '" + password + "' '" +email + "' '"+branch +"' '"+msg+"'";
     respondWithCMD(cmd, res, function() {
     RepositoryInSync[repository] = undefined;
     }, dryrun);
     
   } else if (sPath.match(/\/_git\/resolve/)) {
-    cmd = "lively4resolve.sh '" + repository + "'";
+    cmd = `${server}/bin/lively4resolve.sh '`+ repository + "'";
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/status/)) {
