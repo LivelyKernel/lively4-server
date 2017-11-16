@@ -1,6 +1,6 @@
 #!/bin/bash
 
-REPOSITORY=~/lively4/"$1"
+REPOSITORY="$1"
 USERNAME="$2"
 PASSWORD="$3"
 EMAIL="$4"

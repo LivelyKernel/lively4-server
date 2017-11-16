@@ -1,14 +1,13 @@
 #!/bin/bash
 
-LIVELY4="$1"
-REPOSITORY="$2"
-USERNAME="$3"
-PASSWORD="$4"
-EMAIL="$5"
-BRANCH="$6"
-MSG="$7"
+REPOSITORY="$1"
+USERNAME="$2"
+PASSWORD="$3"
+EMAIL="$4"
+BRANCH="$5"
+MSG="$6"
 
-pushd "$LIVELY4"/"$REPOSITORY" > /dev/null
+pushd "$REPOSITORY" > /dev/null
 
 MSG2="SQUASHED: `git log HEAD...origin/$BRANCH --pretty=format:%f | sort | uniq | tr '\n' ', '`"
 

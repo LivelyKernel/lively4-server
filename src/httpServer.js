@@ -480,14 +480,13 @@ function gitControl(sPath, req, res, cb) {
       repository, res, null, dryrun);
     }
     RepositoryInSync[repository] = true;
-    cmd = `${server}/bin/lively4sync.sh '` + repository + "' '" +
-      username + "' '" + password + "' '" +email + "' '"+branch +"' '"+msg+"'";
+    cmd = `${server}/bin/lively4sync.sh '${lively4DirUnix + "/"+ repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
     respondWithCMD(cmd, res, function() {
     RepositoryInSync[repository] = undefined;
     }, dryrun);
     
   } else if (sPath.match(/\/_git\/resolve/)) {
-    cmd = `${server}/bin/lively4resolve.sh '`+ repository + "'";
+    cmd = `${server}/bin/lively4resolve.sh '`+ lively4DirUnix + "/" + repository + "'";
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/status/)) {
@@ -496,7 +495,7 @@ function gitControl(sPath, req, res, cb) {
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/log/)) {
-    cmd = 'cd ' + repository + "; git log ";
+    cmd = 'cd ' + lively4DirUnix + "/" + repository + "; git log ";
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/commit/)) {
@@ -505,7 +504,7 @@ function gitControl(sPath, req, res, cb) {
     } else {
        return res.end("Please provide a commit message!");
     }
-    cmd = 'cd ' + repository + ";\n"+
+    cmd = 'cd \'' + lively4DirUnix + "/" +repository + "';\n"+
       "git config user.name "+username + ";\n"+
       "git config user.email "+email + ";\n"+
       "git commit "+ msg +" -a ";
@@ -546,24 +545,24 @@ function gitControl(sPath, req, res, cb) {
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/merge/)) {
-    cmd = `${server}/bin/lively4merge.sh '${repository}' `+
+    cmd = `${server}/bin/lively4merge.sh '${lively4DirUnix}/${repository}' `+
       `'${username}' '${password}' '${email}' '${branch}'`;;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/squash/)) {
-    cmd = `${server}/bin/lively4squash.sh '${lively4DirUnix}' '${repository}' `+
+    cmd = `${server}/bin/lively4squash.sh '${lively4DirUnix}/${repository}' `+
       `'${username}' '${password}' '${email}' '${branch}' '${msg}'`;;
     respondWithCMD(cmd, res, null, dryrun);
 
   } else if (sPath.match(/\/_git\/delete/)) {
-    cmd = `${server}/bin/lively4deleterepository.sh '${repository}'`;
+    cmd = `${server}/bin/lively4deleterepository.sh '${lively4DirUnix}/${repository}'`;
     respondWithCMD(cmd, res, null, dryrun);
-    
   } else {
     res.writeHead(200);
     res.end("Lively4 git Control! " + sPath + " not implemented!");
   }
 }
+
 
 function metaControl(pathname, req, res) {
   if (pathname.match(/_meta\/exit/)) {
