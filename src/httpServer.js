@@ -446,6 +446,10 @@ function searchFiles(sPath, req, res) {
   }
 }
 
+function cleanString(str) {
+  return str.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"_")
+}
+
 function gitControl(sPath, req, res, cb) {
   console.log("git control: " + sPath);
 
@@ -459,7 +463,7 @@ function gitControl(sPath, req, res, cb) {
   var password =      req.headers["gitpassword"];
   var email =         req.headers["gitemail"];
   var branch =        req.headers["gitrepositorybranch"];
-  var msg =           req.headers["gitcommitmessage"];
+  var msg =           cleanString(req.headers["gitcommitmessage"]);
   var filepath =      req.headers["gitfilepath"];
 
   if (!email) {
@@ -500,7 +504,7 @@ function gitControl(sPath, req, res, cb) {
 
   } else if (sPath.match(/\/_git\/commit/)) {
     if (msg) {
-      msg = " -m'" + msg.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"") +"'";
+      msg = " -m'" + msg +"'";
     } else {
        return res.end("Please provide a commit message!");
     }
