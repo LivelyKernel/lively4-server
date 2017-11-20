@@ -366,7 +366,7 @@ function respondWithCMD(cmd, res, finish, dryrun) {
 
 
 function deleteFile(sPath, res) {
-  sPath = sPath.replace(/['"; &|]/g,"");
+  sPath = sPath.replace(/['";&|]/g,""); // #TODO can we get rid of stripping these?
   if (indexFiles) {
     try {
       lunrSearch.removeFile(sPath);
@@ -695,7 +695,9 @@ class Server {
       var sPath = slash(path.normalize(oUrl.pathname));
       
       
-      sPath = sPath.replace(/%20/g, " ")
+      // sPath = sPath.replace(/%20/g, " "); //#TODO this is poor unicode handling...
+      sPath = decodeURI(sPath)
+      
       console.log("sPath: " + sPath)
     
       var fileversion =  req.headers["fileversion"]
