@@ -24,7 +24,9 @@ else
 fi
 echo COMMIT $COMMIT
 
-
+if [ -e "${REPOSITORY}/.git/MERGE_HEAD" ]; then
+  echo "merge in progress - you had conflicts or a manual merge is in progress"
+fi
 git commit -m "$COMMIT" -a ; 
 echo "PULL"
 git pull --no-edit origin "$BRANCH" ; 
