@@ -502,6 +502,10 @@ function gitControl(sPath, req, res, cb) {
     cmd = 'cd ' + lively4DirUnix + "/" + repository + "; git log ";
     respondWithCMD(cmd, res, null, dryrun);
 
+  } else if (sPath.match(/\/_git\/graph/)) {
+    cmd = 'cd ' + lively4DirUnix + "/" + repository + "; git log --graph -100";
+    respondWithCMD(cmd, res, null, dryrun);
+
   } else if (sPath.match(/\/_git\/commit/)) {
     if (msg) {
       msg = " -m'" + msg +"'";
