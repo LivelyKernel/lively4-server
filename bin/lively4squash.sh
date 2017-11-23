@@ -19,6 +19,6 @@ git config user.email "$EMAIL"
 
 MSG2="SQUASHED: `git log HEAD...origin/$BRANCH --pretty=format:%f | sort | uniq | tr '\n' ', '`"
 
-git reset --soft origin/$BRANCH && git commit -m "$MSG" -m "$MSG2"
+git reset --soft origin/$BRANCH && git commit -a --allow-empty -m "$MSG" -m "$MSG2"
 
 popd > /dev/null
