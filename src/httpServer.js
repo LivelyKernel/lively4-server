@@ -447,7 +447,7 @@ function searchFiles(sPath, req, res) {
 }
 
 function cleanString(str) {
-  return str.replace(/[^A-Za-z0-9 ,.()\[\]]/g,"_")
+  return str.replace(/[^A-Za-z0-9 ,.()\[\]#]/g,"_")
 }
 
 function gitControl(sPath, req, res, cb) {
