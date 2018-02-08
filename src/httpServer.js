@@ -1,19 +1,19 @@
+/* globals require */
 var http = require("http");
 var fs = require("fs");
 var url = require("url");
 var path = require("path");
 var mime = require("mime");
 var mkdirp = require("mkdirp");
-var async = require("async");
 var argv = require("argv");
 var child_process = require("child_process");
 var exec = child_process.exec; 
 var slash = require("slash");
 
+var tmpStorage = {}
+
 // this adds a timestamp to all log messages
 require("log-timestamp");
-
-
 
 // define command line options
 var options = [{
@@ -572,6 +572,35 @@ function gitControl(sPath, req, res, cb) {
   }
 }
 
+/*
+ * Experimental in memory tmp file for drag and drop #Hack
+ */
+function tempFile(pathname, req, res) {
+  // console.log("tempFile " + pathname)
+  var file = pathname.replace(/^\/_tmp\//,"")
+  if (req.method == "GET") {
+    var data  = tmpStorage[file] 
+    res.writeHead(200, {
+      'content-type': 'text/plain'
+    });
+    res.end(data);
+  }
+  if (req.method == "PUT") {
+    var fullBody = '';  
+    req.on('data', function(chunk) {
+      fullBody += chunk.toString();
+    });
+    req.on('end', async function() {
+      tmpStorage[file] = fullBody
+      setTimeout(() => {
+        console.log("cleanup " + file)
+        delete tmpStorage[file]
+      }, 5 * 60 * 1000) // cleanup after 5min
+      res.writeHead(200); // done
+      res.end();
+    })
+  }
+}
 
 function metaControl(pathname, req, res) {
   if (pathname.match(/_meta\/exit/)) {
@@ -650,6 +679,9 @@ function readFileVersion(repositorypath, filepath, fileversion, res) {
     'git show '+fileversion +':' + filepath, res)
 }
 
+
+
+
 class Server {
 
   static setup() {
@@ -715,8 +747,11 @@ class Server {
         res.end("Your not allowed to access files outside the pages storage area\n");
         return;
       }
-      
     
+      if (pathname.match(/\/_tmp\//)) {
+        return tempFile(pathname, req, res)
+      }
+
       if (pathname.match(/\/_meta\//)) {
         return metaControl(pathname, req, res)
       }
