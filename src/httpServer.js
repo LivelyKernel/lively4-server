@@ -118,6 +118,7 @@ function writeFile(repositorypath, filepath, req, res) {
   if (filepath.match(isTextRegEx)) {
     // #TODO how do we better decide if we need this...
   } else {
+    console.log("set binary encoding");
     req.setEncoding('binary')
   }
   // }
