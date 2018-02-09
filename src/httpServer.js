@@ -580,13 +580,12 @@ function tempFile(pathname, req, res) {
   var file = pathname.replace(/^\/_tmp\//,"")
   if (req.method == "GET") {
     var data  = tmpStorage[file] 
-    res.writeHead(200, {
-      'content-type': 'text/plain'
-    });
-    res.end(data);
+    res.writeHead(200);
+    res.end(data, 'binary');
   }
   if (req.method == "PUT") {
     var fullBody = '';  
+    req.setEncoding('binary')
     req.on('data', function(chunk) {
       fullBody += chunk.toString();
     });
