@@ -59,11 +59,7 @@ var options = [{
   description: "the directory in cygwin... FUCK IT!"
 }];
 
-function log(...args) {
-  console.log(...args)
-}
-
-log("Welcome to Lively4!");
+console.log("Welcome to Lively4!");
 
 // parse command line arguments
 var args = argv.option(options).run();
@@ -75,41 +71,54 @@ var server = args.options.server || "~/lively4-server";
 var bashBin = args.options['bash-bin'] || "bash";
 var cygwin = args.options['cygwin'];
 var lively4DirUnix = args.options['lively4dir-unix'] || lively4dir;
+
+
 var autoCommit = args.options['auto-commit'] || false;
+
 var RepositoryInSync = {}; // cheap semaphore
 
 if (cygwin) {
-  log("Lively4dir in unix: " + lively4DirUnix);
+  console.log("Lively4dir in unix: " + lively4DirUnix);
 }
 
 // use-case cof #ContextJS ?
 if (indexFiles) {
  var lunrSearch = require("./lively4-search/shared/lunr-search.js");
 } else {
-  log("[search] indexing files is disabled");  
+  console.log("[search] indexing files is disabled");  
 }
 
 if (indexFiles) {
-  log("[search] setRootFolder " + sSourceDir);
+  console.log("[search] setRootFolder " + sSourceDir);
   lunrSearch.setRootFolder(sSourceDir);
 }
 
 
 var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 
+function getVersion(repositorypath, filepath) {
+  let cmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
+  console.log("version cmd: " + cmd);
+  return new Promise((resolve, reject) => {
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) resolve(null) // no version found
+      else resolve(stdout)
+    })
+  })
+}
 
 var isTextRegEx = /(txt)|(md)|(js)|(html)|(svg)$/
 
 //write file to disk
 function writeFile(repositorypath, filepath, req, res) {
   var fullpath = path.join(repositorypath, filepath);
-  log("write file: " + fullpath);
+  console.log("write file: " + fullpath);
   var fullBody = '';
   // if (filepath.match(/png$/)) {
   if (filepath.match(isTextRegEx)) {
     // #TODO how do we better decide if we need this...
   } else {
-    log("set binary encoding");
+    console.log("set binary encoding");
     req.setEncoding('binary')
   }
   // }
@@ -124,9 +133,9 @@ function writeFile(repositorypath, filepath, req, res) {
     if (fullpath.match(/\/$/)){
       mkdirp(fullpath, function(err) {
         if (err) {
-          log("Error creating dir: " + err);
+          console.log("Error creating dir: " + err);
         }
-        log("mkdir " + fullpath);
+        console.log("mkdir " + fullpath);
         res.writeHead(200, "OK");
         res.end();
       });
@@ -134,12 +143,12 @@ function writeFile(repositorypath, filepath, req, res) {
       var lastVersion =  req.headers["lastversion"];
       var currentVersion = await getVersion(repositorypath, filepath)
       
-      log("last version: " + lastVersion);
-      log("current version: " + currentVersion);
+      console.log("last version: " + lastVersion);
+      console.log("current version: " + currentVersion);
       
       // we have version information and there is a conflict
       if (lastVersion && currentVersion && lastVersion !== currentVersion) {
-        log("[writeFile] CONFLICT DETECTED")
+        console.log("[writeFile] CONFLICT DETECTED")
         res.writeHead(409, { // HTTP CONFLICT
           'content-type': 'text/plain',
           'conflictversion': currentVersion
@@ -148,13 +157,13 @@ function writeFile(repositorypath, filepath, req, res) {
         return 
       } 
       
-      log("size " + fullBody.length)
+      console.log("size " + fullBody.length)
       
-      // log("fullBody: " + fullBody)
+      // console.log("fullBody: " + fullBody)
       fs.writeFile(fullpath, fullBody, (fullpath.match(isTextRegEx) ? undefined : "binary"), function(err) {
         if (err) {
           // throw err;
-          log(err);
+          console.log(err);
           return;
         }
         
@@ -162,7 +171,7 @@ function writeFile(repositorypath, filepath, req, res) {
           try {
             lunrSearch.addFile(fullpath); // #TODO #BUG what path does lunr accept?
           } catch(e) {
-            log("Error indexing file, but conitue anyway: " + e);
+            console.log("Error indexing file, but conitue anyway: " + e);
           }
         }
         if (autoCommit) {
@@ -174,25 +183,25 @@ function writeFile(repositorypath, filepath, req, res) {
           var authCmd = "";
           if (username) authCmd += `git config user.name '${username}'; `
           if (email) authCmd += `git config user.email '${email}'; `
-          log("EMAIL " + email + " USER " + username)
+          console.log("EMAIL " + email + " USER " + username)
           
           // #TODO maybe we should ask for github credetials here too?
           let cmd  = `cd "${repositorypath}"; ${authCmd} git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
-          log("[AUTO-COMMIT] " + cmd);
+          console.log("[AUTO-COMMIT] " + cmd);
           exec(cmd, (error, stdout, stderr) => {
-            log("stdout: " + stdout);
-            log("stderr: " + stderr);
+            console.log("stdout: " + stdout);
+            console.log("stderr: " + stderr);
             if (error) {
-              log("ERROR");
+              console.log("ERROR");
               res.writeHead(500, "" + err);
               res.end("ERROR: " + stderr);
             } else {
               // return the hash for the commit, we just created
               
               let fileVersionCmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
-              log("cmd: " + fileVersionCmd);
+              console.log("cmd: " + fileVersionCmd);
               exec(fileVersionCmd, (error, stdout, stderr) => {
-                log("New version: " + stdout);
+                console.log("New version: " + stdout);
                 if (error) {
                   res.writeHead(500);
                   res.end("could not retrieve new version... somthing went wrong: " + stdout + " " +stderr);
@@ -207,7 +216,7 @@ function writeFile(repositorypath, filepath, req, res) {
             }
           });
         } else {
-          log("saved " + fullpath);
+          console.log("saved " + fullpath);
           res.writeHead(200, "OK");
           res.end();
         }
@@ -216,100 +225,54 @@ function writeFile(repositorypath, filepath, req, res) {
   });
 }
 
-async function run(cmd) {
-  return new Promise( resolve => {
-    exec(cmd, (error, stdout, stderr) => {
-      resolve(stdout)
-    })
-  })
-}
-
-async function getVersion(repositorypath, filepath) {
-  return await run(`cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`);
-}
-
-async function getLastModified(repositorypath, filepath) {
-  return await run(`cd "${repositorypath}"; find "${filepath}" -not -path '*/.git/*' -printf "%TY-%Tm-%Td %TH:%TM:%.2TS"`);
-}
-
-async function readFile(repositorypath, filepath, res) {
+function readFile(repositorypath, filepath, res) {
   var sPath = repositorypath + "/" +filepath;
-  log("read file: " + sPath);
-  fs.exists(sPath, async function(exists) {
+  console.log("read file " + sPath);
+  fs.exists(sPath, function(exists) {
     if (!exists) {
       res.writeHead(404);
       res.end("File not found!\n");
     } else {
-      fs.stat(sPath, async function(err, stats) {
+      fs.stat(sPath, function(err, stats) {
         if (err !== null) {
           if (err.code == 'ENOENT') {
               res.writeHead(404);
               res.end();
           } else {
-            log(err);
+            console.log(err);
           }
           return;
         }
         if (stats.isDirectory()) {
-          readDirectory(repositorypath, filepath, res, "text/html");
+          readDirectory(sPath, res, "text/html");
         } else {
-          var commithash = await getVersion(repositorypath, filepath)
-          var modified = await getLastModified(repositorypath, filepath)
-          res.writeHead(200, {
+          var cmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
+          console.log("run: " + cmd);
+          exec(cmd, (error, stdout, stderr) => {
+            console.log("commithash " + stdout);
+            res.writeHead(200, {
               'content-type': mime.lookup(sPath),
-              'modified': modified,
-              'fileversion': commithash
-          });
-          var stream = fs.createReadStream(sPath, {
-            bufferSize: 64 * 1024
-          });
-          stream.on('error', function (err) {
-            log("error reading: " + sPath + " error: " + err);
-            res.end("Error reading file\n");
-          });
-          stream.pipe(res);
-           
+              'fileversion': stdout
+            });
+            var stream = fs.createReadStream(sPath, {
+              bufferSize: 64 * 1024
+            });
+            stream.on('error', function (err) {
+              console.log("error reading: " + sPath + " error: " + err);
+              res.end("Error reading file\n");
+            });
+            stream.pipe(res);
+           });
         }
       });
     }
   });
 }
 
-
-/*
- * recursively directories and with modification date of files 
- * #Idea (should be used to update caches)
- */
-async function readFilelist(repositorypath, filepath, res){
-  var cmd = `cd "${repositorypath}"; find -not -path '*/.git/*' -printf "%TY-%Tm-%Td %TH:%TM:%.2TS\t%p\n"`;
-  log("run: " + cmd);
-  exec(cmd, async (error, stdout, stderr) => {
-    var list =  stdout.split("\n").map(line => {
-      var row = line.split("\t")
-      return {
-        modified: row[0],
-        type: "file",
-        name: row[1]
-      }
-    })
-    
-    res.writeHead(200, {
-      'content-type': "json",
-    });
-    res.end(JSON.stringify({
-      type: "filelist",
-      contents: list
-    }));
-   });
-}
-
-async function readDirectory(repositorypath, filepath, res, contentType){
-  var version = await getVersion(repositorypath, filepath)
-  var aPath = repositorypath + "/" + filepath
-  fs.readdir(aPath, async function(err, files) {
+function readDirectory(aPath, res, contentType){
+  fs.readdir(aPath, function(err, files) {
     var dir = {
       type: "directory",
-      version: version,
       contents: []
     };
     
@@ -374,7 +337,7 @@ async function readDirectory(repositorypath, filepath, res, contentType){
 
 
 function respondWithCMD(cmd, res, finish, dryrun) {
-  log(cmd);
+  console.log(cmd);
 
   res.setHeader('Content-Type', 'text/plain');
   res.setHeader('Transfer-Encoding', 'chunked');
@@ -387,12 +350,12 @@ function respondWithCMD(cmd, res, finish, dryrun) {
   var process = child_process.spawn(bashBin, ["-c", cmd]);
 
   process.stdout.on('data', function (data) {
-    log('STDOUT: ' + data);
-    res.write(data, undefined, function() {log("FLUSH");} );
+    console.log('STDOUT: ' + data);
+    res.write(data, undefined, function() {console.log("FLUSH");} );
   });
 
   process.stderr.on('data', function (data) {
-  log('stderr: ' + data);
+  console.log('stderr: ' + data);
   res.write(data);
   });
 
@@ -409,7 +372,7 @@ function deleteFile(sPath, res) {
     try {
       lunrSearch.removeFile(sPath);
     } catch(e) {
-      log("[search] Error removing file, but conitue anyway: " + e)
+      console.log("[search] Error removing file, but conitue anyway: " + e)
     }
   }
   return respondWithCMD(
@@ -418,7 +381,7 @@ function deleteFile(sPath, res) {
 }
 
 function createDirectory(sPath, res) {
-  log("create directory " + sPath);
+  console.log("create directory " + sPath);
   sPath = sPath.replace(/['"; &|]/g,"");
   return respondWithCMD(`mkdir ${lively4DirUnix}/"${sPath}"`, res);
 }
@@ -431,41 +394,32 @@ function listVersions(repositorypath, filepath, res) {
 }
 
 function listOptions(sSourcePath, sPath, req, res) {
-  log("doing a stat on " + sSourcePath);
+  console.log("doing a stat on " + sSourcePath);
   // statFile was called by client
-  fs.stat(sSourcePath, async function(err, stats) {
-    var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
-    var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
-
+  fs.stat(sSourcePath, function(err, stats) {
     if (err !== null) {
-      log("stat ERROR: " + err);
+      console.log("stat ERROR: " + err);
       if (err.code == 'ENOENT') {
           res.writeHead(404);
           res.end();
       } else {
-        log(err);
+        console.log(err);
       }
       return;
     }
     if (stats.isDirectory()) {
-      if (req.headers["filelist"] == "true") {
-        readFilelist(repositorypath, filepath, res);        
-      } else {
-        readDirectory(repositorypath, filepath, res);
-      }
-      
+      readDirectory(sSourcePath, res);
     } else if (stats.isFile()) {
       if (req.headers["showversions"] == "true") {
+        var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+        var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
         return listVersions(repositorypath, filepath, res)
       }
-            
       // type, name, size
       var result = {type: "file"}
       result.name = sSourcePath.replace(/.*\//,"")
       result.size = stats.size
-      result.version = await getVersion(repositorypath, filepath)
-      result.modified = await getLastModified(repositorypath, filepath)
-    
+
       var data = JSON.stringify(result, null, 2);
       // github return text/plain, therefore we need to do the same
       res.writeHead(200, {
@@ -494,23 +448,24 @@ function searchFiles(sPath, req, res) {
 }
 
 function cleanString(str) {
-  return str.replace(/[^A-Za-z0-9 ,.()[\]#]/g,"_")
+  return str.replace(/[^A-Za-z0-9 ,.()\[\]#]/g,"_")
 }
 
-function gitControl(sPath, req, res) {
-  log("git control: " + sPath);
+function gitControl(sPath, req, res, cb) {
+  console.log("git control: " + sPath);
 
   var dryrun = req.headers["dryrun"];
   dryrun = dryrun && dryrun == "true";
   // #TODO replace it with something more secure... #Security #Prototype
   // Set CORS headers
-  var repository = req.headers["gitrepository"];
+  var repository =    req.headers["gitrepository"];
   var repositoryurl = req.headers["gitrepositoryurl"];
-  var username = req.headers["gitusername"];
-  var password = req.headers["gitpassword"];
-  var email = req.headers["gitemail"];
-  var branch = req.headers["gitrepositorybranch"];
-  var msg = cleanString(req.headers["gitcommitmessage"]);
+  var username =      req.headers["gitusername"];
+  var password =      req.headers["gitpassword"];
+  var email =         req.headers["gitemail"];
+  var branch =        req.headers["gitrepositorybranch"];
+  var msg =           cleanString(req.headers["gitcommitmessage"]);
+  var filepath =      req.headers["gitfilepath"];
 
   if (!email) {
     return res.end("please provide email!");
@@ -524,7 +479,7 @@ function gitControl(sPath, req, res) {
 
   var cmd;
   if (sPath.match(/\/_git\/sync/)) {
-    log("SYNC REPO " + RepositoryInSync[repository]);
+    console.log("SYNC REPO " + RepositoryInSync[repository]);
     if (RepositoryInSync[repository]) {
       return respondWithCMD("echo Sync in progress: " +
       repository, res, null, dryrun);
@@ -621,7 +576,7 @@ function gitControl(sPath, req, res) {
  * Experimental in memory tmp file for drag and drop #Hack
  */
 function tempFile(pathname, req, res) {
-  // log("tempFile " + pathname)
+  // console.log("tempFile " + pathname)
   var file = pathname.replace(/^\/_tmp\//,"")
   if (req.method == "GET") {
     var data  = tmpStorage[file] 
@@ -637,7 +592,7 @@ function tempFile(pathname, req, res) {
     req.on('end', async function() {
       tmpStorage[file] = fullBody
       setTimeout(() => {
-        log("cleanup " + file)
+        console.log("cleanup " + file)
         delete tmpStorage[file]
       }, 5 * 60 * 1000) // cleanup after 5min
       res.writeHead(200); // done
@@ -674,17 +629,17 @@ function searchFilesWithIndex(sPath, req, res) {
     try {
       lunrSearch.createIndex(location).then(() => {
         // index is available
-        log("[Search] index available in location: " + location);
+        console.log("[Search] index available in location: " + location);
         res.writeHead(200, {"Content-Type": "application/json"});
         res.end(JSON.stringify({indexStatus: "available"}));
       }, (err) => {
         // index not available yet
-        log("[Search] index not yet available in location: " + location + " Error: " + err);
+        console.log("[Search] index not yet available in location: " + location + " Error: " + err);
         res.writeHead(200, {"Content-Type": "application/json"});
         res.end(JSON.stringify({indexStatus: "indexing"}));
       });
     } catch(e) {
-      log("[Search] could not create index, but conitue anyway: " + e)
+      console.log("[Search] could not create index, but conitue anyway: " + e)
       res.writeHead(500, {"Content-Type": "application/json"});
       res.end("Creating index failed due: " + e);
       return
@@ -692,19 +647,19 @@ function searchFilesWithIndex(sPath, req, res) {
 
   } else if (sPath.match(/\/api\/search\/statusIndex.*/)) {
     lunrSearch.getStatus(location).then(status => {
-      log(`[Search] check index status for ${location}: ${status}`);
+      console.log(`[Search] check index status for ${location}: ${status}`);
       res.writeHead(200, {"Content-Type": "application/json"});
       res.end(JSON.stringify({indexStatus: status}));
     });
   } else if (sPath.match(/\/api\/search\/removeIndex.*/)) {
     lunrSearch.removeIndex(location).then(() => {
-      log("[Search] index removed in location: " + location);
+      console.log("[Search] index removed in location: " + location);
       res.writeHead(200, "OK");
       res.end();
     });
   } else {
     var pattern = query.q;
-    log("[Search] search: " + pattern + " in location: " + location);
+    console.log("[Search] search: " + pattern + " in location: " + location);
     lunrSearch.search(location, pattern).then((results) => {
       res.writeHead(200, {"Content-Type": "application/json"});
       res.end(JSON.stringify(results));
@@ -723,6 +678,9 @@ function readFileVersion(repositorypath, filepath, fileversion, res) {
     'git show '+fileversion +':' + filepath, res)
 }
 
+
+
+
 class Server {
 
   static setup() {
@@ -735,7 +693,7 @@ class Server {
   }
   
   static set lively4dir(path) {
-    log("set lively4dir to:" + path)
+    console.log("set lively4dir to:" + path)
     sSourceDir = path;
     lively4dir = path;
     lively4DirUnix = path;
@@ -747,80 +705,86 @@ class Server {
   }
   
   static set autoCommit(bool) {
-    log("set autoCommit to: " + bool)
+    console.log("set autoCommit to: " + bool)
     return autoCommit = bool
   }
 
   static start() {
-    log("Server: "+ this.server);
-    log("Lively4: "+ lively4dir);
-    log("Port: "+ this.port);
-    log("Indexing: "+ indexFiles);
-    log("Auto-commit: "+ autoCommit);
-    http.createServer((req,res) => this.onRequest(req,res)).listen(this.port, function(err) {
+    console.log("Server: "+ this.server);
+    console.log("Lively4: "+ lively4dir);
+    console.log("Port: "+ this.port);
+    console.log("Indexing: "+ indexFiles);
+    console.log("Auto-commit: "+ autoCommit);
+    
+    http.createServer(function(req, res) {
+      // Set CORS headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Request-Method', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT');
+      res.setHeader('Access-Control-Allow-Headers', '*');
+    
+      var oUrl = url.parse(req.url, true, false);
+      console.log("pathname: " + oUrl.pathname);
+      var pathname = oUrl.pathname;
+    
+      // use slash to avoid conversion from '\' to '/' on Windows
+      var sPath = slash(path.normalize(oUrl.pathname));
+      
+      
+      // sPath = sPath.replace(/%20/g, " "); //#TODO this is poor unicode handling...
+      sPath = decodeURI(sPath)
+      
+      console.log("sPath: " + sPath)
+    
+      var fileversion =  req.headers["fileversion"]
+      console.log("fileversion: " + fileversion)
+      var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+      var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
+    
+      if (breakOutRegex.test(sPath) === true) {
+        res.writeHead(500);
+        res.end("Your not allowed to access files outside the pages storage area\n");
+        return;
+      }
+    
+      if (pathname.match(/\/_tmp\//)) {
+        return tempFile(pathname, req, res)
+      }
+
+      if (pathname.match(/\/_meta\//)) {
+        return metaControl(pathname, req, res)
+      }
+      if (sPath.match(/\/_git.*/)) {
+        return gitControl(sPath, req, res);
+      }
+      if (pathname.match(/\/api\/search.*/)) {
+        return searchFilesWithIndex(sPath, req, res);
+      }
+      if (pathname.match(/\/_search\//)) {
+        return searchFiles(pathname, req, res);
+      }
+      var sSourcePath = path.join(sSourceDir, sPath);
+      if (req.method == "GET") {
+        if (fileversion && fileversion != "undefined") {
+          readFileVersion(repositorypath, filepath, fileversion, res)
+        } else {
+          readFile(repositorypath, filepath, res);
+        }
+      } else if (req.method == "PUT") {
+        writeFile(repositorypath, filepath, req, res);
+      } else if (req.method == "DELETE") {
+        deleteFile(sPath, res);
+      } else if (req.method == "MKCOL") {
+        createDirectory(sPath, res);
+      } else if (req.method == "OPTIONS") {
+        listOptions(sSourcePath, sPath, req, res)
+      }
+    }).listen(this.port, function(err) {
       if (err) {
         throw err;
       }
-      log("Server running on port " + port + " in directory " + sSourceDir);
+      console.log("Server running on port " + port + " in directory " + sSourceDir);
     });
-  }
-  
-  static onRequest(req, res) {
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Request-Method', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT');
-    res.setHeader('Access-Control-Allow-Headers', '*');
-
-    var oUrl = url.parse(req.url, true, false);
-    log("pathname: " + oUrl.pathname);
-    var pathname = oUrl.pathname;
-    
-    // use slash to avoid conversion from '\' to '/' on Windows
-    var sPath = decodeURI(slash(path.normalize(oUrl.pathname)));
-    log("sPath: " + sPath)
-
-    var fileversion =  req.headers["fileversion"]
-    log("fileversion: " + fileversion)
-    var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
-    var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
-
-    if (breakOutRegex.test(sPath) === true) {
-      res.writeHead(500);
-      res.end("Your not allowed to access files outside the pages storage area\n");
-      return;
-    }
-    if (pathname.match(/\/_tmp\//)) {
-      return tempFile(pathname, req, res)
-    }
-    if (pathname.match(/\/_meta\//)) {
-      return metaControl(pathname, req, res)
-    }
-    if (sPath.match(/\/_git.*/)) {
-      return gitControl(sPath, req, res);
-    }
-    if (pathname.match(/\/api\/search.*/)) {
-      return searchFilesWithIndex(sPath, req, res);
-    }
-    if (pathname.match(/\/_search\//)) {
-      return searchFiles(pathname, req, res);
-    }
-    var sSourcePath = path.join(sSourceDir, sPath);
-    if (req.method == "GET") {
-      if (fileversion && fileversion != "undefined") {
-        readFileVersion(repositorypath, filepath, fileversion, res)
-      } else {
-        readFile(repositorypath, filepath, res);
-      }
-    } else if (req.method == "PUT") {
-      writeFile(repositorypath, filepath, req, res);
-    } else if (req.method == "DELETE") {
-      deleteFile(sPath, res);
-    } else if (req.method == "MKCOL") {
-      createDirectory(sPath, res);
-    } else if (req.method == "OPTIONS") {
-      listOptions(sSourcePath, sPath, req, res)
-    }
   }
 }
 Server.setup()
