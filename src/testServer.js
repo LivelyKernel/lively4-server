@@ -4,15 +4,9 @@ import fetch from 'node-fetch'
 import chai from "chai"
 import request from "request"
 import child_process from "child_process"
-
 import {expect} from "chai"
 import {exec} from "child_process"
-// var expect = chai.expect;
-// var exec = child_process.exec;
-
 import Server from './httpServer.js'
-// var Server = require('./httpServer');
-
 
 var port = 8081;
 

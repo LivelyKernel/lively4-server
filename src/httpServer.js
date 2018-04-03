@@ -1,25 +1,35 @@
-/* globals require */
-var http = require("http");
-var fs = require("fs");
-var url = require("url");
-var path = require("path");
-var mime = require("mime");
-var mkdirp = require("mkdirp");
-var argv = require("argv");
-var child_process = require("child_process");
-var exec = child_process.exec; 
-var slash = require("slash");
+/*
+ * # Lively4 Server -- a file server that serves and manages git repositories as REST
+ *
+ * ## Supported methods:
+ * - GET
+ * - PUT
+ * - DELETE
+ * - MKCOL
+ * - OPTIONS
+ *   - filelist  
+ *   - default: modified, type, name
+ * 
+ * ## Special request HEADER
+ * - fileversion 
+ */
+import http from "http";
+import fs from "fs";
+import url from "url";
+import path from "path";
+import mime from "mime";
+import mkdirp from "mkdirp";
+import argv from "argv";
+import child_process from "child_process";
+import {exec} from "child_process"
+import slash from 'slash'
+import 'log-timestamp' // // this adds a timestamp to all log messages
 
 var tmpStorage = {}
-
 
 function log(...args) {
   console.log(...args)
 }
-
-// this adds a timestamp to all log messages
-require("log-timestamp");
-
 
 // define command line options
 var options = [{
@@ -251,7 +261,7 @@ function writeFile(repositorypath, filepath, req, res) {
 }
 
 /*
- * recursively directories and with modification date of files 
+ * recursively list directories and with modification date of files 
  * #Idea (should be used to update caches)
  */
 async function readFilelist(repositorypath, filepath, res){
