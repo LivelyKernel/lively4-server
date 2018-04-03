@@ -44,7 +44,7 @@ describe("Lively4 Server", () => {
 
   })
 
-  describe("List Livel4 directory", () => {
+  describe("List Lively4 directory", () => {
 
     it("returns status 200", (done) => {
       request(url, (error, response, body) => {
@@ -68,6 +68,20 @@ describe("Lively4 Server", () => {
     });
   });
 
+  
+  // describe("List Lively4 options", () => {
+  //   it("list options of directory", (done) => {
+  //     request({
+  //         method: "OPTIONS",
+  //         url: url + "lively4-dummy/"
+  //       }, (error, response, body) => {
+  //       expect(response.statusCode).to.equal(200);
+  //       done();
+  //     });
+  //   });
+  // });
+
+  
   function expectResultMatch(cmd, regexString) {
     return new Promise((resolve, reject) => {
       cmd =`cd ${tmp}${testrepo};` + cmd; 
