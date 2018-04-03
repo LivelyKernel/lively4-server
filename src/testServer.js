@@ -1,14 +1,19 @@
-// import fetch from 'node-fetch';
-
-var expect  = require("chai").expect;
-var request = require("request");
-var child_process = require("child_process");
-
-var exec = child_process.exec;
-
 process.env.NODE_ENV = 'test';
 
-var Server = require('./httpServer');
+import fetch from 'node-fetch'
+import chai from "chai"
+import request from "request"
+import child_process from "child_process"
+
+import {expect} from "chai"
+import {exec} from "child_process"
+// var expect = chai.expect;
+// var exec = child_process.exec;
+
+import Server from './httpServer.js'
+// var Server = require('./httpServer');
+
+
 var port = 8081;
 
 describe("Lively4 Server", () => {
@@ -17,11 +22,11 @@ describe("Lively4 Server", () => {
   var testrepo = "lively4-dummy";
   var url = "http://localhost:" + port+"/";
   
-  before((done) => {
+  before(function(done) {
     Server.lively4dir = tmp;
     Server.port = port;
     Server.autoCommit = true
-    
+    this.timeout(35000);
     var cmd = `rm -rv "${tmp}"; mkdir -v "${tmp}"; cd "${tmp}";` +
       `git clone https://github.com/LivelyKernel/${testrepo};` +
       `cd ${testrepo}; git --reset hard`;
@@ -70,15 +75,23 @@ describe("Lively4 Server", () => {
     });
   });
 
-  // describe("List options", () => {
-  //   it("list options of directory", async (done) => {
-  //     var response = await fetch(url + "lively4-dummy/", {
-  //         method: "OPTIONS",
-  //       })
-  //     expect(response.statusCode).to.equal(200);
-  //     done();
-  //   });
-  // });
+  describe("List options", () => {
+    it("list options of directory", async () => { // async functions do not need "done" any more...
+      var response = await fetch(url + "lively4-dummy/", {
+        method: "OPTIONS",
+      })  
+      expect(response.status).to.equal(200);
+      var stats = await response.json()
+      expect(stats.type).to.equal("directory");
+    });
+
+    it("list options of directory without slash", async () => { // async functions do not need "done" any more...
+      var response = await fetch(url + "lively4-dummy", {
+        method: "OPTIONS",
+      })
+      expect(response.status).to.equal(200);
+    });
+  });
   
   function expectResultMatch(cmd, regexString) {
     return new Promise((resolve, reject) => {

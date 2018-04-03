@@ -1,6 +1,14 @@
 var gulp = require("gulp");
 var babel = require("gulp-babel");
+
+var mocha = require('gulp-mocha');
+var batch = require('gulp-batch');
+
+
 var spawn = require("child_process").spawn;
+var exec = require("child_process").exec;
+var gulpexec = require('gulp-exec');
+
 var node;
 var lastTranspilationSuccessful;
 
@@ -40,3 +48,44 @@ gulp.task("watch", function() {
 });
 
 gulp.task("default", ["prod"]);
+
+// gulp.task("mocha", function() {
+//   console.log("mocha")
+//   gulp.watch(['dist/**'], batch(function (events, cb) {
+//     return gulp.src(['dist/test*.js'])
+//       //.pipe(mocha({ reporter: 'list' }))
+//       .pipe(each(function(content, file, callback) {
+//         console.log("changed " + file) 
+//         exec("echo " + file, (stdout) => {
+//           callback()
+//         })
+//       }))
+//       .on('error', function (err) {
+//         console.log(err.stack);
+//       });
+//   }));
+// })
+
+ 
+gulp.task('mocha', function() {
+  var options = {
+    continueOnError: true, // default = false, true means don't emit error event
+    pipeStdout: false, // default = false, true means stdout is written to file.contents
+  };
+  var reportOptions = {
+    err: true, // default = true, false means don't write err
+    stderr: true, // default = true, false means don't write stderr
+    stdout: true // default = true, false means don't write stdout
+  }
+  return gulp.src('./dist/test*js')
+    .pipe(gulpexec('./node_modules/mocha/bin/mocha <%= file.path %>', options)) 
+    .pipe(gulpexec.reporter(reportOptions));
+});
+
+gulp.task('test', function() {
+  gulp.watch("src/**/*.js", ["babel"]);
+  gulp.watch("dist/**/*.js", ["mocha"]);
+})
+
+
+  

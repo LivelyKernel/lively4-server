@@ -12,13 +12,14 @@ var slash = require("slash");
 
 var tmpStorage = {}
 
+
 function log(...args) {
   console.log(...args)
 }
 
-
 // this adds a timestamp to all log messages
 require("log-timestamp");
+
 
 // define command line options
 var options = [{
