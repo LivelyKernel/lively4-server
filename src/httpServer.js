@@ -97,16 +97,6 @@ if (indexFiles) {
 
 var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
 
-function getVersion(repositorypath, filepath) {
-  let cmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
-  log("version cmd: " + cmd);
-  return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) resolve(null) // no version found
-      else resolve(stdout)
-    })
-  })
-}
 
 var isTextRegEx = /(txt)|(md)|(js)|(html)|(svg)$/
 
@@ -226,15 +216,31 @@ function writeFile(repositorypath, filepath, req, res) {
   });
 }
 
-function readFile(repositorypath, filepath, res) {
+async function run(cmd) {
+  return new Promise( resolve => {
+    exec(cmd, (error, stdout, stderr) => {
+      resolve(stdout)
+    })
+  })
+}
+
+async function getVersion(repositorypath, filepath) {
+  return await run(`cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`);
+}
+
+async function getLastModified(repositorypath, filepath) {
+  return await run(`cd "${repositorypath}"; find "${filepath}" -not -path '*/.git/*' -printf "%TY-%Tm-%Td %TH:%TM:%.2TS"`);
+}
+
+async function readFile(repositorypath, filepath, res) {
   var sPath = repositorypath + "/" +filepath;
-  log("read file " + sPath);
-  fs.exists(sPath, function(exists) {
+  log("read file: " + sPath);
+  fs.exists(sPath, async function(exists) {
     if (!exists) {
       res.writeHead(404);
       res.end("File not found!\n");
     } else {
-      fs.stat(sPath, function(err, stats) {
+      fs.stat(sPath, async function(err, stats) {
         if (err !== null) {
           if (err.code == 'ENOENT') {
               res.writeHead(404);
@@ -247,23 +253,22 @@ function readFile(repositorypath, filepath, res) {
         if (stats.isDirectory()) {
           readDirectory(repositorypath, filepath, res, "text/html");
         } else {
-          var cmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
-          log("run: " + cmd);
-          exec(cmd, (error, stdout, stderr) => {
-            log("commithash " + stdout);
-            res.writeHead(200, {
+          var commithash = await getVersion(repositorypath, filepath)
+          var modified = await getLastModified(repositorypath, filepath)
+          res.writeHead(200, {
               'content-type': mime.lookup(sPath),
-              'fileversion': stdout
-            });
-            var stream = fs.createReadStream(sPath, {
-              bufferSize: 64 * 1024
-            });
-            stream.on('error', function (err) {
-              log("error reading: " + sPath + " error: " + err);
-              res.end("Error reading file\n");
-            });
-            stream.pipe(res);
-           });
+              'modified': modified,
+              'fileversion': commithash
+          });
+          var stream = fs.createReadStream(sPath, {
+            bufferSize: 64 * 1024
+          });
+          stream.on('error', function (err) {
+            log("error reading: " + sPath + " error: " + err);
+            res.end("Error reading file\n");
+          });
+          stream.pipe(res);
+           
         }
       });
     }
@@ -453,13 +458,14 @@ function listOptions(sSourcePath, sPath, req, res) {
       if (req.headers["showversions"] == "true") {
         return listVersions(repositorypath, filepath, res)
       }
+            
       // type, name, size
       var result = {type: "file"}
       result.name = sSourcePath.replace(/.*\//,"")
       result.size = stats.size
       result.version = await getVersion(repositorypath, filepath)
+      result.modified = await getLastModified(repositorypath, filepath)
     
-
       var data = JSON.stringify(result, null, 2);
       // github return text/plain, therefore we need to do the same
       res.writeHead(200, {
@@ -498,13 +504,13 @@ function gitControl(sPath, req, res) {
   dryrun = dryrun && dryrun == "true";
   // #TODO replace it with something more secure... #Security #Prototype
   // Set CORS headers
-  var repository =    req.headers["gitrepository"];
+  var repository = req.headers["gitrepository"];
   var repositoryurl = req.headers["gitrepositoryurl"];
-  var username =      req.headers["gitusername"];
-  var password =      req.headers["gitpassword"];
-  var email =         req.headers["gitemail"];
-  var branch =        req.headers["gitrepositorybranch"];
-  var msg =           cleanString(req.headers["gitcommitmessage"]);
+  var username = req.headers["gitusername"];
+  var password = req.headers["gitpassword"];
+  var email = req.headers["gitemail"];
+  var branch = req.headers["gitrepositorybranch"];
+  var msg = cleanString(req.headers["gitcommitmessage"]);
 
   if (!email) {
     return res.end("please provide email!");
@@ -751,75 +757,70 @@ class Server {
     log("Port: "+ this.port);
     log("Indexing: "+ indexFiles);
     log("Auto-commit: "+ autoCommit);
-    
-    http.createServer(function(req, res) {
-      // Set CORS headers
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Request-Method', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT');
-      res.setHeader('Access-Control-Allow-Headers', '*');
-    
-      var oUrl = url.parse(req.url, true, false);
-      log("pathname: " + oUrl.pathname);
-      var pathname = oUrl.pathname;
-    
-      // use slash to avoid conversion from '\' to '/' on Windows
-      var sPath = slash(path.normalize(oUrl.pathname));
-
-      // sPath = sPath.replace(/%20/g, " "); //#TODO this is poor unicode handling...
-      sPath = decodeURI(sPath)
-      
-      log("sPath: " + sPath)
-    
-      var fileversion =  req.headers["fileversion"]
-      log("fileversion: " + fileversion)
-      var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
-      var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
-    
-      if (breakOutRegex.test(sPath) === true) {
-        res.writeHead(500);
-        res.end("Your not allowed to access files outside the pages storage area\n");
-        return;
-      }
-    
-      if (pathname.match(/\/_tmp\//)) {
-        return tempFile(pathname, req, res)
-      }
-
-      if (pathname.match(/\/_meta\//)) {
-        return metaControl(pathname, req, res)
-      }
-      if (sPath.match(/\/_git.*/)) {
-        return gitControl(sPath, req, res);
-      }
-      if (pathname.match(/\/api\/search.*/)) {
-        return searchFilesWithIndex(sPath, req, res);
-      }
-      if (pathname.match(/\/_search\//)) {
-        return searchFiles(pathname, req, res);
-      }
-      var sSourcePath = path.join(sSourceDir, sPath);
-      if (req.method == "GET") {
-        if (fileversion && fileversion != "undefined") {
-          readFileVersion(repositorypath, filepath, fileversion, res)
-        } else {
-          readFile(repositorypath, filepath, res);
-        }
-      } else if (req.method == "PUT") {
-        writeFile(repositorypath, filepath, req, res);
-      } else if (req.method == "DELETE") {
-        deleteFile(sPath, res);
-      } else if (req.method == "MKCOL") {
-        createDirectory(sPath, res);
-      } else if (req.method == "OPTIONS") {
-        listOptions(sSourcePath, sPath, req, res)
-      }
-    }).listen(this.port, function(err) {
+    http.createServer((req,res) => this.onRequest(req,res)).listen(this.port, function(err) {
       if (err) {
         throw err;
       }
       log("Server running on port " + port + " in directory " + sSourceDir);
     });
+  }
+  
+  static onRequest(req, res) {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Request-Method', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+
+    var oUrl = url.parse(req.url, true, false);
+    log("pathname: " + oUrl.pathname);
+    var pathname = oUrl.pathname;
+    
+    // use slash to avoid conversion from '\' to '/' on Windows
+    var sPath = decodeURI(slash(path.normalize(oUrl.pathname)));
+    log("sPath: " + sPath)
+
+    var fileversion =  req.headers["fileversion"]
+    log("fileversion: " + fileversion)
+    var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+    var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
+
+    if (breakOutRegex.test(sPath) === true) {
+      res.writeHead(500);
+      res.end("Your not allowed to access files outside the pages storage area\n");
+      return;
+    }
+    if (pathname.match(/\/_tmp\//)) {
+      return tempFile(pathname, req, res)
+    }
+    if (pathname.match(/\/_meta\//)) {
+      return metaControl(pathname, req, res)
+    }
+    if (sPath.match(/\/_git.*/)) {
+      return gitControl(sPath, req, res);
+    }
+    if (pathname.match(/\/api\/search.*/)) {
+      return searchFilesWithIndex(sPath, req, res);
+    }
+    if (pathname.match(/\/_search\//)) {
+      return searchFiles(pathname, req, res);
+    }
+    var sSourcePath = path.join(sSourceDir, sPath);
+    if (req.method == "GET") {
+      if (fileversion && fileversion != "undefined") {
+        readFileVersion(repositorypath, filepath, fileversion, res)
+      } else {
+        readFile(repositorypath, filepath, res);
+      }
+    } else if (req.method == "PUT") {
+      writeFile(repositorypath, filepath, req, res);
+    } else if (req.method == "DELETE") {
+      deleteFile(sPath, res);
+    } else if (req.method == "MKCOL") {
+      createDirectory(sPath, res);
+    } else if (req.method == "OPTIONS") {
+      listOptions(sSourcePath, sPath, req, res)
+    }
   }
 }
 Server.setup()
