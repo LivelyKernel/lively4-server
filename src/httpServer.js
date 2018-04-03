@@ -447,7 +447,7 @@ function listVersions(repositorypath, filepath, res) {
 function listOptions(sSourcePath, sPath, req, res) {
   log("doing a stat on " + sSourcePath);
   // statFile was called by client
-  fs.stat(sSourcePath, function(err, stats) {
+  fs.stat(sSourcePath, async function(err, stats) {
     if (err !== null) {
       log("stat ERROR: " + err);
       if (err.code == 'ENOENT') {
@@ -458,27 +458,26 @@ function listOptions(sSourcePath, sPath, req, res) {
       }
       return;
     }
+    var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+    var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
     if (stats.isDirectory()) {
       if (req.headers["filelist"] == "true") {
-        var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
-        var filepath = sSourcePath.replace(/^\/.*?\/(.*)/,"$1")
         log("repositorypath: " + repositorypath)
         log("filepath: " + filepath)
-        
         readFilelist(repositorypath, filepath, res);        
       } else {
         readDirectory(sSourcePath, res);
       }
     } else if (stats.isFile()) {
       if (req.headers["showversions"] == "true") {
-        var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
-        var filepath = sPath.replace(/^\/.*?\/(.*)/,"$1")
         return listVersions(repositorypath, filepath, res)
       }
       // type, name, size
       var result = {type: "file"}
       result.name = sSourcePath.replace(/.*\//,"")
       result.size = stats.size
+      result.version = await getVersion(repositorypath, filepath)
+      result.modified = await getLastModified(repositorypath, filepath)
 
       var data = JSON.stringify(result, null, 2);
       // github return text/plain, therefore we need to do the same

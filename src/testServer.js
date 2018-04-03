@@ -1,3 +1,5 @@
+import fetch from 'node-fetch';
+
 var expect  = require("chai").expect;
 var request = require("request");
 var child_process = require("child_process");
@@ -68,19 +70,15 @@ describe("Lively4 Server", () => {
     });
   });
 
-  
-  // describe("List Lively4 options", () => {
-  //   it("list options of directory", (done) => {
-  //     request({
-  //         method: "OPTIONS",
-  //         url: url + "lively4-dummy/"
-  //       }, (error, response, body) => {
-  //       expect(response.statusCode).to.equal(200);
-  //       done();
-  //     });
-  //   });
-  // });
-
+  describe("List options", () => {
+    it("list options of directory", async (done) => {
+      var response = await fetch(url + "lively4-dummy/", {
+          method: "OPTIONS",
+        })
+      expect(response.statusCode).to.equal(200);
+      done();
+    });
+  });
   
   function expectResultMatch(cmd, regexString) {
     return new Promise((resolve, reject) => {
