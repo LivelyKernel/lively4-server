@@ -249,6 +249,31 @@ function writeFile(repositorypath, filepath, req, res) {
   });
 }
 
+/*
+ * recursively directories and with modification date of files 
+ * #Idea (should be used to update caches)
+ */
+async function readFilelist(repositorypath, filepath, res){
+  var list = await run(`cd "${repositorypath}"; find -not -path '*/.git/*' -printf "%TY-%Tm-%Td %TH:%TM:%.2TS\t%p\n"`)  
+  list =  list.split("\n").map(line => {
+    var row = line.split("\t")
+    return {
+      modified: row[0],
+      type: "file",
+      name: row[1]
+    }
+  })    
+  res.writeHead(200, {
+    'content-type': "json",
+  });
+  res.end(JSON.stringify({
+    type: "filelist",
+    contents: list
+  }));
+}
+
+
+
 function readFile(repositorypath, filepath, res) {
   var sPath = repositorypath + "/" +filepath;
   log("read file " + sPath);
@@ -294,6 +319,9 @@ function readFile(repositorypath, filepath, res) {
 }
 
 function readDirectory(aPath, res, contentType){
+  
+  log("readDirectory " + aPath)
+  
   fs.readdir(aPath, function(err, files) {
     var dir = {
       type: "directory",
@@ -389,7 +417,6 @@ function respondWithCMD(cmd, res, finish, dryrun) {
   });
 }
 
-
 function deleteFile(sPath, res) {
   sPath = sPath.replace(/['";&|]/g,""); // #TODO can we get rid of stripping these?
   if (indexFiles) {
@@ -432,7 +459,16 @@ function listOptions(sSourcePath, sPath, req, res) {
       return;
     }
     if (stats.isDirectory()) {
-      readDirectory(sSourcePath, res);
+      if (req.headers["filelist"] == "true") {
+        var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
+        var filepath = sSourcePath.replace(/^\/.*?\/(.*)/,"$1")
+        log("repositorypath: " + repositorypath)
+        log("filepath: " + filepath)
+        
+        readFilelist(repositorypath, filepath, res);        
+      } else {
+        readDirectory(sSourcePath, res);
+      }
     } else if (stats.isFile()) {
       if (req.headers["showversions"] == "true") {
         var repositorypath = sSourceDir  + sPath.replace(/^\/(.*?)\/.*/,"$1") 
