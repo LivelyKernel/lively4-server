@@ -4,7 +4,6 @@ LIVELY=~/lively4
 SERVER=~/lively4/lively4-server
 PORT=9006
 GITPULL=false
-INDEX_Files=false
 LOGFILE=$SERVER/server.log
 AUTOCOMMIT=true
 

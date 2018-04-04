@@ -1,7 +1,7 @@
 var gulp = require("gulp");
 var babel = require("gulp-babel");
 
-var mocha = require('gulp-mocha');
+// var mocha = require('gulp-mocha');
 var batch = require('gulp-batch');
 
 
@@ -26,7 +26,12 @@ gulp.task("server", ["babel"], function() {
 
 gulp.task("babel", function () {
   // don't end the watch task if the transpilation fails
-  var b = babel({});
+  var b = babel({
+    // es2015: false,
+    // stage2: false,
+    presets: [],
+    plugins: []
+  });
   lastTranspilationSuccessful = true;
   b.on("error", function (e) {
     console.log(e.stack);
@@ -78,6 +83,7 @@ gulp.task('mocha', function() {
     stdout: true // default = true, false means don't write stdout
   }
   return gulp.src('./dist/test*js')
+    //.pipe(gulpexec('echo changed <%= file.path %>', options))   
     .pipe(gulpexec('./node_modules/mocha/bin/mocha <%= file.path %>', options)) 
     .pipe(gulpexec.reporter(reportOptions));
 });

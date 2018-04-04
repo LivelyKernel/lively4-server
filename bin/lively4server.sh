@@ -59,7 +59,7 @@ while true; do
 
   # transpile javascript
   pushd $SERVER; gulp babel; popd
-  node $SERVER/dist/httpServer.js $OPTIONS --index-files="$INDEX_Files" --directory="$LIVELY4" --port="$PORT" --auto-commit="$AUTOCOMMIT" 2>&1 > >(\
+  node $SERVER/dist/httpServer.js $OPTIONS --directory="$LIVELY4" --port="$PORT" --auto-commit="$AUTOCOMMIT" 2>&1 > >(\
   	  sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
 	  sed -u 's/lively4sync.*/lively4sync.../' | \
 	  tee -a $LOGFILE ) & 
