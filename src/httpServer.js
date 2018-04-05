@@ -486,7 +486,7 @@ class Server {
    * #Idea (should be used to update caches)
    */
   static async readFilelist(repositorypath, filepath, res){
-    var result = await run(`cd "${repositorypath}"; find -not -path '*/.git/*' -printf "%TY-%Tm-%Td %TH:%TM:%.2TS\t%p\n"`)  
+    var result = await run(`cd "${repositorypath}/${filepath}"; find -not -path '*/.git/*' -printf "%TY-%Tm-%Td %TH:%TM:%.2TS\t%p\n"`)  
     var list =  result.stdout.split("\n").map(line => {
       var row = line.split("\t")
       return {
@@ -494,7 +494,7 @@ class Server {
         type: "file",
         name: row[1]
       }
-    })    
+    }).filter(ea => ea.name)    
     res.writeHead(200, {
       'content-type': "json",
     });
