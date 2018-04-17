@@ -496,7 +496,7 @@ class Server {
         size: row[2],
         name: row[3]
       }
-    }).filter(ea => ea.name)    
+    }).filter(ea => ea.name && ea.name !== ".")    
     res.writeHead(200, {
       'content-type': "json",
     });
