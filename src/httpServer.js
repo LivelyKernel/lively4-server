@@ -587,7 +587,7 @@ class Server {
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/graph/)) {
-      cmd = 'cd ' + lively4DirUnix + "/" + repository + "; git log --graph -100";
+      cmd = 'cd ' + lively4DirUnix + "/" + repository + "; git log --graph -100 --color=always";
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/commit/)) {
