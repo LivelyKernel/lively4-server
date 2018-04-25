@@ -579,11 +579,11 @@ class Server {
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/status/)) {
       cmd = `cd ${lively4DirUnix}/${repository}; 
-        git status; git log HEAD...origin/${branch} --pretty="format:%h\t%aN\t%cD\t%f"`;
+        git -c color.status=always  status ; git log --color=always HEAD...origin/${branch} --pretty="format:%h\t%aN\t%cD\t%f"`;
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/log/)) {
-      cmd = 'cd ' + lively4DirUnix + "/" + repository + "; git log ";
+      cmd = 'cd ' + lively4DirUnix + "/" + repository + "; git log --color=always";
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/graph/)) {
@@ -608,7 +608,7 @@ class Server {
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/diff/)) {
-      cmd =  `cd ${lively4DirUnix}/${repository}; git diff origin/${branch}`;
+      cmd =  `cd ${lively4DirUnix}/${repository}; git diff --color=always origin/${branch}`;
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/clone/)) {
