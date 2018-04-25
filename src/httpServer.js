@@ -706,10 +706,10 @@ class Server {
 // parse command line arguments
 var args = argv.option(Server.options).run();
 var port = args.options.port || 8080;
-var sSourceDir = args.options.directory || ".";
+var sSourceDir = args.options.directory || "../";
 var indexFiles = args.options['index-files'];
-var lively4dir = args.options.directory; 
-var server = args.options.server || "~/lively4-server";
+var lively4dir = sSourceDir; 
+var server = args.options.server || ".";
 var bashBin = args.options['bash-bin'] || "bash";
 utils.config.bashBin = bashBin
 var lively4DirUnix = args.options['lively4dir-unix'] || lively4dir;

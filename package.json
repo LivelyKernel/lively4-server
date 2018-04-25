@@ -5,8 +5,8 @@
   "main": "httpServer.js",
   "scripts": {
     "test": "npm run postinstall && mocha dist/testServer",
-    "start": "node dist/httpServer.js",
-    "postinstall": "gulp babel"
+    "start": "npm run postinstall && node dist/httpServer.js",
+    "postinstall": "node ./node_modules/gulp/bin/gulp.js babel"
   },
   "repository": {
     "type": "git",
