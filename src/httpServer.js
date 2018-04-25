@@ -237,7 +237,6 @@ class Server {
   }
 
   static readDirectory(aPath, res, contentType) {
-    console.log("why am i not here?")
     log("readDirectory x " + aPath)
     fs.readdir(aPath, function(err, files) {
       var dir = {
