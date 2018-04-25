@@ -591,15 +591,20 @@ class Server {
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/commit/)) {
-      if (msg) {
-        msg = " -m'" + msg +"'";
-      } else {
-         return res.end("Please provide a commit message!");
+      if (!msg) {
+        return res.end("Please provide a commit message!");
       }
       cmd = 'cd \'' + lively4DirUnix + "/" +repository + "';\n"+
         "git config user.name "+username + ";\n"+
         "git config user.email "+email + ";\n"+
-        "git commit "+ msg +" -a ";
+        // "git commit "+ msg +" -a ";
+        `if [ -e ".git/MERGE_HEAD" ]; 
+        then 
+          echo "merge in progress - you had conflicts or a manual merge is in progress";
+        else
+          git commit -m'${msg}' -a ;
+        fi`;
+      
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/diff/)) {
