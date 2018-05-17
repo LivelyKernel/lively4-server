@@ -52,7 +52,7 @@ export function log(...args) {
 var RepositoryInSync = {}; // cheap semaphore
 
 var breakOutRegex = new RegExp("/*\\/\\.\\.\\/*/");
-var isTextRegEx = /(txt)|(md)|(js)|(html)|(svg)$/
+var isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/
 
 class Server {
 
@@ -552,6 +552,7 @@ class Server {
     var branch = req.headers["gitrepositorybranch"];
     var msg = cleanString(req.headers["gitcommitmessage"]);
     var filepath = req.headers["gitfilepath"];
+    var gitcommit = req.headers["gitcommit"];
 
     if (!email) {
       return res.end("please provide email!");
@@ -608,7 +609,11 @@ class Server {
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/diff/)) {
-      cmd =  `cd ${lively4DirUnix}/${repository}; git diff --color=always origin/${branch}`;
+      var commit = "origin/" + branch
+      if (gitcommit) {
+        commit = gitcommit + "~1 " + gitcommit
+      }
+      cmd =  `cd ${lively4DirUnix}/${repository}; git diff --color=always ${commit}`;
       respondWithCMD(cmd, res, dryrun);
 
     } else if (sPath.match(/\/_git\/clone/)) {
