@@ -441,8 +441,11 @@ class Server {
       if (err !== null) {
         log("stat ERROR: " + err);
         if (err.code == 'ENOENT') {
-            res.writeHead(404);
-            res.end();
+            res.writeHead(200);
+            var data = JSON.stringify({
+              error: err 
+            }, null, 2);
+            res.end(data);
         } else {
           log(err);
         }
