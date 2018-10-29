@@ -522,7 +522,7 @@ class Server {
       process.exit();
     } else {
       res.writeHead(500);
-      res.end("meta: " + pathname + " not implemented!" );
+      res.end("meta: " + pathname + " not implemented! What!?" );
     }
   }
   
