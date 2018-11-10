@@ -48,7 +48,8 @@
     "q-io": "^1.13.5",
     "request": "^2.85.0",
     "slash": "^1.0.0",
-    "vinyl-fs": "^3.0.2"
+    "vinyl-fs": "^3.0.2",
+    "http-proxy": "^1.17.0"
   },
   "jshintConfig": {
     "esversion": 6
