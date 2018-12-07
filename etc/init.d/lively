@@ -1,0 +1,32 @@
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:          lively
+# Required-Start:    
+# Required-Stop:
+# X-Start-Before:    
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: Lively4
+# Description: start Lively4 server
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+
+case "$1" in
+  start)
+	# make sure privileges don't persist across reboots
+    echo "start Lively4 server"
+    su -l jens -c "cd lively4-server; ./bin/lively4S1.sh" &
+	;;
+  stop|reload|restart|force-reload|status)
+    killall lively4S1.sh
+	;;
+  *)
+	echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+	exit 1
+	;;
+esac
+
+exit 0
