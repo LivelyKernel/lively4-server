@@ -7,6 +7,9 @@ var pty = require('node-pty');
 var terminals = {},
     logs = {};
 
+var secrets = new Map()
+secrets.set("hellolively", "jens") // symetric application key, #TODO move it to hard disk
+
 app.use('/build', express.static(__dirname + '/../build'));
 
 app.use(function(req, res, next) {
@@ -20,13 +23,23 @@ app.get('/', function(req, res){
 });
 
 app.post('/create', function (req, res) {
+  var shell = '/bin/login'
+  var secret = req.headers.secret
+  var args = []
+  var user = secrets.get(secret) // the secret is the key to the user....
+  var cwd = req.headers.cwd ||  process.env.PWD
+  if (secret && user) {
+    shell = '/bin/bash'
+    args = args.concat(["-c", "su " + user]) 
+  }
   var cols = parseInt(req.query.cols),
       rows = parseInt(req.query.rows),
-      term = pty.spawn(process.platform === 'win32' ? 'cmd.exe' : '/bin/login', [], {
+      // process.platform === 'win32' ? 'cmd.exe' 
+      term = pty.spawn(shell, args, {
         name: 'xterm-color',
         cols: cols || 80,
         rows: rows || 24,
-        cwd: process.env.PWD,
+        cwd: cwd,
         env: process.env
       });
 
