@@ -1,0 +1,16 @@
+
+[Unit]
+Description=AutoSSH tunnel service to lively kernel
+After=network.target
+
+[Service]
+User=jens
+Group=jens
+Type=simple
+WorkingDirectory=/home/jens
+ExecStart=/usr/bin/autossh -t -R 8005:localhost:9005 -R 8006:localhost:3000 -l jens lively-kernel.org -N
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target

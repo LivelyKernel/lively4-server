@@ -1,0 +1,14 @@
+
+[Unit]
+Description=Lively XTerm server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/jens/lively4/lively4-server/bin/lively4xterm.sh
+
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target

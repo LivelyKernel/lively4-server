@@ -1,0 +1,15 @@
+[Unit]
+Description=Lively4 server
+After=network.target
+
+[Service]
+User=jens
+Group=jens
+Type=simple
+WorkingDirectory=/home/jens/lively4-server
+ExecStart=/home/jens/lively4-server/bin/lively4S1.sh
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target
