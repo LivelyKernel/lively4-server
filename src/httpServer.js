@@ -845,7 +845,7 @@ class Server {
 
     } else if(pathname.match("/_webhook/signal")) {
    
-      log("webhook signal ", req.headers)
+      log("webhook signal ")
       var body = '';
       req.on('data', (data) => {
           body += data;
@@ -861,11 +861,11 @@ class Server {
         if (json) {
           var key = json.repository.full_name
           var listeners = this.webhookListeners(key)
-          log("found listeners: " + listeners.size)
+          // log("found listeners: " + listeners.size)
           Array.from(listeners).forEach(ea => {
             var response = ea.response
             if (response) {
-              log("answer " + response)
+              // log("answer " + response)
               response.writeHead(200); // answer long poll 
               response.end(JSON.stringify(json));              
             }
