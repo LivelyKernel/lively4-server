@@ -9,7 +9,9 @@ MSG="$6"
 
 pushd $REPOSITORY > /dev/null
 
-ORIGIN=`git config --get remote.origin.url | sed "s/https:\/\//https:\/\/$USERNAME:$PASSWORD@/"`
+## get rid of accidental passwords.. should never be needed
+PLAINORIGIN=`git config --get remote.origin.url | sed "s/https:\/\/.*@/https:\/\//" `
+ORIGIN=`echo $PLAINORIGIN | sed "s/https:\/\//https:\/\/$USERNAME:$PASSWORD@/"` 
 
 echo "REPO: " "$REPOSITORY" "USERNAME: " "$USERNAME" 
 
@@ -31,7 +33,7 @@ fi
 
 git commit -m "$COMMIT" -a ; 
 echo "PULL"
-git pull --no-edit origin "$BRANCH" ; 
+git pull --no-edit "$ORIGIN" "$BRANCH" ; 
 
 # ALT: #Issue6
 # git pull --rebase --no-edit origin "$BRANCH" ; 
@@ -42,6 +44,19 @@ echo git push "$ORIGIN" "$BRANCH"
 git push "$ORIGIN" "$BRANCH"
 
 echo "FETCH AGAIN"
-#git fetch origin "$BRANCH"
+
+## ALTERNATVIE: an explicit fetch is not enough, because the staus is not updated
+# git fetch "$ORIGIN" "$BRANCH"
+
+## ALTERNATVIE: a simple fetch is also not enough because it does not have credentials
+
+# git fetch
+
+# #HACK, temporarily set the origin to a url with credentials
+
+git remote set-url origin  $ORIGIN
 git fetch
+git remote set-url origin  $PLAINORIGIN
+
+
 popd > /dev/null

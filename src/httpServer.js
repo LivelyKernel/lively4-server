@@ -712,12 +712,19 @@ class Server {
       cmd = `cd ${lively4DirUnix}/${repository}; git diff --color=always ${commit}`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/clone/)) {
+      var url = repositoryurl.replace("https://", `https://${username}:${password}@`)
       cmd =
         `cd ${lively4DirUnix}; \n` +
         'git clone --recursive ' +
-        repositoryurl +
+        url +
         ' ' +
-        repository;
+        repository +`;\n` + // this will leave the password in the config
+        `cd ${lively4DirUnix}/${repository}; \n` + 
+        
+        // #TODO can we avoid the and prevent the storing of username and password in the first place, e.g. is there is method of handing git the usename and password without encoding them in the url?
+        // remove the username password from the config       
+        `git remote set-url origin ${repositoryurl}` 
+
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/npminstall/)) {
       cmd = `cd ${lively4DirUnix}/${repository};\n` + 'npm install';
