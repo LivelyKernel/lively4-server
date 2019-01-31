@@ -728,6 +728,18 @@ class Server {
 
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/checkout/)) {
+      
+      log('CHECKOUT REPO ' + RepositoryInSync[repository] + " " + filepath);
+      
+      // #TODO we should merge this semaphore logic...
+      if (RepositoryInSync[repository]) {
+        return respondWithCMD(
+          'echo Sync in progress: ' + repository,
+          res,
+          dryrun
+        );
+      }
+      RepositoryInSync[repository] = true;
       // checkout single file directly from origin server... without pulling in other changes
       // WARNING: the changes will appear as local changes but should be resolved by the merge later
       // from git's standpoint it will appeach as two changes with the same content
@@ -738,7 +750,8 @@ class Server {
         `git checkout origin/${branch} -- ${filepath}; \n`+
         `git remote set-url origin ${repositoryurl}` 
 
-      respondWithCMD(cmd, res, dryrun);
+      await respondWithCMD(cmd, res, dryrun);
+      RepositoryInSync[repository] = undefined;
     } else if (sPath.match(/\/_git\/npminstall/)) {
       cmd = `cd ${lively4DirUnix}/${repository};\n` + 'npm install';
       respondWithCMD(cmd, res, dryrun);
