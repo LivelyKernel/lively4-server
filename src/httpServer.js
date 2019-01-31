@@ -639,6 +639,8 @@ class Server {
       return res.end('please login');
     }
 
+    repository = repository.replace(/^\//,"") // #TODO should we take care of this in the client?
+    
     var cmd;
     if (sPath.match(/\/_git\/sync/)) {
       log('SYNC REPO ' + RepositoryInSync[repository]);
