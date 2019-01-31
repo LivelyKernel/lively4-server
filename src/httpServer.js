@@ -712,7 +712,7 @@ class Server {
       cmd = `cd ${lively4DirUnix}/${repository}; git diff --color=always ${commit}`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/clone/)) {
-      var url = repositoryurl.replace("https://", `https://${username}:${password}@`)
+      let url = repositoryurl.replace("https://", `https://${username}:${password}@`)
       cmd =
         `cd ${lively4DirUnix}; \n` +
         'git clone --recursive ' +
@@ -720,9 +720,20 @@ class Server {
         ' ' +
         repository +`;\n` + // this will leave the password in the config
         `cd ${lively4DirUnix}/${repository}; \n` + 
-        
         // #TODO can we avoid the and prevent the storing of username and password in the first place, e.g. is there is method of handing git the usename and password without encoding them in the url?
         // remove the username password from the config       
+        `git remote set-url origin ${repositoryurl}` 
+
+      respondWithCMD(cmd, res, dryrun);
+    } else if (sPath.match(/\/_git\/checkout/)) {
+      // checkout single file directly from origin server... without pulling in other changes
+      // WARNING: the changes will appear as local changes but should be resolved by the merge later
+      // from git's standpoint it will appeach as two changes with the same content
+      let url = repositoryurl.replace("https://", `https://${username}:${password}@`)
+      cmd = `cd ${lively4DirUnix}/${repository};\n` + 
+        `git remote set-url origin ${url};\n` +
+        `git fetch; \n` +
+        `git checkout origin/${branch} -- ${filepath}; \n`+
         `git remote set-url origin ${repositoryurl}` 
 
       respondWithCMD(cmd, res, dryrun);
