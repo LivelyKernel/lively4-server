@@ -7,7 +7,7 @@ export var config = {
 
 export async function run(cmd) {
   return  new Promise((resolve) => {
-    exec(cmd, (error, stdout, stderr) => {
+    exec(cmd, {maxBuffer: 1024 * 2000}, (error, stdout, stderr) => {
       resolve({stdout, stderr, error});      
     });
   })
