@@ -568,6 +568,11 @@ class Server {
         };
       })
       .filter(ea => ea.name && ea.name !== '.');
+    if (result.error) {
+      console.error("readFilelist stderr " + result.stderr)
+      console.error("readFilelist: " + result.error)
+    }
+    console.log("readFilelist found " + list.length + " files")
     res.writeHead(200, {
       'content-type': 'json'
     });
