@@ -412,7 +412,7 @@ class Server {
               return;
             }
 
-            if (autoCommit) {
+            if (autoCommit && !req.headers['nocommit']) {
               var username = req.headers.gitusername;
               var email = req.headers.gitemail;
               // var password = req.headers.gitpassword; // not used yet
