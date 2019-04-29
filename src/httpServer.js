@@ -291,6 +291,16 @@ class Server {
       console.log("NOTINBOOTFILE " +  repositorypath + " " + filepath)
     }
   }
+  
+  static async ensureSpecialParentDirectories(repositorypath, filepath) {
+    if (!filepath.match(Lively4transpileDir)) return 
+
+    var result = await run(`cd ${repositorypath}; 
+        if [ ! -e ${Lively4transpileDir} ]; then
+          mkdir ${Lively4transpileDir}
+        fi`) 
+    console.log("ensureSpecialParentDirectories " + result.stdout)
+  }
 
   static async invalidateTranspiledFile(repositorypath, filepath) {
     if (filepath.match(Lively4transpileDir)) return  // don't do it on yourself
@@ -426,6 +436,7 @@ class Server {
   static async PUT(repositorypath, filepath, req, res) {
     await this.invalidateTranspiledFile(repositorypath, filepath)
     await this.invalidateBundleFile(repositorypath, filepath)
+    await this.ensureSpecialParentDirectories(repositorypath, filepath)
     
     var fullpath = path.join(repositorypath, filepath);
     log('write file: ' + fullpath);
