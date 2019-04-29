@@ -15,7 +15,6 @@
  * - fileversion
  */
 
-
 import http from 'http';
 import httpProxy from 'http-proxy';
 import fs from 'fs';
@@ -52,6 +51,16 @@ var fs_readdir = function(file) {
 export function log(...args) {
   console.log('[server]', ...args);
 }
+
+const Lively4bootfilelistName = ".lively4bootfilelist"
+const Lively4bundleName = ".lively4bundle.zip"
+const Lively4transpileDir = ".transpiled"
+
+
+var RepositoryBootfiles = {}
+
+
+
 
 var RepositoryInSync = {}; // cheap semaphore
 
@@ -222,13 +231,44 @@ class Server {
   }
 
   static GET(repositorypath, filepath, fileversion, res) {
-    if (fileversion && fileversion != 'undefined') {
+    if (filepath.match(Lively4bundleName)) {
+      this.ensureBundleFile(repositorypath, filepath, res);
+    } else if (fileversion && fileversion != 'undefined') {
       this.readFileVersion(repositorypath, filepath, fileversion, res);
     } else {
       this.readFile(repositorypath, filepath, res);
     }
   }
-
+  
+  static async ensureBundleFile(repositorypath, filepath, res) {
+    // #TODO pull file existence logic into javascript?
+    await run(`cd ${repositorypath}; 
+      if [ ! -e ${Lively4transpileDir} ]; then
+        mkdir ${Lively4transpileDir}
+      fi
+      if [ ! -e ${Lively4bundleName} ]; then 
+        cat ${Lively4bootfilelistName} | xargs zip -r ${Lively4bundleName} ${Lively4transpileDir}/*        ; 
+      fi`
+    );
+    return this.readFile(repositorypath, filepath, res)
+  }
+  
+  static async isInBootfile(repositorypath, filepath) {
+    console.log("isInBootfile " + Lively4bootfilelistName + " in "+ repositorypath + " " + filepath)
+    if (filepath.match(Lively4bootfilelistName)) {
+      return true // the bootfilelist always invalidates itself...
+    }
+    
+    // costs... 10ms ... so #Refactor before using it every GET requests
+    var result = (await run(`cd ${repositorypath}; 
+      echo ${Lively4bootfilelistName}
+      if [ -e ${Lively4bootfilelistName} ]; then
+        grep ${filepath} ${Lively4bootfilelistName}
+      fi`)).stdout      
+    return result.match(filepath)
+  }
+  
+  
   /* load a specific version of a file through git */
   static readFileVersion(repositorypath, filepath, fileversion, res) {
     // #TODO what about the history of directory structure?
@@ -237,7 +277,36 @@ class Server {
       res
     );
   }
+  
+  
+  static async invalidateBundleFile(repositorypath, filepath) {
+    if (await this.isInBootfile(repositorypath, filepath)) {
+      console.log("INVALIDATE " + Lively4bundleName + " in "+ repositorypath)
+      // remove bundle if we uploaded a file that belongs into it
+      await run(`cd ${repositorypath}; 
+        if [ -e ${Lively4bundleName} ]; then
+          rm ${Lively4bundleName}
+        fi`)
+    } else {
+      console.log("NOTINBOOTFILE " +  repositorypath + " " + filepath)
+    }
+  }
 
+  static async invalidateTranspiledFile(repositorypath, filepath) {
+    if (filepath.match(Lively4transpileDir)) return  // don't do it on yourself
+    if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
+    
+    console.log("invalidate transpilation files" + Lively4bundleName + " in "+ repositorypath)
+    var hashedpath = filepath.replace(/\//g,"_")
+    var result = await run(`cd ${repositorypath}; 
+        if [ -e ${Lively4transpileDir} ]; then
+          rm ${Lively4transpileDir}/${hashedpath}
+          rm ${Lively4transpileDir}/${hashedpath}.map.json
+        fi`) 
+    console.log("RESULT " + result.stdout)
+  }
+
+  
   static async readFile(repositorypath, filepath, res) {
     var sPath = repositorypath + '/' + filepath;
     log('read file ' + sPath);
@@ -354,7 +423,10 @@ class Server {
   /*
    * write file to disk
    */
-  static PUT(repositorypath, filepath, req, res) {
+  static async PUT(repositorypath, filepath, req, res) {
+    await this.invalidateTranspiledFile(repositorypath, filepath)
+    await this.invalidateBundleFile(repositorypath, filepath)
+    
     var fullpath = path.join(repositorypath, filepath);
     log('write file: ' + fullpath);
     var fullBody = '';
