@@ -280,7 +280,8 @@ class Server {
   
   
   static async invalidateBundleFile(repositorypath, filepath) {
-    if (await this.isInBootfile(repositorypath, filepath)) {
+    if (filepath.match(Lively4transpileDir) // all compiled files are bundled?
+        || await this.isInBootfile(repositorypath, filepath)) {
       console.log("INVALIDATE " + Lively4bundleName + " in "+ repositorypath)
       // remove bundle if we uploaded a file that belongs into it
       await run(`cd ${repositorypath}; 
