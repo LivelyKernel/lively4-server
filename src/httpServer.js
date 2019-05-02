@@ -435,9 +435,6 @@ class Server {
    * write file to disk
    */
   static async PUT(repositorypath, filepath, req, res) {
-    await this.invalidateTranspiledFile(repositorypath, filepath)
-    await this.invalidateBundleFile(repositorypath, filepath)
-    await this.ensureSpecialParentDirectories(repositorypath, filepath)
     
     var fullpath = path.join(repositorypath, filepath);
     log('write file: ' + fullpath);
@@ -458,6 +455,11 @@ class Server {
 
     //after transmission, write file to disk
     req.on('end', async () => {
+      // only block at the end...
+      await this.invalidateTranspiledFile(repositorypath, filepath)
+      await this.invalidateBundleFile(repositorypath, filepath)
+      await this.ensureSpecialParentDirectories(repositorypath, filepath)
+      
       if (fullpath.match(/\/$/)) {
         mkdirp(fullpath, err => {
           if (err) {
