@@ -4,6 +4,14 @@ import fetch from 'node-fetch'
 import {expect} from "chai"
 import {exec} from "child_process"
 import Server from './httpServer.js'
+import JSZip  from "jszip"
+
+const Lively4bootfilelistName = ".lively4bootfilelist"
+const Lively4bundleName = ".lively4bundle.zip"
+const Lively4transpileDir = ".transpiled"
+const Lively4optionsDir = ".options"
+
+import fs from 'fs';
 
 var port = 8081;
 
@@ -34,8 +42,13 @@ describe("Lively4 Server", () => {
     var result = await run(`rm -rv "${tmp}"; mkdir -v "${tmp}"; cd "${tmp}";` +
       `git clone https://github.com/LivelyKernel/${testrepo};` +
       `cd ${testrepo}; git --reset hard`);
+    
+    
     console.log("stdout: " + result.stdout);
-    Server.start();
+    await Server.start();
+    
+   
+
   });
 
   describe("GET", () => {
@@ -56,7 +69,24 @@ describe("Lively4 Server", () => {
       expect(response.headers.get("fileversion"),"fileversion").length.gt(0)
       expect(response.headers.get("modified"),"modified").length.gt(0)
     });
-  });
+    
+    it("read bundle", async () => {
+      var response = await fetch(url + "lively4-dummy/" + Lively4bundleName, {
+        method: "GET",
+      })
+      var body = await response.arrayBuffer() 
+      console.log("BODY " + body)
+      var zip = await JSZip.loadAsync(body)
+      var files = Object.keys(zip.files);
+
+      console.log("Bundled files:" , files)
+      
+      expect(files).to.include("README.md")
+      expect(files).to.include("foo.js")
+      expect(files).to.include(".options/foo.js")
+    
+    })
+  })
   
   describe("PUT", () => {
     it("write file", async function() {

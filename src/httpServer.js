@@ -18,13 +18,13 @@
 import http from 'http';
 import httpProxy from 'http-proxy';
 import fs from 'fs';
-import url from 'url';
-import path from 'path';
+import URL from 'url';
+import Path from 'path';
 import mime from 'mime';
 import mkdirp from 'mkdirp';
 import argv from 'argv';
 import { exec } from 'child_process';
-import slash from 'slash';
+import slash from 'slash'; // Convert Windows backslash paths to slash paths: foo\\bar ➔ foo/bar
 import 'log-timestamp'; // // this adds a timestamp to all log messages
 import * as utils from './utils.js';
 import { cleanString, run, respondWithCMD } from './utils.js';
@@ -45,6 +45,26 @@ var fs_readdir = function(file) {
   return new Promise(resolve => fs.readdir(file, resolve));
 };
 
+var fs_writeFile = function(...args) {
+  return new Promise(resolve => fs.writeFile(args[0], args[1], args[2], (err) => resolve({err: err}) ))
+};
+
+var fs_readFile = function(file) {
+  return new Promise((resolve, reject) => fs.readFile(file, "utf8", (err, data) => {
+    if (err) {
+      reject(err)
+    } else {
+      resolve(data)
+    }
+  }))
+};
+
+
+fs.readFile('/etc/passwd', (err, data) => {
+  if (err) throw err;
+  console.log(data);
+});
+
 // var readFile = Promise.promisify(fs.readFile);
 // var readDir = Promise.promisify(fs.readdir);
 
@@ -55,12 +75,9 @@ export function log(...args) {
 const Lively4bootfilelistName = ".lively4bootfilelist"
 const Lively4bundleName = ".lively4bundle.zip"
 const Lively4transpileDir = ".transpiled"
-
+const Lively4optionsDir = ".options"
 
 var RepositoryBootfiles = {}
-
-
-
 
 var RepositoryInSync = {}; // cheap semaphore
 
@@ -123,7 +140,7 @@ class Server {
 
   static set lively4dir(path) {
     log('set lively4dir to:' + path);
-    sSourceDir = path;
+    sourceDir = path;
     lively4dir = path;
     lively4DirUnix = path;
     return lively4dir;
@@ -156,7 +173,7 @@ class Server {
           throw err;
         }
 
-        log('Server running on port ' + port + ' in directory ' + sSourceDir);
+        log('Server running on port ' + port + ' in directory ' + sourceDir);
       });
   }
 
@@ -167,24 +184,30 @@ class Server {
     res.setHeader('Access-Control-Allow-Headers', '*');
   }
 
-  static onRequest(req, res, proxy) {
+  static async onRequest(req, res, proxy) {
+    log("START REQUEST " + req.method + " " + req.url)
+    var startRequestTime = Date.now()
     try {
       this.setCORSHeaders(res);
 
-      var oUrl = url.parse(req.url, true, false);
-      var pathname = oUrl.pathname;
-      var sPath = decodeURI(slash(path.normalize(oUrl.pathname)));
-      var fileversion = req.headers['fileversion'];
-      var repositorypath = sSourceDir + sPath.replace(/^\/(.*?)\/.*/, '$1');
-      var filepath = sPath.replace(/^\/.*?\/(.*)/, '$1');
+      // url =  new URL("https://lively-kernel.org/lively4/lively4-jens/src/client/boot.js")
+      var url = URL.parse(req.url, true, false); 
+      var pathname = url.pathname;// /lively4/lively4-jens/src/client/boot.js
+      
+      pathname = pathname.replace(/['";&?:#|]/g, ''); // just for safty
+      
+      var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
+      var fileversion = req.headers['fileversion']; // 
+      var repositorypath = sourceDir + path.replace(/^\/(.*?)\/.*/, '$1');
+      var filepath = path.replace(/^\/.*?\/(.*)/, '$1'); // src/client/boot.js
 
       log(
-        `request ${req.method} ${sPath}  ${
+        `request ${req.method} ${path}  ${
           fileversion ? '[version= ' + fileversion + ']' : ''
         }`
       );
 
-      if (breakOutRegex.test(sPath) === true) {
+      if (breakOutRegex.test(path) === true) {
         res.writeHead(500);
         res.end(
           'Your not allowed to access files outside the pages storage area\n'
@@ -205,53 +228,156 @@ class Server {
       if (pathname.match(/\/_webhook\//)) {
         return this.WEBHOOK(pathname, req, res);
       }
-      if (sPath.match(/\/_git.*/)) {
-        return this.GIT(sPath, req, res);
+      if (path.match(/\/_git.*/)) {
+        return this.GIT(path, req, res);
       }
       if (pathname.match(/\/_search\//)) {
         return this.SEARCH(pathname, req, res);
       }
-      var sSourcePath = path.join(sSourceDir, sPath);
       if (req.method == 'GET') {
-        this.GET(repositorypath, filepath, fileversion, res);
+        await  this.GET(repositorypath, filepath, fileversion, res);
       } else if (req.method == 'PUT') {
-        this.PUT(repositorypath, filepath, req, res);
+        await this.PUT(repositorypath, filepath, req, res);
       } else if (req.method == 'DELETE') {
-        this.DELETE(sPath, res);
+        await  this.DELETE(repositorypath, filepath, res);
       } else if (req.method == 'MKCOL') {
-        this.MKCOL(sPath, res);
+        await this.MKCOL(repositorypath, filepath, res);
       } else if (req.method == 'OPTIONS') {
-        this.OPTIONS(sSourcePath, sPath, req, res);
+        await this.OPTIONS(repositorypath, filepath, req, res);
       }
     } catch (e) {
-      console.log('ERROR on request ' + req.url, e);
+      console.error('ERROR on request ' + req.url, e);
       res.writeHead(500);
       res.end('ERROR: ' + e);
     }
+    log("FINISHED REQUEST " + req.method + " " + req.url + " " + Math.round(Date.now() - startRequestTime) + "ms")
   }
 
   static GET(repositorypath, filepath, fileversion, res) {
     if (filepath.match(Lively4bundleName)) {
-      this.ensureBundleFile(repositorypath, filepath, res);
+      return this.ensureBundleFile(repositorypath, filepath, res);
     } else if (fileversion && fileversion != 'undefined') {
-      this.readFileVersion(repositorypath, filepath, fileversion, res);
+      return this.readFileVersion(repositorypath, filepath, fileversion, res);
     } else {
-      this.readFile(repositorypath, filepath, res);
+      return this.readFile(repositorypath, filepath, res);
     }
   }
   
-  static async ensureBundleFile(repositorypath, filepath, res) {
-    // #TODO pull file existence logic into javascript?
-    await run(`cd ${repositorypath}; 
-      if [ ! -e ${Lively4transpileDir} ]; then
-        mkdir ${Lively4transpileDir}
-      fi
-      if [ ! -e ${Lively4bundleName} ]; then 
-        cat ${Lively4bootfilelistName} | xargs zip -r ${Lively4bundleName} ${Lively4transpileDir}/*        ; 
-      fi`
-    );
-    return this.readFile(repositorypath, filepath, res)
+  static hashFilepath(filepath) {
+    return filepath.replace(/\//g,"_")
   }
+  
+  static async ensureBundleFile(repositorypath, bundleFilepath, res) {
+    log("BUNDLE for " + repositorypath)
+    // #TODO pull file existence logic into javascript?
+    await this.ensureDirectory(repositorypath, Lively4optionsDir)
+    let optionsDir = Path.join(repositorypath, Lively4optionsDir)
+    
+    await this.ensureDirectory(repositorypath, Lively4transpileDir)
+    let transpileDir = Path.join(repositorypath, Lively4transpileDir)
+    
+    try {
+      var bootlist = await fs_readFile(repositorypath + "/" + Lively4bootfilelistName)
+    } catch(e) {
+      log("WARNING, could not read " + Lively4bootfilelistName + ":" + e)
+    }
+    var relativeBootFiles = []
+    var relativeOptionFiles = []
+    var relativeTranspileFiles = []
+    
+    if (bootlist) {
+      var hashed = new Map()
+      for(let file of bootlist.split("\n")) {
+       
+        let filehash = this.hashFilepath(file)
+        log("filehash " + filehash)
+        hashed.set(filehash, file)
+        
+        let filepath = Path.join(repositorypath, file)
+        
+        try {
+          var stats = fs.statSync(filepath)
+        } catch(e){
+          log("WARN could not fs.stat " + filepath)
+          continue;
+        }
+        
+        let optionsFile = Path.join(optionsDir, filehash)
+        let transpileFile = Path.join(transpileDir, filehash)
+        let transpileMapFile = Path.join(transpileDir, filehash + ".json.map")
+        
+        relativeBootFiles.push(file)
+        relativeOptionFiles.push(Path.join(Lively4optionsDir, filehash)) 
+        relativeTranspileFiles.push(Path.join(Lively4transpileDir, filehash))
+        relativeTranspileFiles.push(Path.join(Lively4transpileDir, filehash  + ".json.map"))
+            
+        try {
+          var optionsStats = fs.statSync(optionsFile)
+        } catch(e) {
+          // do nothing...
+        }
+        
+        if  (!optionsStats || stats.mtime > optionsStats.mtime ) {
+          var updatedOptions = await this.readOptions(repositorypath, filepath, stats)
+          log("UPDATE OPTIONS " + optionsFile)
+          await fs_writeFile(optionsFile, JSON.stringify(updatedOptions, null, 2))
+        }
+        
+        try {
+          let transpileStats = fs.statSync(transpileFile)
+          if  (stats.mtime > transpileStats.mtime ){
+            log("DELETE " + transpileFile)
+            await this.deletePath(transpileFile)
+          }
+          let transpileMapStats = fs.statSync(transpileMapFile)
+          if  (stats.mtime > transpileMapStats.mtime ){
+            log("DELETE " + transpileMapFile)
+            await this.deletePath(transpileMapFile)
+          }
+        } catch(e) {
+          log('ERROR on Update bundle ' + e)
+        }
+        // #TODO ensure OPTIONS here?
+      }
+     
+      // DELETE not unused options/transpiled caches
+      // should not be needed, because.... it will not end up in zip anyway...
+      for (let optionfile of fs.readdirSync(optionsDir)) {
+        if (!hashed.get(optionfile)) {
+          let filePath =  optionsDir + "/" +optionfile
+          log("delete " + filePath)
+          await this.deletePath(filePath)
+        } 
+      }
+      for (let transpiledfile of fs.readdirSync(transpileDir)) {
+        let filePath =  transpileDir + "/" +transpiledfile
+        if (!hashed.get(transpiledfile)) {
+          log("delete " + transpileDir + "/" + transpiledfile)
+          await this.deletePath(filePath)
+        }
+        if (!hashed.get(transpiledfile.replace(/\.json.map$/,""))) {
+          log("delete " + transpileDir + "/" + transpiledfile)
+          await this.deletePath(filePath)
+        }
+      }
+      
+    }
+
+    let quoteList = function(list) {
+      return list.map(ea => `"${ea}"`).join(" ")
+    }
+    
+    var cmd = `cd ${repositorypath}; 
+      if [ ! -e ${Lively4bundleName} ]; then
+        zip -r ${Lively4bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
+      fi`
+    console.log("ZIP " + cmd)
+    var result = await run(cmd)
+    log("stdout: " + result.stdout + "\nstderr: " + result.stderr)
+    return this.readFile(repositorypath, bundleFilepath, res)
+  }
+  
+  
   
   static async isInBootfile(repositorypath, filepath) {
     console.log("isInBootfile " + Lively4bootfilelistName + " in "+ repositorypath + " " + filepath)
@@ -282,67 +408,89 @@ class Server {
   static async invalidateBundleFile(repositorypath, filepath) {
     if (filepath.match(Lively4transpileDir) // all compiled files are bundled?
         || await this.isInBootfile(repositorypath, filepath)) {
-      console.log("INVALIDATE " + Lively4bundleName + " in "+ repositorypath)
+      log("INVALIDATE " + Lively4bundleName + " in "+ repositorypath)
       // remove bundle if we uploaded a file that belongs into it
       await run(`cd ${repositorypath}; 
         if [ -e ${Lively4bundleName} ]; then
           rm ${Lively4bundleName}
         fi`)
     } else {
-      console.log("NOTINBOOTFILE " +  repositorypath + " " + filepath)
+      log("NOTINBOOTFILE " +  repositorypath + " " + filepath)
+    }
+  }
+
+  static async ensureDirectory(path, name) {
+    // #TODO do it directly in JavaScript instead of Polyglot?
+    var result = await run(`cd ${path}; 
+      if [ ! -e ${name} ]; then
+        mkdir ${name}
+      fi`)
+    if (result.stderr) {
+      log("ensureDirectory stderr:" + result.stderr)
     }
   }
   
   static async ensureSpecialParentDirectories(repositorypath, filepath) {
-    if (!filepath.match(Lively4transpileDir)) return 
-
-    var result = await run(`cd ${repositorypath}; 
-        if [ ! -e ${Lively4transpileDir} ]; then
-          mkdir ${Lively4transpileDir}
-        fi`) 
-    console.log("ensureSpecialParentDirectories " + result.stdout)
+    if (filepath.match(Lively4transpileDir)) { 
+      await this.ensureDirectory(repositorypath, Lively4transpileDir)
+    }
+    
+    // if (filepath.match(Lively4optionsDir)) { 
+    //   await this.ensureDirectory(repositorypath, Lively4optionsDir)
+    // }
   }
 
+  static async invalidateOptionsFile(repositorypath, filepath) {
+    if (filepath.match(Lively4optionsDir)) return  // don't do it on yourself
+    if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
+    
+    log("invalidate options files" + Lively4bundleName + " in "+ repositorypath)
+    var hashedpath = filepath.replace(/\//g,"_")
+    await run(`cd ${repositorypath}; 
+        if [ -e ${Lively4optionsDir} ]; then
+          rm ${Lively4optionsDir}/${hashedpath}
+        fi`)
+  }
+  
   static async invalidateTranspiledFile(repositorypath, filepath) {
     if (filepath.match(Lively4transpileDir)) return  // don't do it on yourself
     if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
     
-    console.log("invalidate transpilation files" + Lively4bundleName + " in "+ repositorypath)
+    log("invalidate transpilation files" + Lively4bundleName + " in "+ repositorypath)
     var hashedpath = filepath.replace(/\//g,"_")
     var result = await run(`cd ${repositorypath}; 
         if [ -e ${Lively4transpileDir} ]; then
           rm ${Lively4transpileDir}/${hashedpath}
           rm ${Lively4transpileDir}/${hashedpath}.map.json
         fi`) 
-    console.log("RESULT " + result.stdout)
+    log("RESULT " + result.stdout)
   }
-
   
   static async readFile(repositorypath, filepath, res) {
-    var sPath = repositorypath + '/' + filepath;
-    log('read file ' + sPath);
+    var fullpath = repositorypath + '/' + filepath;
+    log('read file ' + fullpath);
 
     // throw new Error("hello error handler?")
 
-    var exists = await fs_exists(sPath);
+    var exists = await fs_exists(fullpath);
     if (!exists) {
       res.writeHead(404);
       return res.end('File not found!\n');
     }
-    var stats = await fs_stat(sPath);
+    var stats = await fs_stat(fullpath);
     if (stats.isDirectory()) {
-      this.readDirectory(sPath, res, 'text/html');
+      this.readDirectory(fullpath, res, 'text/html');
     } else {
       res.writeHead(200, {
-        'content-type': mime.lookup(sPath),
+        'content-type': mime.lookup(fullpath),
         fileversion: await this.getVersion(repositorypath, filepath),
         modified: await this.getLastModified(repositorypath, filepath)
       });
-      var stream = fs.createReadStream(sPath, {
+      var stream = fs.createReadStream(fullpath, {
         bufferSize: 64 * 1024
       });
       stream.on('error', function(err) {
-        log('error reading: ' + sPath + ' error: ' + err);
+        log('error reading: ' + fullpath + ' error: ' + err);
         res.end('Error reading file\n');
       });
       stream.pipe(res);
@@ -404,7 +552,7 @@ class Server {
       };
       checkEnd();
       files.forEach(function(filename) {
-        var filePath = path.join(aPath, filename);
+        var filePath = Path.join(aPath, filename);
         fs.stat(filePath, function(err, statObj) {
           if (!statObj) {
             dir.contents.push({
@@ -436,7 +584,7 @@ class Server {
    */
   static async PUT(repositorypath, filepath, req, res) {
     
-    var fullpath = path.join(repositorypath, filepath);
+    var fullpath = Path.join(repositorypath, filepath);
     log('write file: ' + fullpath);
     var fullBody = '';
     // if (filepath.match(/png$/)) {
@@ -453,185 +601,203 @@ class Server {
       fullBody += chunk.toString();
     });
 
+    await new Promise(resolve => req.on('end', resolve))
+    
     //after transmission, write file to disk
-    req.on('end', async () => {
-      // only block at the end...
-      await this.invalidateTranspiledFile(repositorypath, filepath)
-      await this.invalidateBundleFile(repositorypath, filepath)
-      await this.ensureSpecialParentDirectories(repositorypath, filepath)
-      
-      if (fullpath.match(/\/$/)) {
-        mkdirp(fullpath, err => {
-          if (err) {
-            log('Error creating dir: ' + err);
-          }
-          log('mkdir ' + fullpath);
-          res.writeHead(200, 'OK');
-          res.end();
-        });
-      } else {
-        var lastVersion = req.headers['lastversion'];
-        var currentVersion = await this.getVersion(repositorypath, filepath);
+    
+    // only block at the end...
+    await this.invalidateOptionsFile(repositorypath, filepath)
+    await this.invalidateTranspiledFile(repositorypath, filepath)
+    await this.invalidateBundleFile(repositorypath, filepath)
+    await this.ensureSpecialParentDirectories(repositorypath, filepath)
 
-        log('last version: ' + lastVersion);
-        log('current version: ' + currentVersion);
-
-        // we have version information and there is a conflict
-        if (lastVersion && currentVersion && lastVersion !== currentVersion) {
-          log('[writeFile] CONFLICT DETECTED');
-          res.writeHead(409, {
-            // HTTP CONFLICT
-            'content-type': 'text/plain',
-            conflictversion: currentVersion
-          });
-          res.end('Writing conflict detected: ' + currentVersion);
-          return;
+    if (fullpath.match(/\/$/)) {
+      return mkdirp(fullpath, err => {
+        if (err) {
+          log('Error creating dir: ' + err);
         }
+        log('mkdir ' + fullpath);
+        res.writeHead(200, 'OK');
+        res.end();
+      });
+    } 
+    var lastVersion = req.headers['lastversion'];
+    var currentVersion = await this.getVersion(repositorypath, filepath);
 
-        log('size ' + fullBody.length);
-        fs.writeFile(
-          fullpath,
-          fullBody,
-          fullpath.match(isTextRegEx) ? undefined : 'binary',
-          err => {
-            if (err) {
-              // throw err;
-              log(err);
-              return;
-            }
+    log('last version: ' + lastVersion);
+    log('current version: ' + currentVersion);
 
-            if (autoCommit && !req.headers['nocommit']) {
-              var username = req.headers.gitusername;
-              var email = req.headers.gitemail;
-              // var password = req.headers.gitpassword; // not used yet
+    // we have version information and there is a conflict
+    if (lastVersion && currentVersion && lastVersion !== currentVersion) {
+      log('[writeFile] CONFLICT DETECTED');
+      res.writeHead(409, {
+        // HTTP CONFLICT
+        'content-type': 'text/plain',
+        conflictversion: currentVersion
+      });
+      res.end('Writing conflict detected: ' + currentVersion);
+      return;
+    }
 
-              var authCmd = '';
-              if (username) authCmd += `git config user.name '${username}'; `;
-              if (email) authCmd += `git config user.email '${email}'; `;
-              log('EMAIL ' + email + ' USER ' + username);
+    log('size ' + fullBody.length);
+    let result = await fs_writeFile(fullpath, fullBody, fullpath.match(isTextRegEx) ? undefined : 'binary')
+    if (result.err) {
+      // throw err;
+      log(result.err);
+      throw new Error("Error in writeFile " + fullpath, result.err)
+    }
 
-              // #TODO maybe we should ask for github credetials here too?
-              let cmd = `cd "${repositorypath}"; ${authCmd} git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
-              log('[AUTO-COMMIT] ' + cmd);
-              exec(cmd, (error, stdout, stderr) => {
-                log('stdout: ' + stdout);
-                log('stderr: ' + stderr);
-                if (error) {
-                  log('ERROR');
-                  res.writeHead(500, '' + err);
-                  res.end('ERROR: ' + stderr);
-                } else {
-                  // return the hash for the commit, we just created
-                  let fileVersionCmd = `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`;
-                  log('cmd: ' + fileVersionCmd);
-                  exec(fileVersionCmd, (error, stdout, stderr) => {
-                    log('New version: ' + stdout);
-                    if (error) {
-                      res.writeHead(500);
-                      res.end(
-                        'could not retrieve new version... somthing went wrong: ' +
-                          stdout +
-                          ' ' +
-                          stderr
-                      );
-                    } else {
-                      res.writeHead(200, {
-                        'content-type': 'text/plain',
-                        fileversion: stdout
-                      });
-                      res.end('Created new version: ' + stdout);
-                    }
-                  });
-                }
-              });
-            } else {
-              log('saved ' + fullpath);
-              res.writeHead(200, 'OK');
-              res.end();
-            }
-          }
-        );
-      }
-    });
+    if (!autoCommit || req.headers['nocommit'])  {
+      log('saved ' + fullpath);
+      res.writeHead(200, 'OK');
+      res.end();
+      return
+    } 
+
+    var username = req.headers.gitusername;
+    var email = req.headers.gitemail;
+    // var password = req.headers.gitpassword; // not used yet
+
+    var authCmd = '';
+    if (username) authCmd += `git config user.name '${username}'; `;
+    if (email) authCmd += `git config user.email '${email}'; `;
+    log('EMAIL ' + email + ' USER ' + username);
+
+    // #TODO maybe we should ask for github credetials here too?
+    let cmd = `cd "${repositorypath}"; ${authCmd} git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
+    log('[AUTO-COMMIT] ' + cmd);
+    {
+      let {error, stdout, stderr} = await run(cmd)
+      log('git stdout: ' + stdout);
+      log('git stderr: ' + stderr);
+      if (error) {
+        // file did not change....
+        if (!stdout.match("no changes added to commit")) {
+          log('ERROR');
+          res.writeHead(500, 'Error:' + stderr);
+          return res.end('ERROR stdout: ' + stdout + "\nstderr:" + stderr);
+        }
+      } 
+    }
+    
+    let options = await this.readOptions(repositorypath, filepath)
+    if (options.error) {
+      res.writeHead(500);
+      res.end('could not retrieve new version... somthing went wrong: ' + options.error);
+    } else {
+      var optionsBody = JSON.stringify(options, null, 2)
+      let optionsPath = this.optionsPath(repositorypath, filepath)
+      await fs_writeFile(optionsPath, optionsBody)
+      res.writeHead(200, {
+        'content-type': 'text/plain',
+        fileversion: options.version,
+      });
+      res.end(optionsBody);
+    } 
+  }
+  
+  static optionsPath(repositorypath, filepath) {
+    return repositorypath + "/" + Lively4optionsDir + "/" + filepath.replace(/\//g,"_") 
+  }
+  
+  static transpilePath(repositorypath, filepath) {
+    return repositorypath + "/" + Lively4transpileDir + "/" + filepath.replace(/\//g,"_") 
+  }
+  
+  static async deletePath(fullpath) {
+    return run(
+      `f="${fullpath}";
+      if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi`)
   }
 
   /*
    * delete file
    */
-  static DELETE(sPath, res) {
-    sPath = sPath.replace(/['";&|]/g, ''); // #TODO can we get rid of stripping these?
+  static async DELETE(repositorypath, filepath, res) {
+    let fullpath = Path.join(repositorypath, filepath) 
 
-    return respondWithCMD(
-      `f=${lively4DirUnix}/"${sPath}";
-      if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi`,
-      res
-    );
+    // clear all caches associated with the file
+    await this.deletePath(this.optionsPath(repositorypath, filepath))
+    await this.deletePath(this.transpilePath(repositorypath, filepath)) 
+    
+    var result = await this.deletePath(fullpath)
+    if (result.error) {
+      res.writeHead(404)
+      return res.end("Error " + result.stdout + "\n" + result.stderr)
+    }    
+    res.writeHead(200)
+    res.end("deleted " + fullpath)
   }
 
   /*
    * create directory
    */
-  static MKCOL(sPath, res) {
-    log('create directory ' + sPath);
-    sPath = sPath.replace(/['"; &|]/g, '');
-    return respondWithCMD(`mkdir ${lively4DirUnix}/"${sPath}"`, res);
+  static async MKCOL(repositorypath, filepath, res) {
+    let fullpath = Path.join(repositorypath, filepath) 
+    // #TODO check for existing directory and return 409 ?
+    var result = await run(`mkdir -v "${fullpath}"`);
+    if (result.error) {
+      res.writeHead(404);
+      return res.end("Error " + result.stdout + "\n" + result.stderr);  
+    }
+    res.writeHead(200);
+    res.end("created directory: " + fullpath);
   }
 
+  static async readOptions(repositorypath, filepath, stats) {
+    var fullpath = Path.join(repositorypath, filepath)
+    if (!stats) {
+      try {
+        stats = await fs_stat(fullpath);
+      } catch(e) {
+        console.error("STATS error " + filepath, e)
+        return JSON.stringify({error: e}, null, 2)
+      }
+    } 
+    var result = { type: 'file' }
+    result.name = filepath
+    result.size = stats.size
+    result.version = await this.getVersion(repositorypath, filepath)  // PERFORMANCE WARNING
+    result.modified = await this.getLastModified(repositorypath, filepath) // PERFORMANCE WARNING
+    return result
+  }
+  
+  
   /*
    * list directory contents and file meta information
    */
-  static OPTIONS(sSourcePath, sPath, req, res) {
-    log('doing a stat on ' + sSourcePath);
-    // statFile was called by client
-    fs.stat(sSourcePath, async (err, stats) => {
-      if (err !== null) {
-        log('stat ERROR: ' + err);
-        if (err.code == 'ENOENT') {
-          res.writeHead(200);
-          var data = JSON.stringify(
-            {
-              error: err
-            },
-            null,
-            2
-          );
-          res.end(data);
-        } else {
-          log(err);
-        }
-        return;
+  static async OPTIONS(repositorypath, filepath, req, res) {
+    var fullpath = Path.join(repositorypath, filepath)
+    log('OPTIONS ' + fullpath)
+    try {
+      var stats = await fs_stat(fullpath);
+    } catch(err) {
+      log('stat ERROR: ' + err)
+      if (err.code == 'ENOENT') {
+        res.writeHead(200)
+        let data = JSON.stringify({error: err}, null, 2)
+        res.end(data)
+      } else {
+        log(err)
       }
-      var repositorypath = sSourceDir + sPath.replace(/^\/(.*?)\/.*/, '$1');
-      var filepath = sPath.replace(/^\/.*?\/(.*)/, '$1');
-      log('stats directory: ' + stats.isDirectory());
-      if (stats.isDirectory()) {
-        if (req.headers['filelist'] == 'true') {
-          log('repositorypath: ' + repositorypath);
-          log('filepath: ' + filepath);
-          this.readFilelist(repositorypath, filepath, res);
-        } else {
-          log('readDirectory ' + sSourcePath);
-          this.readDirectory(sSourcePath, res);
-        }
-      } else if (stats.isFile()) {
-        if (req.headers['showversions'] == 'true') {
-          return this.listVersions(repositorypath, filepath, res);
-        }
-        // type, name, size
-        var result = { type: 'file' };
-        result.name = sSourcePath.replace(/.*\//, '');
-        result.size = stats.size;
-        result.version = await this.getVersion(repositorypath, filepath);
-        result.modified = await this.getLastModified(repositorypath, filepath);
-
-        var data = JSON.stringify(result, null, 2);
-        // github return text/plain, therefore we need to do the same
-        res.writeHead(200, {
-          'content-type': 'text/plain'
-        });
-        res.end(data);
+      return 
+    }
+    if (stats.isDirectory()) {
+      if (req.headers['filelist'] == 'true') {
+        this.readFilelist(repositorypath, filepath, res);
+      } else {
+        this.readDirectory(fullpath, res);
       }
-    });
+    } else if (stats.isFile()) {
+      if (req.headers['showversions'] == 'true') {
+        return this.listVersions(repositorypath, filepath, res);
+      }
+      let data = await this.readOptions(repositorypath, filepath, stats)
+      res.writeHead(200, {
+        'content-type': 'text/plain' // github return text/plain, therefore we need to do the same
+      });
+      res.end(JSON.stringify(data, null, 2))
+    }
   }
 
   /*
@@ -1015,9 +1181,9 @@ class Server {
 // parse command line arguments
 var args = argv.option(Server.options).run();
 var port = args.options.port || 8080;
-var sSourceDir = args.options.directory || '../';
+var sourceDir = args.options.directory || '../';
 var indexFiles = args.options['index-files'];
-var lively4dir = sSourceDir;
+var lively4dir = sourceDir;
 var server = args.options.server || '.';
 var bashBin = args.options['bash-bin'] || 'bash';
 utils.config.bashBin = bashBin;
