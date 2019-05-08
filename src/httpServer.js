@@ -198,15 +198,21 @@ class Server {
       
       var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
       var fileversion = req.headers['fileversion']; // 
-      var repositorypath = sourceDir + path.replace(/^\/(.*?)\/.*/, '$1');
-      var filepath = path.replace(/^\/.*?\/(.*)/, '$1'); // src/client/boot.js
+      
+      var m = path.match(/^\/(.*\/.*?)\/?(.*)/)
+      if (m) {
+        var repositorypath = Path.join(sourceDir, m[1]);
+        var filepath = m[2]
+      } else {    
+        repositorypath = sourceDir
+        filepath = path
+      }
+      
+      
+      log(`request ${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
 
-      log(
-        `request ${req.method} ${path}  ${
-          fileversion ? '[version= ' + fileversion + ']' : ''
-        }`
-      );
-
+      log(`repositorypath: ${repositorypath} filepath: ${filepath}`);
+      
       if (breakOutRegex.test(path) === true) {
         res.writeHead(500);
         res.end(
@@ -467,17 +473,25 @@ class Server {
   }
   
   static async readFile(repositorypath, filepath, res) {
-    var fullpath = repositorypath + '/' + filepath;
-    log('read file ' + fullpath);
+    log('read based in:' + repositorypath + " file: " +filepath);
+    var fullpath = Path.join(repositorypath, filepath);
+    
 
     // throw new Error("hello error handler?")
 
-    var exists = await fs_exists(fullpath);
-    if (!exists) {
+    
+    try {
+      // var stats = fs.statSync(filepath)
+      var stats = await fs_stat(fullpath);
+    } catch(e){
+      // nothing
+    }
+    
+    if (!stats) {
+      console.log('FILE DOES NOT EXIST ' + fullpath)
       res.writeHead(404);
       return res.end('File not found!\n');
     }
-    var stats = await fs_stat(fullpath);
     if (stats.isDirectory()) {
       this.readDirectory(fullpath, res, 'text/html');
     } else {
