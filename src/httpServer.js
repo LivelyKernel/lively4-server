@@ -199,7 +199,9 @@ class Server {
       var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
       var fileversion = req.headers['fileversion']; // 
       
-      var m = path.match(/^\/(.*\/.*?)\/?(.*)/)
+      console.log("PATH " + path)                 
+      var m = path.match(/^\/([^/]*)\/(.*)/)
+                        
       if (m) {
         var repositorypath = Path.join(sourceDir, m[1]);
         var filepath = m[2]
