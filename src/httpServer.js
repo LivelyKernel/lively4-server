@@ -1186,7 +1186,7 @@ class Server {
       });      
     } else {
       log("webhook: " + pathname)
-      res.writeHead(400); // not 
+      res.writeHead(200); // not 
       res.end();
     }    
   }
