@@ -1138,8 +1138,9 @@ class Server {
     see https://github.com/LivelyKernel/lively4-core/settings/hooks
   */
   static async WEBHOOK(pathname, req, res) {
+    log("WEBHOOK " + req.method + ": " + pathname)
     
-    if (pathname.match("/_webhook/register")) {
+    if (req.method == 'GET' && pathname.match("/_webhook/register")) {
       let key =  req.headers['repositoryname']; 
       log("webhook register " + key)
       
@@ -1151,7 +1152,7 @@ class Server {
       // res.writeHead(200); // done
       // res.end();
 
-    } else if(pathname.match("/_webhook/signal")) {
+    } else if(req.method == 'PUT' && pathname.match("/_webhook/signal")) {
    
       log("webhook signal ")
       var body = '';
@@ -1185,7 +1186,7 @@ class Server {
       });      
     } else {
       log("webhook: " + pathname)
-      res.writeHead(404); // not 
+      res.writeHead(400); // not 
       res.end();
     }    
   }
