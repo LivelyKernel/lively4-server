@@ -1152,7 +1152,7 @@ class Server {
       // res.writeHead(200); // done
       // res.end();
 
-    } else if(req.method == 'PUT' && pathname.match("/_webhook/signal")) {
+    } else if((req.method == 'PUT' || req.method == 'POST') && pathname.match("/_webhook/signal")) {
    
       log("webhook signal ")
       var body = '';
