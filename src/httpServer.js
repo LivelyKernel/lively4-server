@@ -855,7 +855,7 @@ class Server {
   static listVersions(repositorypath, filepath, res) {
     // #TODO rewrite artificial json formatting and for example get rit of trailing "null"
     var format =
-      '\\{\\"version\\":\\"%h\\",\\"date\\":\\"%ad\\",\\"author\\":\\"%an\\"\\,\\"comment\\":\\"%f\\"},';
+      '\\{\\"version\\":\\"%h\\",\\"date\\":\\"%ad\\",\\"author\\":\\"%an\\"\\,\\"parents\\":\\"%p\\",\\"comment\\":\\"%f\\"},';
     respondWithCMD(
       `cd ${repositorypath};
       echo "{ \\"versions\\": [";
