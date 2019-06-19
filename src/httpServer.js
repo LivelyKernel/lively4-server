@@ -894,6 +894,7 @@ class Server {
   static async GIT(sPath, req, res, cb) {
     log('git control: ' + sPath);
 
+    
     var dryrun = req.headers['dryrun'];
     dryrun = dryrun && dryrun == 'true';
     // #TODO replace it with something more secure... #Security #Prototype
@@ -904,10 +905,11 @@ class Server {
     var password = req.headers['gitpassword'];
     var email = req.headers['gitemail'];
     var branch = req.headers['gitrepositorybranch'];
-    var msg = cleanString(req.headers['gitcommitmessage']);
+    var msg = req.headers['gitcommitmessage'] && cleanString(req.headers['gitcommitmessage']);
     var filepath = req.headers['gitfilepath'];
     var gitcommit = req.headers['gitcommit'];
 
+    
     if (!email) {
       return res.end('please provide email!');
     }
@@ -918,7 +920,13 @@ class Server {
       return res.end('please login');
     }
 
+    if (!repository) {
+      return res.end('please specify repository');
+    }
+
     repository = repository.replace(/^\//,"") // #TODO should we take care of this in the client?
+    
+    
     
     var cmd;
     if (sPath.match(/\/_git\/sync/)) {
@@ -1062,6 +1070,9 @@ class Server {
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/delete/)) {
       cmd = `${server}/bin/lively4deleterepository.sh '${lively4DirUnix}/${repository}'`;
+      respondWithCMD(cmd, res, dryrun);
+    } else if (sPath.match(/\/_git\/show/)) {
+      cmd = `cd ${lively4DirUnix}/${repository};\n` + 'git show ' + gitcommit;
       respondWithCMD(cmd, res, dryrun);
     } else {
       res.writeHead(200);
