@@ -908,6 +908,7 @@ class Server {
     var msg = req.headers['gitcommitmessage'] && cleanString(req.headers['gitcommitmessage']);
     var filepath = req.headers['gitfilepath'];
     var gitcommit = req.headers['gitcommit'];
+    var usecolor = req.headers['gitusecolor'];
 
     
     if (!email) {
@@ -1072,7 +1073,7 @@ class Server {
       cmd = `${server}/bin/lively4deleterepository.sh '${lively4DirUnix}/${repository}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/show/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};\n` + 'git show ' + gitcommit;
+      cmd = `cd ${lively4DirUnix}/${repository};\n` + `git show ${usecolor ? " --color=always " : ""}`  + gitcommit;
       respondWithCMD(cmd, res, dryrun);
     } else {
       res.writeHead(200);
