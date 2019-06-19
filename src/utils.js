@@ -37,7 +37,9 @@ export async function respondWithCMD(cmd, res, dryrun) {
     var process = child_process.spawn(config.bashBin, ["-c", cmd]);
     process.stdout.on('data', function (data) {
       // log('STDOUT: ' + data);
-      res.write(data, undefined, function() {log("FLUSH");} );
+      res.write(data, undefined, function() {
+        // log("FLUSH");
+      } );
     });
 
     process.stderr.on('data', function (data) {
