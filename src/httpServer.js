@@ -799,6 +799,10 @@ class Server {
       return 
     }
     if (stats.isDirectory()) {
+      if (req.headers['showversions'] == 'true') {
+        return this.listVersions(repositorypath, filepath, res);
+      }
+
       if (req.headers['filelist'] == 'true') {
         this.readFilelist(repositorypath, filepath, res);
       } else {

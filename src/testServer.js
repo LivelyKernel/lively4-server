@@ -79,7 +79,7 @@ describe("Lively4 Server", () => {
       var zip = await JSZip.loadAsync(body)
       var files = Object.keys(zip.files);
 
-      console.log("Bundled files:" , files)
+      // console.log("Bundled files:" , files)
       
       expect(files).to.include("README.md")
       expect(files).to.include("foo.js")
@@ -146,6 +146,17 @@ describe("Lively4 Server", () => {
     
     it("should show versions", async() => {
       var response = await fetch(url + "lively4-dummy/README.md", {
+        method: "OPTIONS",
+        headers: {
+          showversions: true
+        }
+      })
+      var content = await response.json()
+      expect(content.versions, "versions").length.to.be.gt(0)
+    })
+    
+    it("should show versions on directories", async() => {
+      var response = await fetch(url + "lively4-dummy/", {
         method: "OPTIONS",
         headers: {
           showversions: true
