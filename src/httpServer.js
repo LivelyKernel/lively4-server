@@ -239,6 +239,9 @@ class Server {
       if (path.match(/\/_git.*/)) {
         return this.GIT(path, req, res);
       }
+      if (path.match(/\/_graphviz.*/)) {
+        return this.GRAPHVIZ(path, req, res);
+      }
       if (pathname.match(/\/_search\//)) {
         return this.SEARCH(pathname, req, res);
       }
@@ -1131,6 +1134,50 @@ class Server {
         }, 5 * 60 * 1000); // cleanup after 5min
         res.writeHead(200); // done
         res.end();
+      });
+    }
+  }
+  
+  
+  static GRAPHVIZ(pathname, req, res) {
+    if (req.method == 'POST') {
+      var fullBody = '';
+      req.setEncoding('binary');
+      req.on('data', chunk => {
+        fullBody += chunk.toString();
+      });
+      req.on('end', async () => {
+        var tempFile = (await run("mktemp --suffix=.dot")).stdout.replace(/\n/g,"") 
+        
+        // log(`got tmp file '${tempFile}'`)
+        await fs_writeFile(tempFile, fullBody)
+        // log("wrote tmp file")
+        
+        var layout = "dot"
+        var type = "svg"
+        if (req.headers['graphlayout'] == "neato") {
+          layout = "neato" // don't allow arbitrary executables...
+        }
+        if (req.headers['graphtype'] == "dot") {
+          type = "dot" 
+        }
+
+        
+        var result = (await run(`${layout} -T${type} '${tempFile}'`))
+        // log(`run dot '${ tempFile}'` )
+        
+        // log("deleted temp")
+        await run(`rm '${tempFile}'`)
+        
+        var source = "" + result.stdout
+        if (source == "") {
+          log("GraphViz ERR: " + result.stderr)
+          res.writeHead(400); // done
+          res.end(result.stderr);          
+        } else {
+          res.writeHead(200); // done
+          res.end(source);          
+        } 
       });
     }
   }
