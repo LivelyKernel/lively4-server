@@ -683,7 +683,15 @@ class Server {
     log('EMAIL ' + email + ' USER ' + username);
 
     // #TODO maybe we should ask for github credetials here too?
-    let cmd = `cd "${repositorypath}"; ${authCmd} git add "${filepath}"; git commit -m "AUTO-COMMIT ${filepath}"`;
+    let cmd = `
+      cd "${repositorypath}"; 
+      if [ -e .git ]; then
+        ${authCmd} git add "${filepath}"; 
+        git commit -m "AUTO-COMMIT ${filepath}"
+      else
+        echo "no git repository" 
+      fi
+    `;
     log('[AUTO-COMMIT] ' + cmd);
     {
       let {error, stdout, stderr} = await run(cmd)
