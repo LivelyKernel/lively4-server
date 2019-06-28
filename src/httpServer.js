@@ -796,6 +796,9 @@ class Server {
   static async OPTIONS(repositorypath, filepath, req, res) {
     var fullpath = Path.join(repositorypath, filepath)
     log('OPTIONS ' + fullpath)
+    var after = req.headers['gitafter']
+    var until = req.headers['gituntil']
+        
     try {
       var stats = await fs_stat(fullpath);
     } catch(err) {
@@ -811,7 +814,7 @@ class Server {
     }
     if (stats.isDirectory()) {
       if (req.headers['showversions'] == 'true') {
-        return this.listVersions(repositorypath, filepath, res);
+        return this.listVersions(repositorypath, filepath, res, after, until);
       }
 
       if (req.headers['filelist'] == 'true') {
@@ -821,7 +824,7 @@ class Server {
       }
     } else if (stats.isFile()) {
       if (req.headers['showversions'] == 'true') {
-        return this.listVersions(repositorypath, filepath, res);
+        return this.listVersions(repositorypath, filepath, res, after, until);
       }
       let data = await this.readOptions(repositorypath, filepath, stats)
       res.writeHead(200, {
@@ -867,14 +870,18 @@ class Server {
     );
   }
 
-  static listVersions(repositorypath, filepath, res) {
+  static listVersions(repositorypath, filepath, res, after, until) {
     // #TODO rewrite artificial json formatting and for example get rit of trailing "null"
     var format =
       '\\{\\"version\\":\\"%h\\",\\"date\\":\\"%ad\\",\\"author\\":\\"%an\\"\\,\\"parents\\":\\"%p\\",\\"comment\\":\\"%f\\"},';
+    
+    // #TODO #Security #Parameters?
+    var range = `${after ? '--after="' +after +'"': "" } ${until ? '--until="' + until +'"' : ""}`
+    
     respondWithCMD(
       `cd ${repositorypath};
       echo "{ \\"versions\\": [";
-      git log --pretty=format:${format}  ${filepath};
+      git log --pretty=format:${format} ${range} ${filepath};
       echo null\\]}`,
       res
     );
