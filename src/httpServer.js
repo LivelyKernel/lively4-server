@@ -1155,11 +1155,8 @@ class Server {
         
         var layout = "dot"
         var type = "svg"
-        if (req.headers['graphlayout'] == "neato") {
-          layout = "neato" // don't allow arbitrary executables...
-        }
-        if (req.headers['graphtype'] == "dot") {
-          type = "dot" 
+        if (req.headers['graphlayout']) {
+          layout = cleanString(req.headers['graphlayout'])
         }
 
         
