@@ -246,7 +246,7 @@ class Server {
         return this.SEARCH(pathname, req, res);
       }
       if (req.method == 'GET') {
-        await  this.GET(repositorypath, filepath, fileversion, res);
+        await  this.GET(repositorypath, filepath, fileversion, req, res);
       } else if (req.method == 'PUT') {
         await this.PUT(repositorypath, filepath, req, res);
       } else if (req.method == 'DELETE') {
@@ -264,13 +264,13 @@ class Server {
     log("FINISHED REQUEST " + req.method + " " + req.url + " " + Math.round(Date.now() - startRequestTime) + "ms")
   }
 
-  static GET(repositorypath, filepath, fileversion, res) {
+  static GET(repositorypath, filepath, fileversion, req, res) {
     if (filepath.match(Lively4bundleName)) {
       return this.ensureBundleFile(repositorypath, filepath, res);
     } else if (fileversion && fileversion != 'undefined') {
       return this.readFileVersion(repositorypath, filepath, fileversion, res);
     } else {
-      return this.readFile(repositorypath, filepath, res);
+      return this.readFile(repositorypath, filepath, req, res);
     }
   }
   
@@ -385,7 +385,7 @@ class Server {
     console.log("ZIP " + cmd)
     var result = await run(cmd)
     log("stdout: " + result.stdout + "\nstderr: " + result.stderr)
-    return this.readFile(repositorypath, bundleFilepath, res)
+    return this.readFile(repositorypath, bundleFilepath, undefined, res)
   }
   
   
@@ -477,7 +477,7 @@ class Server {
     log("RESULT " + result.stdout)
   }
   
-  static async readFile(repositorypath, filepath, res) {
+  static async readFile(repositorypath, filepath, req, res) {
     log('read based in:' + repositorypath + " file: " +filepath);
     var fullpath = Path.join(repositorypath, filepath);
     
@@ -498,7 +498,7 @@ class Server {
       return res.end('File not found!\n');
     }
     if (stats.isDirectory()) {
-      this.readDirectory(fullpath, res, 'text/html');
+      this.readDirectory(fullpath, req, res, 'text/html');
     } else {
       res.writeHead(200, {
         'content-type': mime.lookup(fullpath),
@@ -516,7 +516,7 @@ class Server {
     }
   }
 
-  static readDirectory(aPath, res, contentType) {
+  static readDirectory(aPath, req, res, contentType) {
     log('readDirectory x ' + aPath);
     fs.readdir(aPath, function(err, files) {
       var dir = {
@@ -530,30 +530,39 @@ class Server {
           var data;
           if (contentType == 'text/html') {
             // prefix the directory itself as needed if it does not end in "/"
-            var match = aPath.match(/\/([^/]+)$/);
+            var match = req.url.match(/\/([^/]+)$/); // aPath stripped the / already
             var prefix = match ? match[1] + '/' : '';
 
+            
             data =
-              '<html><body><h1>' +
-              aPath +
+`<html><style>
+  body { 
+    font-family: arial;
+  }
+ </style><body><h1>` +
+              req.url +
               '</h1>\n<ul>' +
-              '<!-- prefix=' +
-              prefix +
-              ' -->' +
-              dir.contents
+              // '<!-- prefix=' +
+              // `PATH: ${aPath} PREFIX: ${prefix} URL: ${req.url} URL2: ${JSON.stringify(req.headers)}}` +
+              // ' -->' +
+              
+                
+              dir.contents.sort()
+                .map(ea => ea.name)
+                .sort()
                 .map(function(ea) {
                   return (
                     "<li><a href='" +
                     prefix +
-                    ea.name +
+                    ea +
                     "'>" +
-                    ea.name +
+                    ea +
                     '</a></li>'
                   );
                 })
                 .join('\n') +
               '</ul></body></html>';
-
+            
             // github return text/plain, therefore we need to do the same
             res.writeHead(200, {
               'content-type': 'text/html'
@@ -820,7 +829,7 @@ class Server {
       if (req.headers['filelist'] == 'true') {
         this.readFilelist(repositorypath, filepath, res);
       } else {
-        this.readDirectory(fullpath, res);
+        this.readDirectory(fullpath, req, res);
       }
     } else if (stats.isFile()) {
       if (req.headers['showversions'] == 'true') {
