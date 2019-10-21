@@ -33,6 +33,9 @@ import Promise from 'bluebird'; // seems not to workd
 // e.g. this did not work var statFile = Promise.promisify(fs.stat);
 // var fs_exists = Prom.promisify(fs.exists);
 // but this does
+
+import fetch from 'node-fetch';
+
 var fs_exists = function(file) {
   return new Promise(resolve =>
     fs.exists(file, exists => {
@@ -77,6 +80,8 @@ const Lively4bundleName = ".lively4bundle.zip"
 const Lively4transpileDir = ".transpiled"
 const Lively4optionsDir = ".options"
 
+const GithubOriganizationMemberCache = {}
+
 var RepositoryBootfiles = {}
 
 var RepositoryInSync = {}; // cheap semaphore
@@ -85,7 +90,7 @@ var breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 var isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
 
 class Server {
-  static get options() {
+  static get optionsSpec() {
     return [
       {
         name: 'port',
@@ -125,6 +130,21 @@ class Server {
         name: 'lively4dir-unix',
         type: 'string',
         description: 'the directory in cygwin.'
+      },
+      {
+        name: 'authorize-requests',
+        type: 'boolean',
+        description: 'authorize every request by authenticating a user and checking if in github team'
+      },
+      {
+        name: 'github-organization',
+        type: 'string',
+        description: 'github organization'
+      },
+      {
+        name: 'github-team',
+        type: 'string',
+        description: 'github team'
       }
     ];
   }
@@ -199,9 +219,13 @@ class Server {
       var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
       var fileversion = req.headers['fileversion']; // 
       
+      
+      
       console.log("PATH " + path)                 
       var m = path.match(/^\/([^/]*)\/(.*)/)
-                        
+
+      
+                            
       if (m) {
         var repositorypath = Path.join(sourceDir, m[1]);
         var filepath = m[2]
@@ -211,8 +235,75 @@ class Server {
       }
       
       
-      log(`request ${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
+      // log("authorize-requests: " + this.options["authorize-requests"])
+      if (this.options["authorize-requests"]) {
+        // log("AUTH REQUIRED")
+        
+        var org = this.options["github-organization"]
+        if (!org) { 
+          log("CONFIG ERROR: github-organization is missing")
+        }
+        var teamName = this.options["github-team"]
+        if (!teamName) { 
+          log("CONFIG ERROR: github-team is missing")
+        }
+        
+        var username = req.headers['gitusername'];
+        var password = req.headers['gitpassword'];
+        
+        // log("user " + username)
+        // log("password " + (password + "").slice(0,3))
+      
+        if (!username || !password) {
+          res.writeHead(403);
+          res.end('Please authenticate yourself\n');
+          return;
+        }
+        
+        // cache the authorization to go light on the github API and answer faster ourselves
+        var authorizationKey = org + "/" + org + "/" + username + "/" + password 
+        var lastAuthorization = GithubOriganizationMemberCache[authorizationKey]
+        if (lastAuthorization && lastAuthorization.success) {
+          log("AUTHORIZED BY CACHE")
+          // do nothing
+        }  else {
+          log("AUTHORIZATION required ")
+          let teamInfo = await fetch(`https://api.github.com/orgs/${org}/teams/${teamName}`, {
+            method: "GET",
+            headers: {
+              Authorization: "token " + password  
+            }
+          }).then(r => r.json());    
 
+          if (teamInfo.members_url) {
+            var members = await fetch(teamInfo.members_url.replace(/\{.*/,""), {
+              method: "GET",
+              headers: {
+                Authorization: "token " + password  
+              }
+            }).then(r => r.json());
+            var userInTeam = members.map(ea => ea.login).includes(username)
+          } 
+
+          if (!userInTeam) {
+            GithubOriganizationMemberCache[authorizationKey] = {
+              success: false,
+              time: Date.now(),
+              previous: lastAuthorization // for preventing... DoS attacks? #TODO
+            }
+            res.writeHead(403);
+            res.end('Authentification/Authorization failed\n');
+            return;
+          }
+          
+          GithubOriganizationMemberCache[authorizationKey] = {
+            success: true,
+            time: Date.now()
+          }
+        }
+      }
+      
+      log(`request ${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
       log(`repositorypath: ${repositorypath} filepath: ${filepath}`);
       
       if (breakOutRegex.test(path) === true) {
@@ -1280,7 +1371,8 @@ class Server {
 
 // #REFACTOR
 // parse command line arguments
-var args = argv.option(Server.options).run();
+var args = argv.option(Server.optionsSpec).run();
+Server.options = args.options
 var port = args.options.port || 8080;
 var sourceDir = args.options.directory || '../';
 var indexFiles = args.options['index-files'];

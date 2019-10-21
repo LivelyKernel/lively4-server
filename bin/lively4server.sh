@@ -44,6 +44,10 @@ if [ "$OS" == "Windows_NT" ]; then
     echo "WIN OPTIONS "$OPTIONS
 fi
 
+if [ $AUTHORIZE ]; then
+  OPTIONS=$OPTIONS" --authorize-requests=true --github-organization=$ORGANIZATION --github-team=$TEAM "
+fi
+
 while true; do
   # cheap log rotate
   cp $LOGFILE $LOGFILE.last
