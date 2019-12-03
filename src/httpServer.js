@@ -317,6 +317,11 @@ class Server {
       if (pathname.match(/\/_tmp\//)) {
         return this.TMP(pathname, req, res);
       }
+      
+      if (pathname.match(/\/_vq\//)) {
+        return this.BP2019Proxy(pathname, req, res, proxy);
+      }
+      
       if (pathname.match(/\/_github\//)) {
         req.url = req.url.replace('/_github/', '');
         return proxy.web(req, res, { target: 'http://172.16.64.132:9001/' });
@@ -355,6 +360,16 @@ class Server {
     log("FINISHED REQUEST " + req.method + " " + req.url + " " + Math.round(Date.now() - startRequestTime) + "ms")
   }
 
+  static BP2019Proxy(pathname, req, res, proxy) {
+    
+    req.url = req.url.replace(/\/_vq\//, '');
+    return proxy.web(req, res, { target: 'http://localhost:10055/' });
+    
+    // res.writeHead(200);
+    //   res.end('Hey you wanted' + pathname);    
+  }
+
+  
   static GET(repositorypath, filepath, fileversion, req, res) {
     if (filepath.match(Lively4bundleName)) {
       return this.ensureBundleFile(repositorypath, filepath, res);
