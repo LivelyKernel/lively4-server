@@ -351,6 +351,8 @@ class Server {
         await this.MKCOL(repositorypath, filepath, res);
       } else if (req.method == 'OPTIONS') {
         await this.OPTIONS(repositorypath, filepath, req, res);
+      } else if (req.method == 'MOVE') {
+        await this.MOVE(repositorypath, filepath, req, res);
       }
     } catch (e) {
       console.error('ERROR on request ' + req.url, e);
@@ -869,6 +871,18 @@ class Server {
     }    
     res.writeHead(200)
     res.end("deleted " + fullpath)
+  }
+  
+   /*
+   * move file or directory
+   */
+  static async MOVE(repositorypath, filepath, req, res) {
+    var fullpath = Path.join(repositorypath, filepath)
+    log('MOVE ' + fullpath)
+    res.writeHead(500, {
+        'content-type': 'text/plain' // github return text/plain, therefore we need to do the same
+    });
+    res.end("Not implemented, Sorry!")
   }
 
   /*
