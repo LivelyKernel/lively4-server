@@ -267,7 +267,7 @@ class Server {
           log("AUTHORIZED BY CACHE")
           // do nothing
         }  else {
-          log("AUTHORIZATION required ")
+          log("AUTHORIZATION required org: " + org + " team: " + teamName)
           let teamInfo = await fetch(`https://api.github.com/orgs/${org}/teams/${teamName}`, {
             method: "GET",
             headers: {
