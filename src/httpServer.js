@@ -267,7 +267,7 @@ class Server {
           log("AUTHORIZED BY CACHE")
           // do nothing
         }  else {
-          log("AUTHORIZATION required ")
+          log("AUTHORIZATION required org: " + org + " team: " + teamName)
           let teamInfo = await fetch(`https://api.github.com/orgs/${org}/teams/${teamName}`, {
             method: "GET",
             headers: {
@@ -317,6 +317,11 @@ class Server {
       if (pathname.match(/\/_tmp\//)) {
         return this.TMP(pathname, req, res);
       }
+      
+      if (pathname.match(/\/_vq\//)) {
+        return this.BP2019Proxy(pathname, req, res, proxy);
+      }
+      
       if (pathname.match(/\/_github\//)) {
         req.url = req.url.replace('/_github/', '');
         return proxy.web(req, res, { target: 'http://172.16.64.132:9001/' });
@@ -346,6 +351,8 @@ class Server {
         await this.MKCOL(repositorypath, filepath, res);
       } else if (req.method == 'OPTIONS') {
         await this.OPTIONS(repositorypath, filepath, req, res);
+      } else if (req.method == 'MOVE') {
+        await this.MOVE(repositorypath, filepath, req, res);
       }
     } catch (e) {
       console.error('ERROR on request ' + req.url, e);
@@ -355,6 +362,16 @@ class Server {
     log("FINISHED REQUEST " + req.method + " " + req.url + " " + Math.round(Date.now() - startRequestTime) + "ms")
   }
 
+  static BP2019Proxy(pathname, req, res, proxy) {
+    
+    req.url = req.url.replace(/\/_vq\//, '');
+    return proxy.web(req, res, { target: 'http://localhost:10055/' });
+    
+    // res.writeHead(200);
+    //   res.end('Hey you wanted' + pathname);    
+  }
+
+  
   static GET(repositorypath, filepath, fileversion, req, res) {
     if (filepath.match(Lively4bundleName)) {
       return this.ensureBundleFile(repositorypath, filepath, res);
@@ -854,6 +871,18 @@ class Server {
     }    
     res.writeHead(200)
     res.end("deleted " + fullpath)
+  }
+  
+   /*
+   * move file or directory
+   */
+  static async MOVE(repositorypath, filepath, req, res) {
+    var fullpath = Path.join(repositorypath, filepath)
+    log('MOVE ' + fullpath)
+    res.writeHead(500, {
+        'content-type': 'text/plain' // github return text/plain, therefore we need to do the same
+    });
+    res.end("Not implemented, Sorry!")
   }
 
   /*
