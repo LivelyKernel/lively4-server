@@ -32,7 +32,8 @@ $SERVER/bin/watch.sh $SERVER/src/httpServer.js 'kill -USR1 '$$ &
 WATCHERPID=$!
 
 
-OPTIONS=" --server="$SERVER" "
+OPTIONS=" --server="$SERVER" --myurl="$MYURL" "
+
 
 if [ "$OS" == "Windows_NT" ]; then
     OPTIONS=$OPTIONS"  --lively4dir-unix="$LIVELY" --cygwin --bash-bin="`cygpath -wa /usr/bin/bash`

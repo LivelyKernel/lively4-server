@@ -145,6 +145,11 @@ class Server {
         name: 'github-team',
         type: 'string',
         description: 'github team'
+      },
+      {
+        name: 'myurl',
+        type: 'string',
+        description: 'myurl from the outside...'
       }
     ];
   }
@@ -174,6 +179,7 @@ class Server {
     log('set autoCommit to: ' + bool);
     return (autoCommit = bool);
   }
+  
 
   static start() {
     log('Welcome to Lively4!');
@@ -181,6 +187,7 @@ class Server {
     log('Lively4: ' + lively4dir);
     log('Port: ' + this.port);
     log('Auto-commit: ' + autoCommit);
+    log('Myurl: ' + Server.options.myurl);
 
     this.tmpStorage = {};
 
@@ -211,25 +218,23 @@ class Server {
       this.setCORSHeaders(res);
 
       // url =  new URL("https://lively-kernel.org/lively4/lively4-jens/src/client/boot.js")
-      var url = URL.parse(req.url, true, false); 
+      var url = URL.parse(req.url, true, false);
+      console.log("URL:" + url.pathname)
       var pathname = url.pathname;// /lively4/lively4-jens/src/client/boot.js
       
       pathname = pathname.replace(/['";&?:#|]/g, ''); // just for safty
       
       var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
       var fileversion = req.headers['fileversion']; // 
-      
-      
-      
-      console.log("PATH " + path)                 
+                  
       var m = path.match(/^\/([^/]*)\/(.*)/)
-
       
+      console.log("Path:" + path)
                             
       if (m) {
         var repositorypath = Path.join(sourceDir, m[1]);
         var filepath = m[2]
-      } else {    
+      } else {
         repositorypath = sourceDir
         filepath = path
       }
@@ -876,15 +881,48 @@ class Server {
    /*
    * move file or directory
    */
-  static async MOVE(repositorypath, filepath, req, res) {
-    var fullpath = Path.join(repositorypath, filepath)
-    log('MOVE ' + fullpath)
-    res.writeHead(500, {
-        'content-type': 'text/plain' // github return text/plain, therefore we need to do the same
-    });
-    res.end("Not implemented, Sorry!")
+  
+  static async moveResource(source, destination) {
+    return run(
+      `SOURCE="${source}";
+       DESTINATION="${destination}";
+       if [ -e $SOURCE -a -e $DESTINATION ]; 
+          then mv $SOURCE $DESTINATION;
+       fi`)
   }
+  
+  static async MOVE(repositorypath, filepath, req, res) {
+    
+    var source = req.url
+    
+    var destination = req.headers['destination']
+    
+    var re = new RegExp(Server.options.myurl + "(.*)")    
+    var m = destination.match(re)
+    
+    if (m) {
+      destination = m[1]
+    } else {
+      res.writeHead(404);
+      return res.end("Server for destination and source don't match!")
+    }
+    
+    source = Server.options.directory + source.substr(1)
+    destination = Server.options.directory + destination
+    
+    var result = await this.moveResource(source, destination)
+    log('MOVE from ' + source + ' to ' + destination)
+    
+    if (result.error) {
+      res.writeHead(404)
+      return res.end("Error " + result.stdout + "\n" + result.stderr)
+    }    
+    res.writeHead(200)
+    res.end("moved " + source + " to " + destination)
 
+  }
+  
+  
   /*
    * create directory
    */
