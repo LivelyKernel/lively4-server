@@ -36,6 +36,7 @@ import Promise from 'bluebird'; // seems not to workd
 
 import fetch from 'node-fetch';
 
+
 var fs_exists = function(file) {
   return new Promise(resolve =>
     fs.exists(file, exists => {
@@ -74,6 +75,13 @@ fs.readFile('/etc/passwd', (err, data) => {
 export function log(...args) {
   console.log('[server]', ...args);
 }
+
+
+// #UseCase #ContextJS #AsyncContext it is really hard to hand down the request object into all methods, just so they can log properly...
+export function logRequest(req, ...args) {
+  log("REQUEST[" +req._logId + "] ",...args);
+}
+
 
 const Lively4bootfilelistName = ".lively4bootfilelist"
 const Lively4bundleName = ".lively4bundle.zip"
@@ -190,7 +198,9 @@ class Server {
     log('Myurl: ' + Server.options.myurl);
 
     this.tmpStorage = {};
-
+    this.requestCounter = 0
+    
+    
     var proxy = httpProxy.createProxyServer({});
 
     http
@@ -212,14 +222,31 @@ class Server {
   }
 
   static async onRequest(req, res, proxy) {
-    log("START REQUEST " + req.method + " " + req.url)
+    req._logId = this.requestCounter++
+    req._startTime = Date.now()
+    logRequest(req, "START " + req.method + "\t" + req.url)
+    var debugInitiator = req.headers['debug-initiator'];
+    if (debugInitiator) {
+      logRequest(req, "INITIATOR " + debugInitiator)
+    }
+    var debugSession = req.headers['debug-session'];
+    if (debugSession) {
+      logRequest(req, "SESSION " + debugSession)
+    }
+    
+    var debugSystem = req.headers['debug-system'];
+    if (debugSystem) {
+      logRequest(req, "SYSTEM " + debugSystem)
+    }
+    
     var startRequestTime = Date.now()
+    
+    
     try {
       this.setCORSHeaders(res);
 
       // url =  new URL("https://lively-kernel.org/lively4/lively4-jens/src/client/boot.js")
       var url = URL.parse(req.url, true, false);
-      console.log("URL:" + url.pathname)
       var pathname = url.pathname;// /lively4/lively4-jens/src/client/boot.js
       
       pathname = pathname.replace(/['";&?:#|]/g, ''); // just for safty
@@ -229,8 +256,8 @@ class Server {
                   
       var m = path.match(/^\/([^/]*)\/(.*)/)
       
-      console.log("Path:" + path)
-                            
+      
+      
       if (m) {
         var repositorypath = Path.join(sourceDir, m[1]);
         var filepath = m[2]
@@ -246,11 +273,11 @@ class Server {
         
         var org = this.options["github-organization"]
         if (!org) { 
-          log("CONFIG ERROR: github-organization is missing")
+          logRequest(req,"CONFIG ERROR: github-organization is missing")
         }
         var teamName = this.options["github-team"]
         if (!teamName) { 
-          log("CONFIG ERROR: github-team is missing")
+          logRequest(req, "CONFIG ERROR: github-team is missing")
         }
         
         var username = req.headers['gitusername'];
@@ -269,10 +296,10 @@ class Server {
         var authorizationKey = org + "/" + org + "/" + username + "/" + password 
         var lastAuthorization = GithubOriganizationMemberCache[authorizationKey]
         if (lastAuthorization && lastAuthorization.success) {
-          log("AUTHORIZED BY CACHE")
+          logRequest(req,"AUTHORIZED BY CACHE")
           // do nothing
         }  else {
-          log("AUTHORIZATION required org: " + org + " team: " + teamName)
+          logRequest(req,"AUTHORIZATION required org: " + org + " team: " + teamName)
           let teamInfo = await fetch(`https://api.github.com/orgs/${org}/teams/${teamName}`, {
             method: "GET",
             headers: {
@@ -308,8 +335,8 @@ class Server {
         }
       }
       
-      log(`request ${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
-      log(`repositorypath: ${repositorypath} filepath: ${filepath}`);
+      logRequest(req, `${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
+      // logRequest(req, `repositorypath: ${repositorypath} filepath: ${filepath}`);
       
       if (breakOutRegex.test(path) === true) {
         res.writeHead(500);
@@ -364,7 +391,7 @@ class Server {
       res.writeHead(500);
       res.end('ERROR: ' + e);
     }
-    log("FINISHED REQUEST " + req.method + " " + req.url + " " + Math.round(Date.now() - startRequestTime) + "ms")
+    logRequest(req, "FINISHED " + req.method + " ("+ Math.round(Date.now() - startRequestTime) + "ms) " + req.url + " " )
   }
 
   static BP2019Proxy(pathname, req, res, proxy) {
@@ -379,9 +406,9 @@ class Server {
   
   static GET(repositorypath, filepath, fileversion, req, res) {
     if (filepath.match(Lively4bundleName)) {
-      return this.ensureBundleFile(repositorypath, filepath, res);
+      return this.ensureBundleFile(repositorypath, filepath, req, res);
     } else if (fileversion && fileversion != 'undefined') {
-      return this.readFileVersion(repositorypath, filepath, fileversion, res);
+      return this.readFileVersion(repositorypath, filepath, fileversion, req, res);
     } else {
       return this.readFile(repositorypath, filepath, req, res);
     }
@@ -391,8 +418,8 @@ class Server {
     return filepath.replace(/\//g,"_")
   }
   
-  static async ensureBundleFile(repositorypath, bundleFilepath, res) {
-    log("BUNDLE for " + repositorypath)
+  static async ensureBundleFile(repositorypath, bundleFilepath, req, res) {
+    logRequest(req,"BUNDLE for " + repositorypath)
     // #TODO pull file existence logic into javascript?
     await this.ensureDirectory(repositorypath, Lively4optionsDir)
     let optionsDir = Path.join(repositorypath, Lively4optionsDir)
@@ -403,7 +430,7 @@ class Server {
     try {
       var bootlist = await fs_readFile(repositorypath + "/" + Lively4bootfilelistName)
     } catch(e) {
-      log("WARNING, could not read " + Lively4bootfilelistName + ":" + e)
+      logRequest(req,"WARNING, could not read " + Lively4bootfilelistName + ":" + e)
     }
     var relativeBootFiles = []
     var relativeOptionFiles = []
@@ -422,7 +449,7 @@ class Server {
         try {
           var stats = fs.statSync(filepath)
         } catch(e){
-          log("WARN could not fs.stat " + filepath)
+          logRequest(req, "WARN could not fs.stat " + filepath)
           continue;
         }
         
@@ -443,23 +470,23 @@ class Server {
         
         if  (!optionsStats || stats.mtime > optionsStats.mtime ) {
           var updatedOptions = await this.readOptions(repositorypath, filepath, stats)
-          log("UPDATE OPTIONS " + optionsFile)
+          logRequest(req, "UPDATE OPTIONS " + optionsFile)
           await fs_writeFile(optionsFile, JSON.stringify(updatedOptions, null, 2))
         }
         
         try {
           let transpileStats = fs.statSync(transpileFile)
           if  (stats.mtime > transpileStats.mtime ){
-            log("DELETE " + transpileFile)
+            logRequest(req, "DELETE " + transpileFile)
             await this.deletePath(transpileFile)
           }
           let transpileMapStats = fs.statSync(transpileMapFile)
           if  (stats.mtime > transpileMapStats.mtime ){
-            log("DELETE " + transpileMapFile)
+            logRequest(req, "DELETE " + transpileMapFile)
             await this.deletePath(transpileMapFile)
           }
         } catch(e) {
-          log('ERROR on Update bundle ' + e)
+          logRequest(req, 'ERROR on Update bundle ' + e)
         }
         // #TODO ensure OPTIONS here?
       }
@@ -469,18 +496,18 @@ class Server {
       for (let optionfile of fs.readdirSync(optionsDir)) {
         if (!hashed.get(optionfile)) {
           let filePath =  optionsDir + "/" +optionfile
-          log("delete " + filePath)
+          logRequest(req, "delete " + filePath)
           await this.deletePath(filePath)
         } 
       }
       for (let transpiledfile of fs.readdirSync(transpileDir)) {
         let filePath =  transpileDir + "/" +transpiledfile
         if (!hashed.get(transpiledfile)) {
-          log("delete " + transpileDir + "/" + transpiledfile)
+          logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
           await this.deletePath(filePath)
         }
         if (!hashed.get(transpiledfile.replace(/\.json.map$/,""))) {
-          log("delete " + transpileDir + "/" + transpiledfile)
+          logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
           await this.deletePath(filePath)
         }
       }
@@ -495,9 +522,9 @@ class Server {
       if [ ! -e ${Lively4bundleName} ]; then
         zip -r ${Lively4bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
       fi`
-    console.log("ZIP " + cmd)
+    logRequest(req, "ZIP " + cmd)
     var result = await run(cmd)
-    log("stdout: " + result.stdout + "\nstderr: " + result.stderr)
+    logRequest(req, "stdout: " + result.stdout + "\nstderr: " + result.stderr)
     return this.readFile(repositorypath, bundleFilepath, undefined, res)
   }
   
@@ -520,7 +547,7 @@ class Server {
   
   
   /* load a specific version of a file through git */
-  static readFileVersion(repositorypath, filepath, fileversion, res) {
+  static readFileVersion(repositorypath, filepath, fileversion, req, res) {
     // #TODO what about the history of directory structure?
     respondWithCMD(
       'cd ' + repositorypath + ';' + 'git show ' + fileversion + ':' + filepath,
@@ -554,7 +581,7 @@ class Server {
     }
   }
   
-  static async ensureSpecialParentDirectories(repositorypath, filepath) {
+  static async ensureSpecialParentDirectories(repositorypath, filepath, req) {
     if (filepath.match(Lively4transpileDir)) { 
       await this.ensureDirectory(repositorypath, Lively4transpileDir)
     }
@@ -564,11 +591,11 @@ class Server {
     // }
   }
 
-  static async invalidateOptionsFile(repositorypath, filepath) {
+  static async invalidateOptionsFile(repositorypath, filepath, req) {
     if (filepath.match(Lively4optionsDir)) return  // don't do it on yourself
     if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
     
-    log("invalidate options files" + Lively4bundleName + " in "+ repositorypath)
+    logRequest(req, "invalidate options files" + Lively4bundleName + " in "+ repositorypath)
     var hashedpath = filepath.replace(/\//g,"_")
     await run(`cd ${repositorypath}; 
         if [ -e ${Lively4optionsDir} ]; then
@@ -576,22 +603,22 @@ class Server {
         fi`)
   }
   
-  static async invalidateTranspiledFile(repositorypath, filepath) {
+  static async invalidateTranspiledFile(repositorypath, filepath, req) {
     if (filepath.match(Lively4transpileDir)) return  // don't do it on yourself
     if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
     
-    log("invalidate transpilation files" + Lively4bundleName + " in "+ repositorypath)
+    logRequest(req,"invalidate transpilation files" + Lively4bundleName + " in "+ repositorypath)
     var hashedpath = filepath.replace(/\//g,"_")
     var result = await run(`cd ${repositorypath}; 
         if [ -e ${Lively4transpileDir} ]; then
           rm ${Lively4transpileDir}/${hashedpath}
           rm ${Lively4transpileDir}/${hashedpath}.map.json
         fi`) 
-    log("RESULT " + result.stdout)
+    logRequest(req, "RESULT " + result.stdout)
   }
   
   static async readFile(repositorypath, filepath, req, res) {
-    log('read based in:' + repositorypath + " file: " +filepath);
+    // logRequest(req, 'read based in:' + repositorypath + " file: " +filepath);
     var fullpath = Path.join(repositorypath, filepath);
     
 
@@ -630,7 +657,6 @@ class Server {
   }
 
   static readDirectory(aPath, req, res, contentType) {
-    log('readDirectory x ' + aPath);
     fs.readdir(aPath, function(err, files) {
       var dir = {
         type: 'directory',
@@ -726,13 +752,12 @@ class Server {
   static async PUT(repositorypath, filepath, req, res) {
     
     var fullpath = Path.join(repositorypath, filepath);
-    log('write file: ' + fullpath);
     var fullBody = '';
     // if (filepath.match(/png$/)) {
     if (filepath.match(isTextRegEx)) {
       // #TODO how do we better decide if we need this...
     } else {
-      log('set binary encoding');
+      logRequest(req, 'set binary encoding');
       req.setEncoding('binary');
     }
     // }
@@ -747,17 +772,17 @@ class Server {
     //after transmission, write file to disk
     
     // only block at the end...
-    await this.invalidateOptionsFile(repositorypath, filepath)
-    await this.invalidateTranspiledFile(repositorypath, filepath)
-    await this.invalidateBundleFile(repositorypath, filepath)
-    await this.ensureSpecialParentDirectories(repositorypath, filepath)
+    await this.invalidateOptionsFile(repositorypath, filepath, req)
+    await this.invalidateTranspiledFile(repositorypath, filepath, req,)
+    await this.invalidateBundleFile(repositorypath, filepath, req)
+    await this.ensureSpecialParentDirectories(repositorypath, filepath, req)
 
     if (fullpath.match(/\/$/)) {
       return mkdirp(fullpath, err => {
         if (err) {
-          log('Error creating dir: ' + err);
+          logRequest(req, 'Error creating dir: ' + err);
         }
-        log('mkdir ' + fullpath);
+        logRequest(req, 'mkdir ' + fullpath);
         res.writeHead(200, 'OK');
         res.end();
       });
@@ -765,12 +790,12 @@ class Server {
     var lastVersion = req.headers['lastversion'];
     var currentVersion = await this.getVersion(repositorypath, filepath);
 
-    log('last version: ' + lastVersion);
-    log('current version: ' + currentVersion);
+    // logRequest(req, 'last version: ' + lastVersion);
+    // logRequest(req, 'current version: ' + currentVersion);
 
     // we have version information and there is a conflict
     if (lastVersion && currentVersion && lastVersion !== currentVersion) {
-      log('[writeFile] CONFLICT DETECTED');
+      logRequest(req, '[writeFile] CONFLICT DETECTED');
       res.writeHead(409, {
         // HTTP CONFLICT
         'content-type': 'text/plain',
@@ -780,16 +805,16 @@ class Server {
       return;
     }
 
-    log('size ' + fullBody.length);
+    // ogRequest(req, 'size ' + fullBody.length);
     let result = await fs_writeFile(fullpath, fullBody, fullpath.match(isTextRegEx) ? undefined : 'binary')
     if (result.err) {
       // throw err;
-      log(result.err);
+      logRequest(req, result.err);
       throw new Error("Error in writeFile " + fullpath, result.err)
     }
 
     if (!autoCommit || req.headers['nocommit'])  {
-      log('saved ' + fullpath);
+      // logRequest(req, 'saved ' + fullpath);
       res.writeHead(200, 'OK');
       res.end();
       return
@@ -802,7 +827,7 @@ class Server {
     var authCmd = '';
     if (username) authCmd += `git config user.name '${username}'; `;
     if (email) authCmd += `git config user.email '${email}'; `;
-    log('EMAIL ' + email + ' USER ' + username);
+    // logRequest(req, 'EMAIL ' + email + ' USER ' + username);
 
     // #TODO maybe we should ask for github credetials here too?
     let cmd = `
@@ -814,15 +839,14 @@ class Server {
         echo "no git repository" 
       fi
     `;
-    log('[AUTO-COMMIT] ' + cmd);
     {
       let {error, stdout, stderr} = await run(cmd)
-      log('git stdout: ' + stdout);
-      log('git stderr: ' + stderr);
+      // logRequest(req, 'git stdout: ' + stdout);
+      // logRequest(req, 'git stderr: ' + stderr);
       if (error) {
         // file did not change....
         if (!stdout.match("no changes added to commit")) {
-          log('ERROR');
+          logRequest(req, 'ERROR');
           res.writeHead(500, 'Error:' + stderr);
           return res.end('ERROR stdout: ' + stdout + "\nstderr:" + stderr);
         }
@@ -911,7 +935,7 @@ class Server {
     destination = Server.options.directory + destination
     
     var result = await this.moveResource(source, destination)
-    log('MOVE from ' + source + ' to ' + destination)
+    logRequest(req, 'MOVE from ' + source + ' to ' + destination)
     
     if (result.error) {
       res.writeHead(404)
@@ -962,20 +986,20 @@ class Server {
    */
   static async OPTIONS(repositorypath, filepath, req, res) {
     var fullpath = Path.join(repositorypath, filepath)
-    log('OPTIONS ' + fullpath)
+    logRequest(req, 'OPTIONS ' + fullpath)
     var after = req.headers['gitafter']
     var until = req.headers['gituntil']
         
     try {
       var stats = await fs_stat(fullpath);
     } catch(err) {
-      log('stat ERROR: ' + err)
+      logRequest(req, 'stat ERROR: ' + err)
       if (err.code == 'ENOENT') {
         res.writeHead(200)
         let data = JSON.stringify({error: err}, null, 2)
         res.end(data)
       } else {
-        log(err)
+        logRequest(req, err)
       }
       return 
     }
@@ -1025,7 +1049,7 @@ class Server {
       console.error("readFilelist stderr " + result.stderr)
       console.error("readFilelist: " + result.error)
     }
-    console.log("readFilelist found " + list.length + " files")
+    // console.log("readFilelist found " + list.length + " files")
     res.writeHead(200, {
       'content-type': 'json'
     });
@@ -1077,9 +1101,8 @@ class Server {
   }
 
   static async GIT(sPath, req, res, cb) {
-    log('git control: ' + sPath);
+    logRequest(req, 'git control: ' + sPath);
 
-    
     var dryrun = req.headers['dryrun'];
     dryrun = dryrun && dryrun == 'true';
     // #TODO replace it with something more secure... #Security #Prototype
@@ -1116,7 +1139,7 @@ class Server {
     
     var cmd;
     if (sPath.match(/\/_git\/sync/)) {
-      log('SYNC REPO ' + RepositoryInSync[repository]);
+      logRequest(req, 'SYNC REPO ' + RepositoryInSync[repository]);
       if (RepositoryInSync[repository]) {
         return respondWithCMD(
           'echo Sync in progress: ' + repository,
@@ -1202,7 +1225,7 @@ class Server {
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/checkout/)) {
       
-      log('CHECKOUT REPO ' + RepositoryInSync[repository] + " " + filepath);
+      logRequest(req,'CHECKOUT REPO ' + RepositoryInSync[repository] + " " + filepath);
       
       // #TODO we should merge this semaphore logic...
       if (RepositoryInSync[repository]) {
@@ -1350,7 +1373,7 @@ class Server {
         
         var source = "" + result.stdout
         if (source == "") {
-          log("GraphViz ERR: " + result.stderr)
+          logRequest(req, "GraphViz ERR: " + result.stderr)
           res.writeHead(400); // done
           res.end(result.stderr);          
         } else {

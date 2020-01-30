@@ -24,7 +24,7 @@ export function log(...args) {
 
 export async function respondWithCMD(cmd, res, dryrun) {
   return new Promise( resolve => {
-    log(cmd);
+    // log(cmd);
 
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Transfer-Encoding', 'chunked');
