@@ -522,9 +522,9 @@ class Server {
       if [ ! -e ${Lively4bundleName} ]; then
         zip -r ${Lively4bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
       fi`
-    logRequest(req, "ZIP " + cmd)
+    // logRequest(req, "ZIP " + cmd)
     var result = await run(cmd)
-    logRequest(req, "stdout: " + result.stdout + "\nstderr: " + result.stderr)
+    // logRequest(req, "stdout: " + result.stdout + "\nstderr: " + result.stderr)
     return this.readFile(repositorypath, bundleFilepath, undefined, res)
   }
   
