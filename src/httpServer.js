@@ -225,173 +225,176 @@ class Server {
     req._logId = this.requestCounter++
     req._startTime = Date.now()
     logRequest(req, "START " + req.method + "\t" + req.url)
-    var debugInitiator = req.headers['debug-initiator'];
-    if (debugInitiator) {
-      logRequest(req, "INITIATOR " + debugInitiator)
-    }
-    var debugSession = req.headers['debug-session'];
-    if (debugSession) {
-      logRequest(req, "SESSION " + debugSession)
-    }
-    
-    var debugSystem = req.headers['debug-system'];
-    if (debugSystem) {
-      logRequest(req, "SYSTEM " + debugSystem)
-    }
-    
-    var startRequestTime = Date.now()
-    
-    
     try {
-      this.setCORSHeaders(res);
-
-      // url =  new URL("https://lively-kernel.org/lively4/lively4-jens/src/client/boot.js")
-      var url = URL.parse(req.url, true, false);
-      var pathname = url.pathname;// /lively4/lively4-jens/src/client/boot.js
-      
-      pathname = pathname.replace(/['";&?:#|]/g, ''); // just for safty
-      
-      var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
-      var fileversion = req.headers['fileversion']; // 
-                  
-      var m = path.match(/^\/([^/]*)\/(.*)/)
-      
-      
-      
-      if (m) {
-        var repositorypath = Path.join(sourceDir, m[1]);
-        var filepath = m[2]
-      } else {
-        repositorypath = sourceDir
-        filepath = path
+      var debugInitiator = req.headers['debug-initiator'];
+      if (debugInitiator) {
+        logRequest(req, "INITIATOR " + debugInitiator)
       }
-      
-      
-      // log("authorize-requests: " + this.options["authorize-requests"])
-      if (this.options["authorize-requests"]) {
-        // log("AUTH REQUIRED")
-        
-        var org = this.options["github-organization"]
-        if (!org) { 
-          logRequest(req,"CONFIG ERROR: github-organization is missing")
-        }
-        var teamName = this.options["github-team"]
-        if (!teamName) { 
-          logRequest(req, "CONFIG ERROR: github-team is missing")
-        }
-        
-        var username = req.headers['gitusername'];
-        var password = req.headers['gitpassword'];
-        
-        // log("user " + username)
-        // log("password " + (password + "").slice(0,3))
-      
-        if (!username || !password) {
-          res.writeHead(403);
-          res.end('Please authenticate yourself\n');
-          return;
-        }
-        
-        // cache the authorization to go light on the github API and answer faster ourselves
-        var authorizationKey = org + "/" + org + "/" + username + "/" + password 
-        var lastAuthorization = GithubOriganizationMemberCache[authorizationKey]
-        if (lastAuthorization && lastAuthorization.success) {
-          logRequest(req,"AUTHORIZED BY CACHE")
-          // do nothing
-        }  else {
-          logRequest(req,"AUTHORIZATION required org: " + org + " team: " + teamName)
-          let teamInfo = await fetch(`https://api.github.com/orgs/${org}/teams/${teamName}`, {
-            method: "GET",
-            headers: {
-              Authorization: "token " + password  
-            }
-          }).then(r => r.json());    
+      var debugSession = req.headers['debug-session'];
+      if (debugSession) {
+        logRequest(req, "SESSION " + debugSession)
+      }
 
-          if (teamInfo.members_url) {
-            var members = await fetch(teamInfo.members_url.replace(/\{.*/,""), {
+      var debugSystem = req.headers['debug-system'];
+      if (debugSystem) {
+        logRequest(req, "SYSTEM " + debugSystem)
+      }
+
+      var startRequestTime = Date.now()
+
+
+      try {
+        this.setCORSHeaders(res);
+
+        // url =  new URL("https://lively-kernel.org/lively4/lively4-jens/src/client/boot.js")
+        var url = URL.parse(req.url, true, false);
+        var pathname = url.pathname;// /lively4/lively4-jens/src/client/boot.js
+
+        pathname = pathname.replace(/['";&?:#|]/g, ''); // just for safty
+
+        var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
+        var fileversion = req.headers['fileversion']; // 
+
+        var m = path.match(/^\/([^/]*)\/(.*)/)
+
+
+
+        if (m) {
+          var repositorypath = Path.join(sourceDir, m[1]);
+          var filepath = m[2]
+        } else {
+          repositorypath = sourceDir
+          filepath = path
+        }
+
+
+        // log("authorize-requests: " + this.options["authorize-requests"])
+        if (this.options["authorize-requests"]) {
+          // log("AUTH REQUIRED")
+
+          var org = this.options["github-organization"]
+          if (!org) { 
+            logRequest(req,"CONFIG ERROR: github-organization is missing")
+          }
+          var teamName = this.options["github-team"]
+          if (!teamName) { 
+            logRequest(req, "CONFIG ERROR: github-team is missing")
+          }
+
+          var username = req.headers['gitusername'];
+          var password = req.headers['gitpassword'];
+
+          // log("user " + username)
+          // log("password " + (password + "").slice(0,3))
+
+          if (!username || !password) {
+            res.writeHead(403);
+            res.end('Please authenticate yourself\n');
+            return;
+          }
+
+          // cache the authorization to go light on the github API and answer faster ourselves
+          var authorizationKey = org + "/" + org + "/" + username + "/" + password 
+          var lastAuthorization = GithubOriganizationMemberCache[authorizationKey]
+          if (lastAuthorization && lastAuthorization.success) {
+            logRequest(req,"AUTHORIZED BY CACHE")
+            // do nothing
+          }  else {
+            logRequest(req,"AUTHORIZATION required org: " + org + " team: " + teamName)
+            let teamInfo = await fetch(`https://api.github.com/orgs/${org}/teams/${teamName}`, {
               method: "GET",
               headers: {
                 Authorization: "token " + password  
               }
-            }).then(r => r.json());
-            var userInTeam = members.map(ea => ea.login).includes(username)
-          } 
+            }).then(r => r.json());    
 
-          if (!userInTeam) {
-            GithubOriganizationMemberCache[authorizationKey] = {
-              success: false,
-              time: Date.now(),
-              previous: lastAuthorization // for preventing... DoS attacks? #TODO
+            if (teamInfo.members_url) {
+              var members = await fetch(teamInfo.members_url.replace(/\{.*/,""), {
+                method: "GET",
+                headers: {
+                  Authorization: "token " + password  
+                }
+              }).then(r => r.json());
+              var userInTeam = members.map(ea => ea.login).includes(username)
+            } 
+
+            if (!userInTeam) {
+              GithubOriganizationMemberCache[authorizationKey] = {
+                success: false,
+                time: Date.now(),
+                previous: lastAuthorization // for preventing... DoS attacks? #TODO
+              }
+              res.writeHead(403);
+              res.end('Authentification/Authorization failed\n');
+              return;
             }
-            res.writeHead(403);
-            res.end('Authentification/Authorization failed\n');
-            return;
-          }
-          
-          GithubOriganizationMemberCache[authorizationKey] = {
-            success: true,
-            time: Date.now()
+
+            GithubOriganizationMemberCache[authorizationKey] = {
+              success: true,
+              time: Date.now()
+            }
           }
         }
-      }
-      
-      logRequest(req, `${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
-      // logRequest(req, `repositorypath: ${repositorypath} filepath: ${filepath}`);
-      
-      if (breakOutRegex.test(path) === true) {
-        res.writeHead(500);
-        res.end(
-          'Your not allowed to access files outside the pages storage area\n'
-        );
-        return;
-      }
 
-      if (pathname.match(/\/_tmp\//)) {
-        return this.TMP(pathname, req, res);
+        logRequest(req, `${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
+        // logRequest(req, `repositorypath: ${repositorypath} filepath: ${filepath}`);
+
+        if (breakOutRegex.test(path) === true) {
+          res.writeHead(500);
+          res.end(
+            'Your not allowed to access files outside the pages storage area\n'
+          );
+          return;
+        }
+
+        if (pathname.match(/\/_tmp\//)) {
+          return this.TMP(pathname, req, res);
+        }
+
+        if (pathname.match(/\/_vq\//)) {
+          return this.BP2019Proxy(pathname, req, res, proxy);
+        }
+
+        if (pathname.match(/\/_github\//)) {
+          req.url = req.url.replace('/_github/', '');
+          return proxy.web(req, res, { target: 'http://172.16.64.132:9001/' });
+        }
+        if (pathname.match(/\/_meta\//)) {
+          return this.META(pathname, req, res);
+        }
+        if (pathname.match(/\/_webhook\//)) {
+          return this.WEBHOOK(pathname, req, res);
+        }
+        if (path.match(/\/_git.*/)) {
+          return this.GIT(path, req, res);
+        }
+        if (path.match(/\/_graphviz.*/)) {
+          return this.GRAPHVIZ(path, req, res);
+        }
+        if (pathname.match(/\/_search\//)) {
+          return this.SEARCH(pathname, req, res);
+        }
+        if (req.method == 'GET') {
+          await  this.GET(repositorypath, filepath, fileversion, req, res);
+        } else if (req.method == 'PUT') {
+          await this.PUT(repositorypath, filepath, req, res);
+        } else if (req.method == 'DELETE') {
+          await  this.DELETE(repositorypath, filepath, res);
+        } else if (req.method == 'MKCOL') {
+          await this.MKCOL(repositorypath, filepath, res);
+        } else if (req.method == 'OPTIONS') {
+          await this.OPTIONS(repositorypath, filepath, req, res);
+        } else if (req.method == 'MOVE') {
+          await this.MOVE(repositorypath, filepath, req, res);
+        }
+      } catch (e) {
+        console.error('ERROR on request ' + req.url, e);
+        res.writeHead(500);
+        res.end('ERROR: ' + e);
       }
-      
-      if (pathname.match(/\/_vq\//)) {
-        return this.BP2019Proxy(pathname, req, res, proxy);
-      }
-      
-      if (pathname.match(/\/_github\//)) {
-        req.url = req.url.replace('/_github/', '');
-        return proxy.web(req, res, { target: 'http://172.16.64.132:9001/' });
-      }
-      if (pathname.match(/\/_meta\//)) {
-        return this.META(pathname, req, res);
-      }
-      if (pathname.match(/\/_webhook\//)) {
-        return this.WEBHOOK(pathname, req, res);
-      }
-      if (path.match(/\/_git.*/)) {
-        return this.GIT(path, req, res);
-      }
-      if (path.match(/\/_graphviz.*/)) {
-        return this.GRAPHVIZ(path, req, res);
-      }
-      if (pathname.match(/\/_search\//)) {
-        return this.SEARCH(pathname, req, res);
-      }
-      if (req.method == 'GET') {
-        await  this.GET(repositorypath, filepath, fileversion, req, res);
-      } else if (req.method == 'PUT') {
-        await this.PUT(repositorypath, filepath, req, res);
-      } else if (req.method == 'DELETE') {
-        await  this.DELETE(repositorypath, filepath, res);
-      } else if (req.method == 'MKCOL') {
-        await this.MKCOL(repositorypath, filepath, res);
-      } else if (req.method == 'OPTIONS') {
-        await this.OPTIONS(repositorypath, filepath, req, res);
-      } else if (req.method == 'MOVE') {
-        await this.MOVE(repositorypath, filepath, req, res);
-      }
-    } catch (e) {
-      console.error('ERROR on request ' + req.url, e);
-      res.writeHead(500);
-      res.end('ERROR: ' + e);
+    } finally {
+      logRequest(req, "FINISHED " + req.method + " ("+ Math.round(Date.now() - startRequestTime) + "ms) " + req.url + " " )
     }
-    logRequest(req, "FINISHED " + req.method + " ("+ Math.round(Date.now() - startRequestTime) + "ms) " + req.url + " " )
   }
 
   static BP2019Proxy(pathname, req, res, proxy) {
