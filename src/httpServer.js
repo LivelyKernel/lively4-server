@@ -37,6 +37,8 @@ import Promise from 'bluebird'; // seems not to workd
 import fetch from 'node-fetch';
 
 
+
+
 var fs_exists = function(file) {
   return new Promise(resolve =>
     fs.exists(file, exists => {
@@ -44,7 +46,20 @@ var fs_exists = function(file) {
     })
   );
 };
+
+
+
 var fs_stat = Promise.promisify(fs.stat);
+
+async function try_fs_stat(file){
+  try {
+    return await fs_stat(file)
+  } catch(e) {
+    return null
+  }
+}
+
+
 var fs_readdir = function(file) {
   return new Promise(resolve => fs.readdir(file, resolve));
 };
@@ -422,112 +437,111 @@ class Server {
   }
   
   static async ensureBundleFile(repositorypath, bundleFilepath, req, res) {
-    logRequest(req,"BUNDLE for " + repositorypath)
-    // #TODO pull file existence logic into javascript?
-    await this.ensureDirectory(repositorypath, Lively4optionsDir)
-    let optionsDir = Path.join(repositorypath, Lively4optionsDir)
-    
-    await this.ensureDirectory(repositorypath, Lively4transpileDir)
-    let transpileDir = Path.join(repositorypath, Lively4transpileDir)
-    
-    try {
-      var bootlist = await fs_readFile(repositorypath + "/" + Lively4bootfilelistName)
-    } catch(e) {
-      logRequest(req,"WARNING, could not read " + Lively4bootfilelistName + ":" + e)
-    }
-    var relativeBootFiles = []
-    var relativeOptionFiles = []
-    var relativeTranspileFiles = []
-    
-    if (bootlist) {
-      var hashed = new Map()
-      for(let file of bootlist.split("\n")) {
-       
-        let filehash = this.hashFilepath(file)
-        log("filehash " + filehash)
-        hashed.set(filehash, file)
-        
-        let filepath = Path.join(repositorypath, file)
-        
-        try {
-          var stats = fs.statSync(filepath)
-        } catch(e){
-          logRequest(req, "WARN could not fs.stat " + filepath)
-          continue;
-        }
-        
-        let optionsFile = Path.join(optionsDir, filehash)
-        let transpileFile = Path.join(transpileDir, filehash)
-        let transpileMapFile = Path.join(transpileDir, filehash + ".json.map")
-        
-        relativeBootFiles.push(file)
-        relativeOptionFiles.push(Path.join(Lively4optionsDir, filehash)) 
-        relativeTranspileFiles.push(Path.join(Lively4transpileDir, filehash))
-        relativeTranspileFiles.push(Path.join(Lively4transpileDir, filehash  + ".json.map"))
-            
-        try {
-          var optionsStats = fs.statSync(optionsFile)
-        } catch(e) {
-          // do nothing...
-        }
-        
-        if  (!optionsStats || stats.mtime > optionsStats.mtime ) {
-          var updatedOptions = await this.readOptions(repositorypath, filepath, stats)
-          logRequest(req, "UPDATE OPTIONS " + optionsFile)
-          await fs_writeFile(optionsFile, JSON.stringify(updatedOptions, null, 2))
-        }
-        
-        try {
-          let transpileStats = fs.statSync(transpileFile)
-          if  (stats.mtime > transpileStats.mtime ){
-            logRequest(req, "DELETE " + transpileFile)
-            await this.deletePath(transpileFile)
-          }
-          let transpileMapStats = fs.statSync(transpileMapFile)
-          if  (stats.mtime > transpileMapStats.mtime ){
-            logRequest(req, "DELETE " + transpileMapFile)
-            await this.deletePath(transpileMapFile)
-          }
-        } catch(e) {
-          logRequest(req, 'ERROR on Update bundle ' + e)
-        }
-        // #TODO ensure OPTIONS here?
-      }
-     
-      // DELETE not unused options/transpiled caches
-      // should not be needed, because.... it will not end up in zip anyway...
-      for (let optionfile of fs.readdirSync(optionsDir)) {
-        if (!hashed.get(optionfile)) {
-          let filePath =  optionsDir + "/" +optionfile
-          logRequest(req, "delete " + filePath)
-          await this.deletePath(filePath)
-        } 
-      }
-      for (let transpiledfile of fs.readdirSync(transpileDir)) {
-        let filePath =  transpileDir + "/" +transpiledfile
-        if (!hashed.get(transpiledfile)) {
-          logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
-          await this.deletePath(filePath)
-        }
-        if (!hashed.get(transpiledfile.replace(/\.json.map$/,""))) {
-          logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
-          await this.deletePath(filePath)
-        }
-      }
-      
-    }
+    var bundleFile = Path.join(repositorypath, bundleFilepath)
+    if (!await fs_exists(bundleFile)) {
+      logRequest(req,"CREATE BUNDLE for " + repositorypath)
+      // #TODO pull file existence logic into javascript?
+      await this.ensureDirectory(repositorypath, Lively4optionsDir)
+      let optionsDir = Path.join(repositorypath, Lively4optionsDir)
 
-    let quoteList = function(list) {
-      return list.map(ea => `"${ea}"`).join(" ")
+      await this.ensureDirectory(repositorypath, Lively4transpileDir)
+      let transpileDir = Path.join(repositorypath, Lively4transpileDir)
+
+      try {
+        var bootlist = await fs_readFile(repositorypath + "/" + Lively4bootfilelistName)
+      } catch(e) {
+        logRequest(req,"WARNING, could not read " + Lively4bootfilelistName + ":" + e)
+      }
+      var relativeBootFiles = []
+      var relativeOptionFiles = []
+      var relativeTranspileFiles = []
+
+      if (bootlist) {
+        var hashed = new Map()
+        for(let file of bootlist.split("\n")) {
+
+          let filehash = this.hashFilepath(file)
+          // logRequest(req, "filehash " + filehash)
+          hashed.set(filehash, file)
+
+          let filepath = Path.join(repositorypath, file)
+
+          var stats = await try_fs_stat(filepath)
+          if (!stats) {
+            logRequest(req, "ignore " + filepath)
+            continue;
+          }
+          let optionsFile = Path.join(optionsDir, filehash)
+          let transpileFile = Path.join(transpileDir, filehash)
+          let transpileMapFile = Path.join(transpileDir, filehash + ".json.map")
+
+          relativeBootFiles.push(file)
+
+          var optionsStats = await try_fs_stat(optionsFile)
+          if  (!optionsStats || stats.mtime > optionsStats.mtime ) {
+            var updatedOptions = await this.readOptions(repositorypath, filepath, stats)
+            logRequest(req, "UPDATE OPTIONS " + optionsFile)
+            await fs_writeFile(optionsFile, JSON.stringify(updatedOptions, null, 2))
+          }
+          relativeOptionFiles.push(Path.join(Lively4optionsDir, filehash)) 
+
+          let transpileStats = await try_fs_stat(transpileFile)
+          if (transpileStats) {
+            if  (stats.mtime > transpileStats.mtime ){
+              logRequest(req, "DELETE " + transpileFile)
+              await this.deletePath(transpileFile)
+            } else {
+              relativeTranspileFiles.push(Path.join(Lively4transpileDir, filehash))
+            }          
+          }
+          let transpileMapStats = await try_fs_stat(transpileMapFile)
+          if (transpileMapStats) {
+            if  (stats.mtime > transpileMapStats.mtime ){
+              logRequest(req, "DELETE " + transpileMapFile)
+              await this.deletePath(transpileMapFile)
+            } else {
+              relativeTranspileFiles.push(Path.join(Lively4transpileDir, filehash  + ".json.map"))
+
+            }
+          }
+        }
+
+        // DELETE not unused options/transpiled caches
+        // should not be needed, because.... it will not end up in zip anyway...
+
+        // for (let optionfile of fs.readdirSync(optionsDir)) {
+        //   if (!hashed.get(optionfile)) {
+        //     let filePath =  optionsDir + "/" +optionfile
+        //     logRequest(req, "delete " + filePath)
+        //     await this.deletePath(filePath)
+        //   } 
+        // }
+        // for (let transpiledfile of fs.readdirSync(transpileDir)) {
+        //   let filePath =  transpileDir + "/" +transpiledfile
+        //   if (!hashed.get(transpiledfile)) {
+        //     logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
+        //     await this.deletePath(filePath)
+        //   }
+        //   if (!hashed.get(transpiledfile.replace(/\.json.map$/,""))) {
+        //     logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
+        //     await this.deletePath(filePath)
+        //   }
+        // }
+
+      }
+
+      let quoteList = function(list) {
+        return list.map(ea => `"${ea}"`).join(" ")
+      }
+
+      var cmd = `cd ${repositorypath}; 
+        if [ ! -e ${Lively4bundleName} ]; then
+          zip -r ${Lively4bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
+        fi`
+      // logRequest(req, "ZIP " + cmd)
+      var result = await run(cmd)
+      // logRequest(req, "stdout: " + result.stdout + "\nstderr: " + result.stderr)
     }
-    
-    var cmd = `cd ${repositorypath}; 
-      if [ ! -e ${Lively4bundleName} ]; then
-        zip -r ${Lively4bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
-      fi`
-    // logRequest(req, "ZIP " + cmd)
-    var result = await run(cmd)
-    // logRequest(req, "stdout: " + result.stdout + "\nstderr: " + result.stderr)
     return this.readFile(repositorypath, bundleFilepath, undefined, res)
   }
   
@@ -601,7 +615,7 @@ class Server {
     logRequest(req, "invalidate options files" + Lively4bundleName + " in "+ repositorypath)
     var hashedpath = filepath.replace(/\//g,"_")
     await run(`cd ${repositorypath}; 
-        if [ -e ${Lively4optionsDir} ]; then
+        if [[ -e ${Lively4optionsDir}/${hashedpath} ]]; then
           rm ${Lively4optionsDir}/${hashedpath}
         fi`)
   }
@@ -855,23 +869,32 @@ class Server {
         }
       } 
     }
-    
-    let options = await this.readOptions(repositorypath, filepath)
-    if (options.error) {
-      res.writeHead(500);
-      res.end('could not retrieve new version... somthing went wrong: ' + options.error);
+    var {options, body, error} = await this.ensureCachedOptions(repositorypath, filepath)
+    if (!options) {
+        res.writeHead(500);
+        res.end('could not retrieve new version... somthing went wrong: ' + error);
     } else {
-      var optionsBody = JSON.stringify(options, null, 2)
-      let optionsPath = this.optionsPath(repositorypath, filepath)
-      await fs_writeFile(optionsPath, optionsBody)
       res.writeHead(200, {
         'content-type': 'text/plain',
         fileversion: options.version,
       });
-      res.end(optionsBody);
-    } 
-  }
+      res.end(body);
+    }
+  }  
   
+  static async ensureCachedOptions(repositorypath, filepath) {
+    console.log("ensureCachedOptions " + repositorypath + ", " + filepath )
+    let options = await this.readOptions(repositorypath, filepath)
+    if (options.error) {
+      return {options: null, body: null, error: options.error}
+    } else {
+      console.log("options: " +  options )
+      var optionsBody = JSON.stringify(options, null, 2)
+      let optionsPath = this.optionsPath(repositorypath, filepath)
+      return {options, body: optionsBody, written: fs_writeFile(optionsPath, optionsBody)}
+    }
+  }
+
   static optionsPath(repositorypath, filepath) {
     return repositorypath + "/" + Lively4optionsDir + "/" + filepath.replace(/\//g,"_") 
   }
