@@ -36,9 +36,6 @@ import Promise from 'bluebird'; // seems not to workd
 
 import fetch from 'node-fetch';
 
-
-
-
 var fs_exists = function(file) {
   return new Promise(resolve =>
     fs.exists(file, exists => {
@@ -47,10 +44,7 @@ var fs_exists = function(file) {
   );
 };
 
-
-
 var fs_stat = Promise.promisify(fs.stat);
-
 async function try_fs_stat(file){
   try {
     return await fs_stat(file)
@@ -58,7 +52,6 @@ async function try_fs_stat(file){
     return null
   }
 }
-
 
 var fs_readdir = function(file) {
   return new Promise(resolve => fs.readdir(file, resolve));
@@ -578,15 +571,19 @@ class Server {
         || await this.isInBootfile(repositorypath, filepath)) {
       log("INVALIDATE " + Lively4bundleName + " in "+ repositorypath)
       // remove bundle if we uploaded a file that belongs into it
-      await run(`cd ${repositorypath}; 
-        if [ -e ${Lively4bundleName} ]; then
-          rm ${Lively4bundleName}
-        fi`)
+      await this.deleteBundleFile(repositorypath)
     } else {
       log("NOTINBOOTFILE " +  repositorypath + " " + filepath)
     }
   }
 
+  static async deleteBundleFile(repositorypath) {
+    return await run(`cd ${repositorypath}; 
+      if [ -e ${Lively4bundleName} ]; then
+        rm ${Lively4bundleName}
+      fi`)
+  }  
+  
   static async ensureDirectory(path, name) {
     // #TODO do it directly in JavaScript instead of Polyglot?
     var result = await run(`cd ${path}; 
@@ -637,11 +634,8 @@ class Server {
   static async readFile(repositorypath, filepath, req, res) {
     // logRequest(req, 'read based in:' + repositorypath + " file: " +filepath);
     var fullpath = Path.join(repositorypath, filepath);
-    
-
     // throw new Error("hello error handler?")
 
-    
     try {
       // var stats = fs.statSync(filepath)
       var stats = await fs_stat(fullpath);
@@ -1145,6 +1139,8 @@ class Server {
     var usecolor = req.headers['gitusecolor'];
 
     
+    var repositorypath = Path.join(sourceDir, repository)
+    
     if (!email) {
       return res.end('please provide email!');
     }
@@ -1160,8 +1156,6 @@ class Server {
     }
 
     repository = repository.replace(/^\//,"") // #TODO should we take care of this in the client?
-    
-    
     
     var cmd;
     if (sPath.match(/\/_git\/sync/)) {
@@ -1179,6 +1173,8 @@ class Server {
         repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
       await respondWithCMD(cmd, res, dryrun);
       RepositoryInSync[repository] = undefined;
+      logRequest(req, "delete bundle: " + repositorypath)
+      await this.deleteBundleFile(repositorypath)
     } else if (sPath.match(/\/_git\/resolve/)) {
       cmd =
         `${server}/bin/lively4resolve.sh '` +
@@ -1308,6 +1304,9 @@ class Server {
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/show/)) {
       cmd = `cd ${lively4DirUnix}/${repository};\n` + `git show ${usecolor ? " --color=always " : ""}`  + gitcommit;
+      respondWithCMD(cmd, res, dryrun);
+    } else if (sPath.match(/\/_git\/reset/)) {
+      cmd = `cd ${lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
       respondWithCMD(cmd, res, dryrun);
     } else {
       res.writeHead(200);
