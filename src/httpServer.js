@@ -557,12 +557,23 @@ class Server {
   
   
   /* load a specific version of a file through git */
-  static readFileVersion(repositorypath, filepath, fileversion, req, res) {
-    // #TODO what about the history of directory structure?
-    respondWithCMD(
+  static async readFileVersion(repositorypath, filepath, fileversion, req, res) {
+    var {stdout, stderr, error} = await run(
       'cd ' + repositorypath + ';' + 'git show ' + fileversion + ':' + filepath,
       res
     );
+    res.setHeader('Content-Type', 'text/plain');
+    // console.log("[readfile version] stderr " + stderr )
+    // console.log("[readfile version] err ", error == null )
+
+    if (error == null) {
+      res.writeHead(200);
+      res.end(stdout);
+    } else {
+      // console.log("ERROR ERROR 300")
+      res.writeHead(300);
+      res.end(stdout + stderr);
+    }
   }
   
   
