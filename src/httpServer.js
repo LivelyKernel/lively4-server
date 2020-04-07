@@ -1149,6 +1149,8 @@ class Server {
     var gitcommit = req.headers['gitcommit'];
     var usecolor = req.headers['gitusecolor'];
 
+    var versionA = req.headers['gitversiona'];
+    var versionB = req.headers['gitversionb'];
     
     var repositorypath = Path.join(sourceDir, repository)
     
@@ -1292,32 +1294,35 @@ class Server {
         `cd ${lively4DirUnix}/${repository};\n` +
         'git config --get remote.origin.url';
       respondWithCMD(cmd, res, dryrun);
-    } else if (sPath.match(/\/_git\/branches/)) {
+    } else if (sPath.match(/\/_git\/branches$/)) {
       cmd = `cd ${lively4DirUnix}/${repository};\n` + 'git branch -a ';
       respondWithCMD(cmd, res, dryrun);
-    } else if (sPath.match(/\/_git\/branch/)) {
+    } else if (sPath.match(/\/_git\/branch$/)) {
       cmd =
         `${server}/bin/lively4branch.sh '${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}'`;
       respondWithCMD(cmd, res, dryrun);
-    } else if (sPath.match(/\/_git\/merge/)) {
+    } else if (sPath.match(/\/_git\/merge$/)) {
       cmd =
         `${server}/bin/lively4merge.sh '${lively4DirUnix}/${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}'`;
       respondWithCMD(cmd, res, dryrun);
-    } else if (sPath.match(/\/_git\/squash/)) {
+    } else if (sPath.match(/\/_git\/squash$/)) {
       cmd =
         `${server}/bin/lively4squash.sh '${lively4DirUnix}/${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}' '${msg}'`;
       respondWithCMD(cmd, res, dryrun);
-    } else if (sPath.match(/\/_git\/delete/)) {
+    } else if (sPath.match(/\/_git\/delete$/)) {
       cmd = `${server}/bin/lively4deleterepository.sh '${lively4DirUnix}/${repository}'`;
       respondWithCMD(cmd, res, dryrun);
-    } else if (sPath.match(/\/_git\/show/)) {
+    } else if (sPath.match(/\/_git\/show$/)) {
       cmd = `cd ${lively4DirUnix}/${repository};\n` + `git show ${usecolor ? " --color=always " : ""}`  + gitcommit;
       respondWithCMD(cmd, res, dryrun);
-    } else if (sPath.match(/\/_git\/reset/)) {
+    } else if (sPath.match(/\/_git\/reset$/)) {
       cmd = `cd ${lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
+      respondWithCMD(cmd, res, dryrun);
+    } else if (sPath.match(/\/_git\/mergebase$/)) {
+      cmd = `cd ${lively4DirUnix}/${repository};\n` + `git merge-base ${versionA} ${versionB} `;
       respondWithCMD(cmd, res, dryrun);
     } else {
       res.writeHead(200);
