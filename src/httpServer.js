@@ -562,16 +562,26 @@ class Server {
       'cd ' + repositorypath + ';' + 'git show ' + fileversion + ':' + filepath,
       res
     );
-    res.setHeader('Content-Type', 'text/plain');
+    var headers = {}
+    headers['Content-Type'] =  mime.lookup(filepath);
     // console.log("[readfile version] stderr " + stderr )
     // console.log("[readfile version] err ", error == null )
+    
+    // ok, this is not easy to figure out
+    
+    // console.log("[readfile version] version ", fileversion )
+    
+    headers['fileversion'] =  fileversion;
+    
+    // not supported by git...
+    // headers['modified'] =   await this.getLastModified(repositorypath, filepath);
 
     if (error == null) {
-      res.writeHead(200);
+      res.writeHead(200, headers);
       res.end(stdout);
     } else {
       // console.log("ERROR ERROR 300")
-      res.writeHead(300);
+      res.writeHead(300, headers);
       res.end(stdout + stderr);
     }
   }
