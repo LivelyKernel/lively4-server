@@ -101,6 +101,7 @@ const GithubOriganizationMemberCache = {}
 var RepositoryBootfiles = {}
 
 var RepositoryInSync = {}; // cheap semaphore
+var MakeInProgress = {}; // cheap semaphore
 
 var breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 var isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
@@ -378,6 +379,9 @@ class Server {
         }
         if (path.match(/\/_graphviz.*/)) {
           return this.GRAPHVIZ(path, req, res); // #TODO auth should be required 
+        }
+        if (path.match(/\/_make.*/)) {
+          return this.MAKE(path, req, res); // #TODO auth should be required
         }
         if (pathname.match(/\/_search\//)) {
           return this.SEARCH(pathname, req, res);
@@ -1435,6 +1439,16 @@ class Server {
     }
   }
   
+  static MAKE(path, req, res) {
+    console.log("MAKE " + path)
+    // var cmd = 'cd ' + pathname + '; pwd;';
+    // MakeInProgress
+    var dir = path.replace(/.*_make\//,"")
+      var cmd = 'cd ' + lively4DirUnix + '; ';
+    return respondWithCMD("cd "  +lively4DirUnix + dir +"; make",  res)
+    //return respondWithCMD(cmd, res)
+  }
+  
   static webhookListeners(key) {
     if (!this.webhookListeners) {
       this.webhookListeners = new Map()
@@ -1447,7 +1461,6 @@ class Server {
     return set
   }
   
-
   
   /* 
     Very basic forward of github webhooks to subscriptions...
