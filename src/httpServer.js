@@ -377,7 +377,7 @@ class Server {
           return this.GIT(path, req, res);
         }
         if (path.match(/\/_graphviz.*/)) {
-          return this.GRAPHVIZ(path, req, res);
+          return this.GRAPHVIZ(path, req, res); // #TODO auth should be required 
         }
         if (pathname.match(/\/_search\//)) {
           return this.SEARCH(pathname, req, res);
