@@ -1441,11 +1441,14 @@ class Server {
   
   static MAKE(path, req, res) {
     console.log("MAKE " + path)
+    
+    var params = URL.parse(req.url, true).query
+    
     // var cmd = 'cd ' + pathname + '; pwd;';
     // MakeInProgress
     var dir = path.replace(/.*_make\//,"")
       var cmd = 'cd ' + lively4DirUnix + '; ';
-    return respondWithCMD("cd "  +lively4DirUnix + dir +"; make",  res)
+    return respondWithCMD("cd "  +lively4DirUnix + dir +"; make " + (params.target || ""),  res)
     //return respondWithCMD(cmd, res)
   }
   
