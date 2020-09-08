@@ -955,11 +955,8 @@ class Server {
     return run(
       `SOURCE="${source}";
        DESTINATION="${destination}";
-       mv $SOURCE $DESTINATION;       
-       if [ -e $SOURCE ]; 
-          then mv $SOURCE $DESTINATION;
-       fi`) 
-      // -a -e $DESTINATION
+       mv -v "$SOURCE" "$DESTINATION";       
+       `) 
   }
   
   static async MOVE(repositorypath, filepath, req, res) {
@@ -978,7 +975,7 @@ class Server {
       return res.end("Server for destination and source don't match! myurl=" +Server.options.myurl )
     }
     
-    source = Server.options.directory + source.substr(1)
+    source = Server.options.directory + decodeURI(source.substr(1))
     destination = Server.options.directory + destination
     
     var result = await this.moveResource(source, destination)
