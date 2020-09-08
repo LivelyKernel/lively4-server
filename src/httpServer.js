@@ -226,7 +226,7 @@ class Server {
   static setCORSHeaders(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Request-Method', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT');
+    res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT, MOVE');
     res.setHeader('Access-Control-Allow-Headers', '*');
   }
 
@@ -955,9 +955,11 @@ class Server {
     return run(
       `SOURCE="${source}";
        DESTINATION="${destination}";
-       if [ -e $SOURCE -a -e $DESTINATION ]; 
+       mv $SOURCE $DESTINATION;       
+       if [ -e $SOURCE ]; 
           then mv $SOURCE $DESTINATION;
-       fi`)
+       fi`) 
+      // -a -e $DESTINATION
   }
   
   static async MOVE(repositorypath, filepath, req, res) {
@@ -973,7 +975,7 @@ class Server {
       destination = m[1]
     } else {
       res.writeHead(404);
-      return res.end("Server for destination and source don't match!")
+      return res.end("Server for destination and source don't match! myurl=" +Server.options.myurl )
     }
     
     source = Server.options.directory + source.substr(1)
