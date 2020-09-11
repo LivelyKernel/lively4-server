@@ -386,6 +386,9 @@ class Server {
         if (pathname.match(/\/_search\//)) {
           return this.SEARCH(pathname, req, res);
         }
+        if (pathname.match(/\/_bibtex/)) {
+          return this.BIBTEX(pathname, req, res);
+        }
         if (req.method == 'GET') {
           await  this.GET(repositorypath, filepath, fileversion, req, res);
         } else if (req.method == 'PUT') {
@@ -1343,6 +1346,12 @@ class Server {
     }
   }
 
+  static BIBTEX(sPath, req, res) {
+    var query = cleanString(URL.parse(req.url, true).query["search"])
+    return respondWithCMD(`${server}/bin/search-bibtex.py "${query}"`, res);
+  }
+  
+  
   static SEARCH(sPath, req, res) {
     var pattern = req.headers['searchpattern'];
     var rootdirs = req.headers['rootdirs'];
@@ -1367,7 +1376,6 @@ class Server {
       res.end('Lively4 Search! ' + sPath + ' not implemented!');
     }
   }
-
   /*
    * Experimental in memory tmp file for drag and drop #Hack
    */
