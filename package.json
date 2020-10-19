@@ -47,7 +47,6 @@
     "mocha": "^3.5.3",
     "natural-compare-lite": "^1.4.0",
     "node-fetch": "^2.6.0",
-    "node-pty": "^0.7.8",
     "q-io": "^1.13.6",
     "request": "^2.88.0",
     "slash": "^1.0.0",
