@@ -1346,6 +1346,9 @@ class Server {
     } else if (sPath.match(/\/_git\/mergebase$/)) {
       cmd = `cd ${lively4DirUnix}/${repository};\n` + `git merge-base ${versionA} ${versionB} `;
       respondWithCMD(cmd, res, dryrun);
+    } else if (sPath.match(/\/_git\/reset-hard/)) {
+      cmd = `cd ${lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
+      respondWithCMD(cmd, res, dryrun);
     } else {
       res.writeHead(200);
       res.end('Lively4 git Control! ' + sPath + ' not implemented!');
