@@ -368,6 +368,7 @@ class Server {
           req.url = req.url.replace('/_github/', '');
           return proxy.web(req, res, { target: 'http://172.16.64.132:9001/' });
         }
+        
         if (pathname.match(/\/_meta\//)) {
           return this.META(pathname, req, res);
         }
@@ -383,6 +384,11 @@ class Server {
         if (path.match(/\/_make.*/)) {
           return this.MAKE(path, req, res); // #TODO auth should be required
         }
+        
+        if (pathname.match(/\/_curl\//)) {
+          return this.CURL(pathname, req, res);
+        }
+        
         if (pathname.match(/\/_search\//)) {
           return this.SEARCH(pathname, req, res);
         }
@@ -1345,12 +1351,26 @@ class Server {
       res.end('Lively4 git Control! ' + sPath + ' not implemented!');
     }
   }
+  
+  static async CURL(sPath, req, res) {
+    console.log("CURL url: " + req.url)
+    var target = URL.parse(req.url, true).query["target"]
+    if (!target || target.length == 0) {
+      res.writeHead(300);
+      res.end('no url parameter provided ');
+      return 
+    }
+    exec(`curl -L "${target}"`, {maxBuffer: 1024 * 1000 * 10}, (error, stdout, stderr) => {
+      res.writeHead(200)
+      res.end(stdout, "binary");
+    });
+    
+  }
 
   static BIBTEX(sPath, req, res) {
     var query = cleanString(URL.parse(req.url, true).query["search"])
     return respondWithCMD(`${server}/bin/search-bibtex.py "${query}"`, res);
   }
-  
   
   static SEARCH(sPath, req, res) {
     var pattern = req.headers['searchpattern'];
