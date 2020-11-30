@@ -969,7 +969,6 @@ class Server {
   }
   
   static async MOVE(repositorypath, filepath, req, res) {
-    
     var source = req.url
     
     var destination = req.headers['destination']
@@ -985,7 +984,7 @@ class Server {
     }
     
     source = Server.options.directory + decodeURI(source.substr(1))
-    destination = Server.options.directory + destination
+    destination = Server.options.directory + decodeURI(destination)
     
     var result = await this.moveResource(source, destination)
     logRequest(req, 'MOVE from ' + source + ' to ' + destination)
