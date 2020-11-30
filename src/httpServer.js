@@ -1362,7 +1362,7 @@ class Server {
       res.end('no url parameter provided ');
       return 
     }
-    exec(`curl -L "${target}"`, {maxBuffer: 1024 * 1000 * 10}, (error, stdout, stderr) => {
+    exec(`curl -L "${target}"`, {encoding: 'binary', maxBuffer: 1024 * 1000 * 100}, (error, stdout, stderr) => {
       res.writeHead(200)
       res.end(stdout, "binary");
     });
