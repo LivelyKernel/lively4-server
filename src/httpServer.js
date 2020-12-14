@@ -1263,7 +1263,7 @@ class Server {
       if (gitcommit) {
         commit = gitcommit + '~1 ' + gitcommit;
       }
-      cmd = `cd ${lively4DirUnix}/${repository}; git diff --color=always ${commit}`;
+      cmd = `cd ${lively4DirUnix}/${repository}; git diff --word-diff --color=always ${commit}`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/clone/)) {
       let url = repositoryurl.replace("https://", `https://${username}:${password}@`)
