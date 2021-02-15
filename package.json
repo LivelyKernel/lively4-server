@@ -37,7 +37,7 @@
     "gulp-batch": "^1.0.5",
     "gulp-cli": "^2.0.1",
     "gulp-exec": "^3.0.2",
-    "http-proxy": "^1.17.0",
+    "http-proxy": "^1.18.1",
     "joey": "^1.5.3",
     "js-tokens": "^1.0.3",
     "log-timestamp": "^0.1.2",
