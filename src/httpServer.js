@@ -384,11 +384,12 @@ class Server {
         if (path.match(/\/_make.*/)) {
           return this.MAKE(path, req, res); // #TODO auth should be required
         }
-        
+        if (path.match(/\/_open.*/)) {
+          return this.OPEN(path, req, res); // #TODO auth should be required
+        }
         if (pathname.match(/\/_curl\//)) {
           return this.CURL(pathname, req, res);
         }
-        
         if (pathname.match(/\/_search\//)) {
           return this.SEARCH(pathname, req, res);
         }
@@ -1470,17 +1471,21 @@ class Server {
   
   static MAKE(path, req, res) {
     console.log("MAKE " + path)
-    
     var params = URL.parse(req.url, true).query
-    
-    // var cmd = 'cd ' + pathname + '; pwd;';
-    // MakeInProgress
     var dir = path.replace(/.*_make\//,"")
-      var cmd = 'cd ' + lively4DirUnix + '; ';
     return respondWithCMD("cd "  +lively4DirUnix + dir +"; make " + (params.target || ""),  res)
-    //return respondWithCMD(cmd, res)
   }
   
+  static OPEN(path, req, res) {
+    console.log("OPEN " + path)
+    var params = URL.parse(req.url, true).query
+    var relativePath = path.replace(/.*_open\//,"")
+    var dir = relativePath.replace(/[^/]*$/,"")
+    var file =  relativePath.replace(/.*\//,"")
+    
+    return respondWithCMD("cd "  +lively4DirUnix + dir + "; open " + file,  res)
+  }
+    
   static webhookListeners(key) {
     if (!this.webhookListeners) {
       this.webhookListeners = new Map()
