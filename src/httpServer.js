@@ -1483,7 +1483,7 @@ class Server {
     var dir = relativePath.replace(/[^/]*$/,"")
     var file =  relativePath.replace(/.*\//,"")
     
-    return respondWithCMD("cd "  +lively4DirUnix + dir + "; open " + file,  res)
+    return respondWithCMD("cd \""  +lively4DirUnix + dir + "\"; open \"" + file +"\"",  res)
   }
     
   static webhookListeners(key) {
