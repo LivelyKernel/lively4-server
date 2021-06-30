@@ -249,6 +249,12 @@ class Server {
         logRequest(req, "SYSTEM " + debugSystem)
       }
 
+      var debugEventid = req.headers['debug-eventid'];
+      if (debugEventid) {
+        logRequest(req, "EVENTID " + debugEventid)
+      }
+
+      
       var startRequestTime = Date.now()
 
 
