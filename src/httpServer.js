@@ -978,7 +978,11 @@ class Server {
   static async MOVE(repositorypath, filepath, req, res) {
     var source = req.url
     
-    var destination = req.headers['destination']
+    var destination = req.headers['destination'] 
+    if (!destination) {
+      res.writeHead(404);
+      return res.end("destination parameter is missing")     
+    }
     
     var re = new RegExp(Server.options.myurl + "(.*)")    
     var m = destination.match(re)
