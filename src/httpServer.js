@@ -898,8 +898,8 @@ class Server {
       if (error) {
         // file did not change....
         if (!stdout.match("no changes added to commit")) {
-          logRequest(req, 'ERROR');
-          res.writeHead(500, 'Error:' + stderr);
+          logRequest(req, 'ERROR ' + JSON.stringify(stderr));	
+	  res.writeHead(500, 'Error:' + JSON.stringify(stderr));   
           return res.end('ERROR stdout: ' + stdout + "\nstderr:" + stderr);
         }
       } 
