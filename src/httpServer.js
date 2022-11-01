@@ -579,7 +579,7 @@ class Server {
   /* load a specific version of a file through git */
   static async readFileVersion(repositorypath, filepath, fileversion, req, res) {
     var {stdout, stderr, error} = await run(
-      'cd ' + repositorypath + ';' + 'git show ' + fileversion + ':' + filepath,
+      'cd ' + repositorypath + ';' + 'git show ' + fileversion + ':"' + filepath +'"',
       res
     );
     var headers = {}
