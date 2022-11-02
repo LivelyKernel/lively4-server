@@ -1,3 +1,4 @@
+"disable livecode"
 /*
  * # Lively4 Server -- a file server that serves and manages git repositories as REST
  *
@@ -14,7 +15,6 @@
  * ## Special request HEADER
  * - fileversion
  */
-
 
 import http from 'http';
 import httpProxy from 'http-proxy';
