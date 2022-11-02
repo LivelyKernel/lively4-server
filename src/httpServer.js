@@ -103,6 +103,7 @@ var RepositoryBootfiles = {}
 
 var RepositoryInSync = {}; // cheap semaphore
 var MakeInProgress = {}; // cheap semaphore
+var RepositoryGitInUse = {};// cheap semaphore
 
 var breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 var isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
@@ -873,6 +874,13 @@ class Server {
       return
     } 
 
+    if (RepositoryGitInUse[repositorypath]) {
+        logRequest(req, '[writeFile] Autocommit failed');
+        res.writeHead(300, 'Autocommit failed');
+        return res.end('Autocommit failed, repository in use: ' + repositorypath);
+      }
+    RepositoryGitInUse[repositorypath] = true;
+    
     var username = req.headers.gitusername;
     var email = req.headers.gitemail;
     // var password = req.headers.gitpassword; // not used yet
@@ -892,7 +900,7 @@ class Server {
         echo "no git repository" 
       fi
     `;
-    {
+    try {
       let {error, stdout, stderr} = await run(cmd)
       // logRequest(req, 'git stdout: ' + stdout);
       // logRequest(req, 'git stderr: ' + stderr);
@@ -900,10 +908,12 @@ class Server {
         // file did not change....
         if (!stdout.match("no changes added to commit")) {
           logRequest(req, 'ERROR ' + JSON.stringify(stderr));	
-	  res.writeHead(500, 'Error:' + JSON.stringify(stderr));   
+          res.writeHead(500, 'Error:' + JSON.stringify(stderr));   
           return res.end('ERROR stdout: ' + stdout + "\nstderr:" + stderr);
         }
       } 
+    } finally {
+      RepositoryGitInUse[repositorypath] = undefined;
     }
     var {options, body, error} = await this.ensureCachedOptions(repositorypath, filepath)
     if (!options) {
