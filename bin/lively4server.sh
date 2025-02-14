@@ -62,9 +62,8 @@ while true; do
   fi
   # start server and filter secret tokens out before logging
 
-  # transpile javascript
-  pushd $SERVER; gulp babel; popd
-  node $SERVER/dist/httpServer.js $OPTIONS --directory="$LIVELY4" --port="$PORT" --auto-commit="$AUTOCOMMIT" 2>&1 > >(\
+  # remove gulp transpilation step and run node directly
+  node $SERVER/src/httpServer.js $OPTIONS --directory="$LIVELY4" --port="$PORT" --auto-commit="$AUTOCOMMIT" 2>&1 > >(\
   	  sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
 	  sed -u 's/lively4sync.*/lively4sync.../' | \
 	  tee -a $LOGFILE ) & 

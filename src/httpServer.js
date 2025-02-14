@@ -21,31 +21,27 @@ import httpProxy from 'http-proxy';
 import fs from 'fs';
 import URL from 'url';
 import Path from 'path';
-import mime from 'mime';
-import mkdirp from 'mkdirp';
+import mime from 'mime-types';
+import { mkdir } from 'fs/promises';
 import argv from 'argv';
 import { exec } from 'child_process';
 import slash from 'slash'; // Convert Windows backslash paths to slash paths: foo\\bar ➔ foo/bar
 import 'log-timestamp'; // // this adds a timestamp to all log messages
 import * as utils from './utils.js';
 import { cleanString, run, respondWithCMD } from './utils.js';
-
-import Promise from 'bluebird'; // seems not to workd
-// e.g. this did not work var statFile = Promise.promisify(fs.stat);
-// var fs_exists = Prom.promisify(fs.exists);
-// but this does
+import { promisify } from 'util';
 
 import fetch from 'node-fetch';
 
 var fs_exists = function(file) {
   return new Promise(resolve =>
     fs.exists(file, exists => {
-      resolve(exists); // there seems to be an issue here, so we do it very explictly
+      resolve(exists);
     })
   );
 };
 
-var fs_stat = Promise.promisify(fs.stat);
+var fs_stat = promisify(fs.stat);
 async function try_fs_stat(file){
   try {
     return await fs_stat(file)
@@ -54,24 +50,11 @@ async function try_fs_stat(file){
   }
 }
 
-var fs_readdir = function(file) {
-  return new Promise(resolve => fs.readdir(file, resolve));
-};
+var fs_readdir = promisify(fs.readdir);
 
-var fs_writeFile = function(...args) {
-  return new Promise(resolve => fs.writeFile(args[0], args[1], args[2], (err) => resolve({err: err}) ))
-};
+var fs_writeFile = promisify(fs.writeFile);
 
-var fs_readFile = function(file) {
-  return new Promise((resolve, reject) => fs.readFile(file, "utf8", (err, data) => {
-    if (err) {
-      reject(err)
-    } else {
-      resolve(data)
-    }
-  }))
-};
-
+var fs_readFile = promisify(fs.readFile);
 
 fs.readFile('/etc/passwd', (err, data) => {
   if (err) throw err;
@@ -463,7 +446,8 @@ class Server {
       let transpileDir = Path.join(repositorypath, Lively4transpileDir)
 
       try {
-        var bootlist = await fs_readFile(repositorypath + "/" + Lively4bootfilelistName)
+        // Convert Buffer to string when reading bootlist
+        var bootlist = (await fs_readFile(repositorypath + "/" + Lively4bootfilelistName)).toString()
       } catch(e) {
         logRequest(req,"WARNING, could not read " + Lively4bootfilelistName + ":" + e)
       }
@@ -585,7 +569,7 @@ class Server {
       res
     );
     var headers = {}
-    headers['Content-Type'] =  mime.lookup(filepath);
+    headers['Content-Type'] = mime.lookup(filepath);
     // console.log("[readfile version] stderr " + stderr )
     // console.log("[readfile version] err ", error == null )
     
@@ -832,7 +816,7 @@ class Server {
     await this.ensureSpecialParentDirectories(repositorypath, filepath, req)
 
     if (fullpath.match(/\/$/)) {
-      return mkdirp(fullpath, err => {
+      return await mkdir(fullpath, err => {
         if (err) {
           logRequest(req, 'Error creating dir: ' + err);
         }
@@ -1606,8 +1590,12 @@ var autoCommit = args.options['auto-commit'] || false;
 
 Server.setup();
 
-if (!module.parent) {
-  Server.start();
+// Only start the server if this file is being run directly
+if (import.meta.url.startsWith('file:')) {
+  const modulePath = URL.fileURLToPath(import.meta.url);
+  if (process.argv[1] === modulePath) {
+    Server.start();
+  }
 }
 
-module.exports = Server; // { start }
+export default Server; 
