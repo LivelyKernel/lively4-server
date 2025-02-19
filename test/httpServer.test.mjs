@@ -224,7 +224,7 @@ describe("Lively4 Server", () => {
       var content = await fetch(filename).then(r => r.text())
       expect(content).to.equal(body)
 
-      // Wait for cleanup (original timeout is 5 minutes, but we've modified it to 1s for testing, so we need to wait longer)
+      // Wait for cleanup (original timeout is 5 minutes, but we've modified it to 1s for testing)
       await new Promise(resolve => setTimeout(resolve, 2000))
 
       // File should be gone
@@ -643,6 +643,203 @@ describe("Lively4 Server", () => {
       const getResponse = await fetch(url + testrepo + "/" + filename);
       expect(getResponse.status).to.equal(200);
       expect(await getResponse.text()).to.equal(content);
+    });
+  });
+
+  // describe("WEBHOOK", function() {
+  //   it("should register webhook listener", async () => {
+  //     const response = await fetch(url + "_webhook/register", {
+  //       method: "GET",
+  //       headers: {
+  //         'repositoryname': 'test-repo'
+  //       }
+  //     });
+  //     expect(response.status).to.equal(200);
+  //   });
+
+  //   it("should handle webhook signals", async () => {
+  //     const response = await fetch(url + "_webhook/signal", {
+  //       method: "POST",
+  //       body: JSON.stringify({
+  //         repository: {
+  //           full_name: "test-repo"
+  //         },
+  //         event: "push"
+  //       })
+  //     });
+  //     expect(response.status).to.equal(200);
+  //   });
+  // });
+
+  describe("Bundle Management", function() {
+    it("should invalidate bundle after file changes", async function() {
+      var bundleUrl = url + "lively4-dummy/" + Lively4bundleName
+
+      // Get initial bundle
+      var response1 = await fetch(bundleUrl)
+      var bundle1 = await response1.arrayBuffer()
+
+      // Modify a file
+      await fetch(url + "lively4-dummy/README.md", {
+        method: "PUT",
+        body: "Modified content"
+      })
+
+      // Get new bundle
+      var response2 = await fetch(bundleUrl)
+      var bundle2 = await response2.arrayBuffer()
+
+      // Bundles should be different
+      expect(bundle1).to.not.deep.equal(bundle2)
+    });
+  });
+
+  describe("Concurrent Operations", function() {
+    it("should handle concurrent file modifications", async function() {
+      const filename = 'concurrent_test.txt';
+      const iterations = 5;
+      
+      // Create multiple concurrent requests
+      const promises = Array(iterations).fill().map((_, i) => 
+        fetch(url + testrepo + "/" + filename, {
+          method: "PUT",
+          body: `content${i}`
+        })
+      );
+      
+      await Promise.all(promises);
+      
+      // Verify final content
+      const response = await fetch(url + testrepo + "/" + filename);
+      const content = await response.text();
+      expect(content).to.match(/content[0-4]/);
+    });
+
+    it("should handle concurrent directory operations", async function() {
+      const dirname = 'concurrent_dir_test';
+      const iterations = 3;
+      
+      // Create and delete directory concurrently
+      const promises = Array(iterations).fill().map((_, i) => 
+        Promise.all([
+          fetch(url + testrepo + "/" + dirname + i, {
+            method: "MKCOL"
+          }),
+          fetch(url + testrepo + "/" + dirname + (i-1), {
+            method: "DELETE"
+          })
+        ])
+      );
+      
+      await Promise.all(promises);
+      
+      // Verify final state
+      const response = await fetch(url + testrepo + "/" + dirname + (iterations-1));
+      expect(response.status).to.equal(200);
+    });
+  });
+
+  describe("Error Recovery", function() {
+    it("should recover from failed git operations", async function() {
+      // Force a git error by providing invalid credentials
+      const response1 = await fetch(url + "_git/sync", {
+        headers: {
+          'gitrepository': testrepo,
+          'gitusername': 'invalid',
+          'gitpassword': 'invalid',
+          'gitemail': 'test@example.com',
+          'gitbranch': 'master'
+        }
+      });
+      expect(response1.status).to.not.equal(200);
+
+      // Verify system still works with valid credentials
+      const response2 = await fetch(url + "_git/status", {
+        headers: {
+          'gitrepository': testrepo,
+          'gitusername': 'test',
+          'gitpassword': 'test',
+          'gitemail': 'test@example.com',
+          'gitbranch': 'master'
+        }
+      });
+      expect(response2.status).to.equal(200);
+    });
+
+    it("should handle interrupted file operations", async function() {
+      const filename = 'interrupted_test.txt';
+      
+      // Start a PUT request but don't send the complete body
+      const controller = new AbortController();
+      const putPromise = fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: "test content",
+        signal: controller.signal
+      });
+      
+      // Abort the request
+      controller.abort();
+      
+      try {
+        await putPromise;
+      } catch (e) {
+        // Expected abort error
+      }
+      
+      // Verify we can still perform operations
+      const response = await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: "new content"
+      });
+      expect(response.status).to.equal(200);
+    });
+  });
+
+  describe("Server Configuration", function() {
+    it("should respect tmp-cleanup-timeout setting", async function() {
+      this.timeout(6000); // increase timeout for this test
+
+      var filename = `${url}_tmp/cleanup_${Date.now()}.txt`
+      
+
+      var response = await fetch(filename)
+      expect(response.status, "file " + filename + " should not exist").to.equal(404)
+
+      var body = "test data"
+      // Create tmp file
+      await fetch(filename, {
+        method: "PUT",
+        body: body
+      })
+
+      // Verify file exists
+      var content = await fetch(filename).then(r => r.text())
+      expect(content).to.equal(body)
+
+      // Wait for cleanup (original timeout is 5 minutes, but we've modified it to 1s for testing)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // File should be gone
+      var response = await fetch(filename)
+      expect(response.status).to.equal(404)
+    });
+
+    it("should handle concurrent tmp file access", async function() {
+      var filename = `${url}_tmp/concurrent_${Date.now()}.txt`
+      var iterations = 10
+
+      // Create multiple concurrent requests
+      var promises = Array(iterations).fill().map(async (_, i) => {
+        await fetch(filename, {
+          method: "PUT",
+          body: `data${i}`
+        })
+        return fetch(filename).then(r => r.text())
+      })
+
+      var results = await Promise.all(promises)
+      // Last write should win
+      expect(results[results.length - 1]).to.equal(`data${iterations - 1}`)
     });
   });
 });
