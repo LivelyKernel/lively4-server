@@ -2,18 +2,45 @@
 /*
  * # Lively4 Server -- a file server that serves and manages git repositories as REST
  *
- * ## Supported methods:
- * - GET
- * - PUT
- * - DELETE
- * - MKCOL
- * - OPTIONS
- *   - filelist
- *   - showversions
- *   - default: modified, type, name
+ * ## Supported HTTP Methods:
+ * - GET - Read files and directories
+ * - PUT - Write files
+ * - DELETE - Remove files and directories
+ * - MKCOL - Create directories
+ * - MOVE - Move/rename files and directories
+ * - OPTIONS - Get metadata and directory listings
+ * 
+ * ## Special Endpoints:
+ * - /_git/* - Git operations (sync, commit, clone, etc)
+ * - /_meta/* - Server control operations
+ * - /_tmp/* - Temporary file storage
+ * - /_github/* - GitHub proxy
+ * - /_webhook/* - GitHub webhook handling
+ * - /_curl/* - URL fetching proxy
+ * - /_search/* - File content search
+ * - /_bibtex/* - BibTeX search
+ * - /_graphviz/* - Graphviz diagram generation
+ * - /_make/* - Make command execution
+ * - /_open/* - Open files externally
  *
- * ## Special request HEADER
- * - fileversion
+ * ## Special Request Headers:
+ * - fileversion - Get specific git version of file
+ * - gitusername - Git authentication
+ * - gitpassword - Git authentication
+ * - gitemail - Git commit author
+ * - gitrepository - Target repository
+ * - gitrepositoryurl - Repository URL for cloning
+ * - gitrepositorybranch - Target branch
+ * - gitcommitmessage - Commit message
+ * - gitfilepath - File path for git operations
+ * - gitcommit - Specific commit for git operations
+ * - gitusecolor - Enable colored git output
+ * - searchpattern - Pattern for file search
+ * - rootdirs - Root directories for search
+ * - excludes - Paths to exclude from search
+ * - graphlayout - Layout engine for graphviz
+ * - showversions - List file versions in OPTIONS
+ * - filelist - Get recursive directory listing in OPTIONS
  */
 
 import http from 'http';
@@ -421,10 +448,6 @@ export class Server {
           return this.TMP(pathname, req, res);
         }
 
-        if (pathname.match(/\/_vq\//)) {
-          return this.BP2019Proxy(pathname, req, res, proxy);
-        }
-
         if (pathname.match(/\/_github\//)) {
           req.url = req.url.replace('/_github/', '');
           return proxy.web(req, res, { target: 'http://172.16.64.132:9001/' });
@@ -479,16 +502,6 @@ export class Server {
       logRequest(req, "FINISHED " + req.method + " (" + Math.round(Date.now() - startRequestTime) + "ms) " + req.url + " ")
     }
   }
-
-  static BP2019Proxy(pathname, req, res, proxy) {
-
-    req.url = req.url.replace(/\/_vq\//, '');
-    return proxy.web(req, res, { target: 'http://localhost:10055/' });
-
-    // res.writeHead(200);
-    //   res.end('Hey you wanted' + pathname);    
-  }
-
 
   static GET(repositorypath, filepath, fileversion, req, res) {
     if (filepath.match(Lively4bundleName)) {
