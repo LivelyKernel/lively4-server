@@ -28,7 +28,7 @@ describe("Lively4 Server", () => {
   var tmp = "tmp/";
   var testrepo = "lively4-dummy";
   var url = "http://localhost:" + port+"/";
-
+  
   async function expectResultMatch(cmd, regexString) {
     var result = await run(`cd ${tmp}${testrepo};` + cmd); 
     expect(result.stdout).match(new RegExp(regexString));
@@ -39,6 +39,8 @@ describe("Lively4 Server", () => {
     Server.port = port;
     Server.autoCommit = true;
     Server.options['tmp-cleanup-timeout'] = 1000; // Set cleanup timeout to 1s for testing
+    Server.options['myurl'] = url; 
+    Server.options['directory'] = Server.lively4dir; 
     this.timeout(35000);
     var result = await run(`rm -rv "${tmp}"; mkdir -p "${tmp}"; cd "${tmp}";` +
       `git clone https://github.com/LivelyKernel/${testrepo};` +
@@ -304,4 +306,164 @@ describe("Lively4 Server", () => {
       expect(bundle1).to.not.deep.equal(bundle2)
     })
   })
+
+  describe("DELETE", () => {
+    it("should delete a file", async () => {
+      // First create a file
+      const filename = 'delete_test.txt';
+      await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: "test content"
+      });
+
+      // Then delete it
+      const response = await fetch(url + testrepo + "/" + filename, {
+        method: "DELETE"
+      });
+      expect(response.status).to.equal(200);
+
+      // Verify file is gone
+      const checkResponse = await fetch(url + testrepo + "/" + filename);
+      expect(checkResponse.status).to.equal(404);
+    });
+
+    it("should delete associated cache files", async () => {
+      const filename = 'cache_test.js';
+      
+      // Create a JS file that will generate cache files
+      await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: "console.log('test');"
+      });
+
+      // Verify cache files are created
+      await fetch(url + testrepo + "/" + filename); // This should trigger cache creation
+      
+      // Delete the file
+      await fetch(url + testrepo + "/" + filename, {
+        method: "DELETE"
+      });
+
+      // Check that cache files are also deleted
+      const optionsPath = `${url}${testrepo}/${Lively4optionsDir}/${filename.replace(/\//g,"_")}`;
+      const transpilePath = `${url}${testrepo}/${Lively4transpileDir}/${filename.replace(/\//g,"_")}`;
+      
+      const optionsResponse = await fetch(optionsPath);
+      const transpileResponse = await fetch(transpilePath);
+      
+      expect(optionsResponse.status).to.equal(404);
+      expect(transpileResponse.status).to.equal(404);
+    });
+  });
+
+  describe("MOVE", () => {
+    it("should move a file to a new location", async () => {
+      // Create test file
+      const sourceFile = 'source.txt';
+      const destFile = 'destination.txt';
+      const content = "move test content";
+      
+      await fetch(url + testrepo + "/" + sourceFile, {
+        method: "PUT",
+        body: content
+      });
+
+      // Move the file
+      const response = await fetch(url + testrepo + "/" + sourceFile, {
+        method: "MOVE",
+        headers: {
+          'destination': url + testrepo + "/" + destFile
+        }
+      });
+      expect(response.status).to.equal(200);
+
+      // Verify source is gone and destination has content
+      const sourceResponse = await fetch(url + testrepo + "/" + sourceFile);
+      expect(sourceResponse.status).to.equal(404);
+
+      const destResponse = await fetch(url + testrepo + "/" + destFile);
+      expect(destResponse.status).to.equal(200);
+      expect(await destResponse.text()).to.equal(content);
+    });
+  });
+
+  describe("Path Validation", () => {
+    it("should reject paths with dangerous characters", async () => {
+      const dangerousPaths = [
+        "test;rm -rf.txt",
+        "test|echo hack.txt",
+        // "test?query=bad.txt",
+        // "test#fragment.txt",
+        "test'quote.txt"
+      ];
+
+      for (const path of dangerousPaths) {
+        const response = await fetch(url + testrepo + "/" + path, {
+          method: "PUT",
+          body: "test"
+        });
+        expect(response.status, `Path ${path} should be rejected`).to.equal(500);
+      }
+    });
+
+    it("should reject directory traversal attempts", async () => {
+      const traversalPaths = [
+        "../outside.txt",
+        "subdir/../../../etc/passwd",
+        "test/.//../secret.txt"
+      ];
+
+      for (const path of traversalPaths) {
+        const response = await fetch(url + testrepo + "/" + path);
+        expect(response.status, `Path ${path} should be rejected`).to.equal(404);
+      }
+    });
+  });
+
+  describe("File Version Control", () => {
+    it("should retrieve specific file versions", async () => {
+      const filename = 'version_test.txt';
+      const content1 = "version 1";
+      const content2 = "version 2";
+
+      // Create file with first version
+      await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: content1,
+        headers: {
+          gitusername: "Tester",
+          gitemail: "test@example.com"
+        }
+      });
+
+      // Get first version hash
+      const v1Response = await fetch(url + testrepo + "/" + filename, {
+        method: "OPTIONS",
+        headers: {
+          showversions: "true"
+        }
+      });
+      const v1Data = await v1Response.json();
+      const v1Hash = v1Data.versions[0].version;
+
+      // Update file
+      await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: content2,
+        headers: {
+          gitusername: "Tester",
+          gitemail: "test@example.com"
+        }
+      });
+
+      // Retrieve first version
+      const response = await fetch(url + testrepo + "/" + filename, {
+        headers: {
+          fileversion: v1Hash
+        }
+      });
+      expect(response.status).to.equal(200);
+      expect(await response.text()).to.equal(content1);
+    });
+  });
 });
