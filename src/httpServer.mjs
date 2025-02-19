@@ -42,32 +42,68 @@
  * - filelist - Get recursive directory listing in OPTIONS
  */
 
+// Core Node.js imports
 import http from 'http';
-import httpProxy from 'http-proxy';
 import fs from 'fs';
 import URL from 'url';
 import Path from 'path';
-import mime from 'mime-types';
 import { mkdir } from 'fs/promises';
-import argv from 'argv';
 import { exec } from 'child_process';
-import slash from 'slash'; // Convert Windows backslash paths to slash paths: foo\\bar ➔ foo/bar
-import 'log-timestamp'; // // this adds a timestamp to all log messages
-import * as utils from './utils.js';
-import { cleanString, run, respondWithCMD } from './utils.js';
 import { promisify } from 'util';
 
+// Third-party imports
+import httpProxy from 'http-proxy';
+import mime from 'mime-types';
+import argv from 'argv';
+import slash from 'slash'; // Convert Windows backslash paths to slash paths: foo\\bar ➔ foo/bar
+import 'log-timestamp'; // this adds a timestamp to all log messages
 import fetch from 'node-fetch';
 
-var fs_exists = function (file) {
+// Local imports
+import * as utils from './utils.js';
+import { cleanString, run, respondWithCMD } from './utils.js';
+
+// Promisified fs functions
+const fs_exists = function (file) {
   return new Promise(resolve =>
     fs.exists(file, exists => {
       resolve(exists);
     })
   );
 };
+const fs_stat = promisify(fs.stat);
+const fs_readdir = promisify(fs.readdir);
+const fs_writeFile = promisify(fs.writeFile);
+const fs_readFile = promisify(fs.readFile);
 
-var fs_stat = promisify(fs.stat);
+// Constants
+const Lively4bootfilelistName = ".lively4bootfilelist";
+const Lively4bundleName = ".lively4bundle.zip";
+const Lively4transpileDir = ".transpiled";
+const Lively4optionsDir = ".options";
+
+// Cache objects
+const GithubOriganizationMemberCache = {};
+const RepositoryBootfiles = {};
+const RepositoryInSync = {}; // cheap semaphore
+const MakeInProgress = {}; // cheap semaphore 
+const RepositoryGitInUse = {}; // cheap semaphore
+
+// Regex constants
+const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
+const isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
+
+// Logging functions
+export function log(...args) {
+  console.log('[server]', ...args);
+}
+
+// #UseCase #ContextJS #AsyncContext it is really hard to hand down the request object into all methods, just so they can log properly...
+export function logRequest(req, ...args) {
+  log("REQUEST[" + req._logId + "] ", ...args);
+}
+
+// Helper functions
 async function try_fs_stat(file) {
   try {
     return await fs_stat(file)
@@ -75,47 +111,6 @@ async function try_fs_stat(file) {
     return null
   }
 }
-
-var fs_readdir = promisify(fs.readdir);
-
-var fs_writeFile = promisify(fs.writeFile);
-
-var fs_readFile = promisify(fs.readFile);
-
-fs.readFile('/etc/passwd', (err, data) => {
-  if (err) throw err;
-  console.log(data);
-});
-
-// var readFile = Promise.promisify(fs.readFile);
-// var readDir = Promise.promisify(fs.readdir);
-
-export function log(...args) {
-  console.log('[server]', ...args);
-}
-
-
-// #UseCase #ContextJS #AsyncContext it is really hard to hand down the request object into all methods, just so they can log properly...
-export function logRequest(req, ...args) {
-  log("REQUEST[" + req._logId + "] ", ...args);
-}
-
-
-const Lively4bootfilelistName = ".lively4bootfilelist"
-const Lively4bundleName = ".lively4bundle.zip"
-const Lively4transpileDir = ".transpiled"
-const Lively4optionsDir = ".options"
-
-const GithubOriganizationMemberCache = {}
-
-var RepositoryBootfiles = {}
-
-var RepositoryInSync = {}; // cheap semaphore
-var MakeInProgress = {}; // cheap semaphore
-var RepositoryGitInUse = {};// cheap semaphore
-
-var breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
-var isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
 
 export class Server {
   static get optionsSpec() {
