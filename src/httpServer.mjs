@@ -152,6 +152,12 @@ export class Server {
         name: 'myurl',
         type: 'string',
         description: 'myurl from the outside...'
+      },
+      {
+        name: 'tmp-cleanup-timeout',
+        type: 'int',
+        description: 'timeout in milliseconds after which temporary files are cleaned up',
+        example: "'node httpServer.js --tmp-cleanup-timeout=300000'"
       }
     ];
   }
@@ -259,9 +265,25 @@ export class Server {
     res.setHeader('Access-Control-Allow-Headers', '*');
   }
 
+  static validatePath(path) {
+    // First check for special characters
+    if (path.match(/['";&#?:|]/)) {
+      return false;
+    }
+    
+    // Check for directory traversal attempts
+    // Normalize the path first to resolve any ../ sequences
+    const normalizedPath = Path.normalize(path);
+    
+    // Check if the normalized path tries to go above root with ../
+    if (normalizedPath.startsWith('..') || normalizedPath.includes('/../')) {
+      return false;
+    }
+    
+    return true;
+  }
+
   static async onRequest(req, res, proxy) {
-
-
     req._logId = this.requestCounter++
     req._startTime = Date.now()
     logRequest(req, "START " + req.method + "\t" + req.url)
@@ -292,18 +314,21 @@ export class Server {
       try {
         this.setCORSHeaders(res);
 
-        // url =  new URL("https://lively-kernel.org/lively4/lively4-jens/src/client/boot.js")
         var url = URL.parse(req.url, true, false);
-        var pathname = url.pathname;// /lively4/lively4-jens/src/client/boot.js
+        var pathname = url.pathname;
 
-        pathname = pathname.replace(/['";&?:#|]/g, ''); // just for safty
+        // Validate path before any processing
+        if (!this.validatePath(pathname)) {
+          res.writeHead(500);
+          res.end('Invalid path: directory traversal not allowed');
+          return;
+        }
 
+        pathname = pathname.replace(/['";&?:#|]/g, ''); // keep this as a secondary safety measure
         var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
-        var fileversion = req.headers['fileversion']; // 
+        var fileversion = req.headers['fileversion']; 
 
         var m = path.match(/^\/([^/]*)\/(.*)/)
-
-
 
         if (m) {
           var repositorypath = Path.join(sourceDir, m[1]);
@@ -312,7 +337,6 @@ export class Server {
           repositorypath = sourceDir
           filepath = path
         }
-
 
         // log("authorize-requests: " + this.options["authorize-requests"])
         if (this.options["authorize-requests"]) {
@@ -434,11 +458,11 @@ export class Server {
           return this.BIBTEX(pathname, req, res);
         }
         if (req.method == 'GET') {
-          await  this.GET(repositorypath, filepath, fileversion, req, res);
+          await this.GET(repositorypath, filepath, fileversion, req, res);
         } else if (req.method == 'PUT') {
           await this.PUT(repositorypath, filepath, req, res);
         } else if (req.method == 'DELETE') {
-          await  this.DELETE(repositorypath, filepath, res);
+          await this.DELETE(repositorypath, filepath, res);
         } else if (req.method == 'MKCOL') {
           await this.MKCOL(repositorypath, filepath, res);
         } else if (req.method == 'OPTIONS') {
@@ -705,12 +729,16 @@ export class Server {
   }
   
   static async readFile(repositorypath, filepath, req, res) {
-    // logRequest(req, 'read based in:' + repositorypath + " file: " +filepath);
+    // First validate the path before attempting to read
+    if (!this.validatePath(filepath)) {
+      res.writeHead(500);
+      res.end('Invalid path: directory traversal not allowed');
+      return;
+    }
+
     var fullpath = Path.join(repositorypath, filepath);
-    // throw new Error("hello error handler?")
 
     try {
-      // var stats = fs.statSync(filepath)
       var stats = await fs_stat(fullpath);
     } catch(e){
       // nothing
@@ -1452,8 +1480,13 @@ export class Server {
     var file = pathname.replace(/^\/_tmp\//, '');
     if (req.method == 'GET') {
       var data = this.tmpStorage[file];
-      res.writeHead(200);
-      res.end(data, 'binary');
+      if (data) {
+        res.writeHead(200);
+        res.end(data, 'binary');
+      } else {
+        res.writeHead(404);
+        res.end('file not found');
+      }
     }
     if (req.method == 'PUT') {
       var fullBody = '';
@@ -1474,7 +1507,7 @@ export class Server {
             log('cleanup ' + file);
             delete this.tmpStorage[file];
             this.tmpStorageTimeouts.delete(file);
-        }, 5 * 60 * 1000); // cleanup after 5min
+        }, this.options['tmp-cleanup-timeout'] || 5 * 60 * 1000); // use configured timeout or default to 5min
         
         this.tmpStorageTimeouts.set(file, timeout);
         

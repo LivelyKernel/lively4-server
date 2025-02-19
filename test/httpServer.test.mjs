@@ -1,4 +1,3 @@
-
 import fetch from 'node-fetch'
 import {expect} from "chai"
 import {exec} from "child_process"
@@ -38,7 +37,8 @@ describe("Lively4 Server", () => {
   before(async function() {
     Server.lively4dir = tmp;
     Server.port = port;
-    Server.autoCommit = true
+    Server.autoCommit = true;
+    Server.options['tmp-cleanup-timeout'] = 1000; // Set cleanup timeout to 1s for testing
     this.timeout(35000);
     var result = await run(`rm -rv "${tmp}"; mkdir -p "${tmp}"; cd "${tmp}";` +
       `git clone https://github.com/LivelyKernel/${testrepo};` +
@@ -55,7 +55,6 @@ describe("Lively4 Server", () => {
   after(async () => {
     console.log("stop server")
     Server.stop();
-    // process.exit(0);
     console.log("server stopped")
   })
 
@@ -201,4 +200,108 @@ describe("Lively4 Server", () => {
       expect(loaded, "tmp content").to.be.equal(body)
     })
    })
+
+  describe("TMP Storage", function() {
+    it("should cleanup tmp files after timeout", async function() {
+      this.timeout(6000); // increase timeout for this test
+      
+      var filename = `${url}_tmp/cleanup_${Date.now()}.txt`
+      
+
+      var response = await fetch(filename)
+      expect(response.status, "file " + filename + " should not exist").to.equal(404)
+
+      var body = "test data"
+      // Create tmp file
+      await fetch(filename, {
+        method: "PUT",
+        body: body
+      })
+      
+      // Verify file exists
+      var content = await fetch(filename).then(r => r.text())
+      expect(content).to.equal(body)
+      
+      // Wait for cleanup (original timeout is 5 minutes, but we've modified it to 1s for testing, so we need to wait longer)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // File should be gone
+      var response = await fetch(filename)
+      expect(response.status).to.equal(404)
+    })
+    
+    it("should handle concurrent tmp file access", async function() {
+      var filename = `${url}_tmp/concurrent_${Date.now()}.txt`
+      var iterations = 10
+      
+      // Create multiple concurrent requests
+      var promises = Array(iterations).fill().map(async (_, i) => {
+        await fetch(filename, {
+          method: "PUT",
+          body: `data${i}`
+        })
+        return fetch(filename).then(r => r.text())
+      })
+      
+      var results = await Promise.all(promises)
+      // Last write should win
+      expect(results[results.length-1]).to.equal(`data${iterations-1}`)
+    })
+  })
+
+  describe("Error Handling", function() {
+    it("should reject paths with special characters", async function() {
+      var response = await fetch(url + "lively4-dummy/test'file.txt", {
+        method: "PUT",
+        body: "test"
+      })
+      expect(response.status, "response " + await response.text()).to.equal(500)
+    })
+    
+    it("should reject paths trying to break out of root", async function() {
+      var response = await fetch(url + "../outside.txt", {
+        method: "GET"
+      })
+      expect(response.status).to.equal(500)
+    })
+  })
+
+  describe("Authorization", function() {
+    it("should reject requests without credentials when auth required", async function() {
+      // Temporarily enable auth requirement
+      var originalAuth = Server.options["authorize-requests"]
+      Server.options["authorize-requests"] = true
+      
+      var response = await fetch(url + "lively4-dummy/README.md", {
+        method: "GET"
+      })
+      expect(response.status).to.equal(403)
+      
+      // Restore original setting
+      Server.options["authorize-requests"] = originalAuth
+    })
+  })
+
+  describe("Bundle", function() {
+    it("should invalidate bundle after file changes", async function() {
+      var bundleUrl = url + "lively4-dummy/" + Lively4bundleName
+      
+      // Get initial bundle
+      var response1 = await fetch(bundleUrl)
+      var bundle1 = await response1.arrayBuffer()
+      
+      // Modify a file
+      await fetch(url + "lively4-dummy/README.md", {
+        method: "PUT",
+        body: "Modified content"
+      })
+      
+      // Get new bundle
+      var response2 = await fetch(bundleUrl)
+      var bundle2 = await response2.arrayBuffer()
+      
+      // Bundles should be different
+      expect(bundle1).to.not.deep.equal(bundle2)
+    })
+  })
 });
