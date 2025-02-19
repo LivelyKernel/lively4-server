@@ -1,9 +1,9 @@
 import fetch from 'node-fetch'
-import {expect} from "chai"
-import {exec} from "child_process"
+import { expect } from "chai"
+import { exec } from "child_process"
 
 // TODO: start server in a separate process
-import {Server} from '../src/httpServer.mjs'
+import { Server } from '../src/httpServer.mjs'
 
 import JSZip from "jszip"
 import fs from 'node:fs'
@@ -19,35 +19,35 @@ function run(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (error, stdout, stderr) => {
       // if (error) reject(stderr)
-      resolve({stdout, stderr, error});      
+      resolve({ stdout, stderr, error });
     });
   })
 }
 
-describe("Lively4 Server", () => {  
+describe("Lively4 Server", () => {
   var tmp = "tmp/";
   var testrepo = "lively4-dummy";
-  var url = "http://localhost:" + port+"/";
-  
+  var url = "http://localhost:" + port + "/";
+
   async function expectResultMatch(cmd, regexString) {
-    var result = await run(`cd ${tmp}${testrepo};` + cmd); 
+    var result = await run(`cd ${tmp}${testrepo};` + cmd);
     expect(result.stdout).match(new RegExp(regexString));
   }
-  
-  before(async function() {
+
+  before(async function () {
     Server.lively4dir = tmp;
     Server.port = port;
     Server.autoCommit = true;
     Server.options['tmp-cleanup-timeout'] = 1000; // Set cleanup timeout to 1s for testing
-    Server.options['myurl'] = url; 
-    Server.options['directory'] = Server.lively4dir; 
+    Server.options['myurl'] = url;
+    Server.options['directory'] = Server.lively4dir;
     this.timeout(35000);
     var result = await run(`rm -rv "${tmp}"; mkdir -p "${tmp}"; cd "${tmp}";` +
       `git clone https://github.com/LivelyKernel/${testrepo};` +
       `cd ${testrepo}; git reset --hard`);
-    
+
     console.log("stdout: " + result.stdout);
-    
+
     console.log("start server")
     Promise.resolve().then(() => Server.start());
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -66,40 +66,40 @@ describe("Lively4 Server", () => {
       var response = await fetch(url, {
         method: "GET",
       })
-      var body = await response.text() 
+      var body = await response.text()
       expect(body).to.match(/lively4-dummy/);
     });
-  
+
     it("read file", async () => {
       var response = await fetch(url + "lively4-dummy/README.md", {
         method: "GET",
       })
-      var body = await response.text() 
+      var body = await response.text()
       expect(body).to.match(/A dummy repository/);
-      expect(response.headers.get("fileversion"),"fileversion").length.gt(0)
-      expect(response.headers.get("modified"),"modified").length.gt(0)
+      expect(response.headers.get("fileversion"), "fileversion").length.gt(0)
+      expect(response.headers.get("modified"), "modified").length.gt(0)
     });
-    
+
     it("read bundle", async () => {
       var response = await fetch(url + "lively4-dummy/" + Lively4bundleName, {
         method: "GET",
       })
-      var body = await response.arrayBuffer() 
+      var body = await response.arrayBuffer()
       console.log("BODY " + body)
       var zip = await JSZip.loadAsync(body)
       var files = Object.keys(zip.files);
 
       // console.log("Bundled files:" , files)
-      
+
       expect(files).to.include("README.md")
       expect(files).to.include("foo.js")
       expect(files).to.include(".options/foo.js")
-    
+
     })
   })
-  
+
   describe("PUT", () => {
-    it("write file", async function() {
+    it("write file", async function () {
       var filename = 'testwrite.txt';
       var authorName = 'Joe';
       var authorEmail = "joe@lively-kernel.org";
@@ -108,16 +108,16 @@ describe("Lively4 Server", () => {
         method: "PUT",
         body: content,
         headers: {
-            gitusername: authorName,
-            gitemail: authorEmail
+          gitusername: authorName,
+          gitemail: authorEmail
         }
       })
       expect(response.status, "status").to.equal(200);
       await expectResultMatch("cat " + filename, content);
-      await expectResultMatch("git status" , /nothing to commit/);
-      await expectResultMatch("git log -n 1 --format='%aN' "+ filename , authorName);
+      await expectResultMatch("git status", /nothing to commit/);
+      await expectResultMatch("git log -n 1 --format='%aN' " + filename, authorName);
       await expectResultMatch("git log -n 1 --format='%aE' " + filename, authorEmail);
-    });    
+    });
   })
 
   describe("MKCOL", async () => {
@@ -130,7 +130,7 @@ describe("Lively4 Server", () => {
     })
   })
 
-  describe("OPTIONS", function() {
+  describe("OPTIONS", function () {
     this.timeout(2100)
     it("lively4 root directory", async () => {
       var response = await fetch(url, {
@@ -141,7 +141,7 @@ describe("Lively4 Server", () => {
     it("directory", async () => {
       var response = await fetch(url + "lively4-dummy/", {
         method: "OPTIONS",
-      })  
+      })
       expect(response.status).to.equal(200);
       var stats = await response.json()
       expect(stats.type).to.equal("directory");
@@ -153,8 +153,8 @@ describe("Lively4 Server", () => {
       })
       expect(response.status).to.equal(200);
     });
-    
-    it("should show versions", async() => {
+
+    it("should show versions", async () => {
       var response = await fetch(url + "lively4-dummy/README.md", {
         method: "OPTIONS",
         headers: {
@@ -164,9 +164,9 @@ describe("Lively4 Server", () => {
       var content = await response.json()
       expect(content.versions, "versions").length.to.be.gt(0)
     })
-    
 
-    it("should show versions on directories", async() => {
+
+    it("should show versions on directories", async () => {
       var response = await fetch(url + "lively4-dummy/", {
         method: "OPTIONS",
         headers: {
@@ -176,8 +176,8 @@ describe("Lively4 Server", () => {
       var content = await response.json()
       expect(content.versions, "versions").length.to.be.gt(0)
     })
-    
-    it("should show filelist", async() => {
+
+    it("should show filelist", async () => {
       var response = await fetch(url + "lively4-dummy/", {
         method: "OPTIONS",
         headers: {
@@ -189,9 +189,9 @@ describe("Lively4 Server", () => {
       expect(content.contents, "contents").length.to.be.gt(0)
     })
   });
-  
-  describe("TMP", function() {
-    it("should create tmp file", async() => {
+
+  describe("TMP", function () {
+    it("should create tmp file", async () => {
       var filename = `${url}_tmp/foo_${Date.now()}.txt`
       var body = "hello world"
       var response = await fetch(filename, {
@@ -201,14 +201,14 @@ describe("Lively4 Server", () => {
       var loaded = await fetch(filename).then(r => r.text())
       expect(loaded, "tmp content").to.be.equal(body)
     })
-   })
+  })
 
-  describe("TMP Storage", function() {
-    it("should cleanup tmp files after timeout", async function() {
+  describe("TMP Storage", function () {
+    it("should cleanup tmp files after timeout", async function () {
       this.timeout(6000); // increase timeout for this test
-      
+
       var filename = `${url}_tmp/cleanup_${Date.now()}.txt`
-      
+
 
       var response = await fetch(filename)
       expect(response.status, "file " + filename + " should not exist").to.equal(404)
@@ -219,23 +219,23 @@ describe("Lively4 Server", () => {
         method: "PUT",
         body: body
       })
-      
+
       // Verify file exists
       var content = await fetch(filename).then(r => r.text())
       expect(content).to.equal(body)
-      
+
       // Wait for cleanup (original timeout is 5 minutes, but we've modified it to 1s for testing, so we need to wait longer)
       await new Promise(resolve => setTimeout(resolve, 2000))
-      
+
       // File should be gone
       var response = await fetch(filename)
       expect(response.status).to.equal(404)
     })
-    
-    it("should handle concurrent tmp file access", async function() {
+
+    it("should handle concurrent tmp file access", async function () {
       var filename = `${url}_tmp/concurrent_${Date.now()}.txt`
       var iterations = 10
-      
+
       // Create multiple concurrent requests
       var promises = Array(iterations).fill().map(async (_, i) => {
         await fetch(filename, {
@@ -244,23 +244,23 @@ describe("Lively4 Server", () => {
         })
         return fetch(filename).then(r => r.text())
       })
-      
+
       var results = await Promise.all(promises)
       // Last write should win
-      expect(results[results.length-1]).to.equal(`data${iterations-1}`)
+      expect(results[results.length - 1]).to.equal(`data${iterations - 1}`)
     })
   })
 
-  describe("Error Handling", function() {
-    it("should reject paths with special characters", async function() {
+  describe("Error Handling", function () {
+    it("should reject paths with special characters", async function () {
       var response = await fetch(url + "lively4-dummy/test'file.txt", {
         method: "PUT",
         body: "test"
       })
       expect(response.status, "response " + await response.text()).to.equal(500)
     })
-    
-    it("should reject paths trying to break out of root", async function() {
+
+    it("should reject paths trying to break out of root", async function () {
       var response = await fetch(url + "../outside.txt", {
         method: "GET"
       })
@@ -268,40 +268,40 @@ describe("Lively4 Server", () => {
     })
   })
 
-  describe("Authorization", function() {
-    it("should reject requests without credentials when auth required", async function() {
+  describe("Authorization", function () {
+    it("should reject requests without credentials when auth required", async function () {
       // Temporarily enable auth requirement
       var originalAuth = Server.options["authorize-requests"]
       Server.options["authorize-requests"] = true
-      
+
       var response = await fetch(url + "lively4-dummy/README.md", {
         method: "GET"
       })
       expect(response.status).to.equal(403)
-      
+
       // Restore original setting
       Server.options["authorize-requests"] = originalAuth
     })
   })
 
-  describe("Bundle", function() {
-    it("should invalidate bundle after file changes", async function() {
+  describe("Bundle", function () {
+    it("should invalidate bundle after file changes", async function () {
       var bundleUrl = url + "lively4-dummy/" + Lively4bundleName
-      
+
       // Get initial bundle
       var response1 = await fetch(bundleUrl)
       var bundle1 = await response1.arrayBuffer()
-      
+
       // Modify a file
       await fetch(url + "lively4-dummy/README.md", {
         method: "PUT",
         body: "Modified content"
       })
-      
+
       // Get new bundle
       var response2 = await fetch(bundleUrl)
       var bundle2 = await response2.arrayBuffer()
-      
+
       // Bundles should be different
       expect(bundle1).to.not.deep.equal(bundle2)
     })
@@ -329,7 +329,7 @@ describe("Lively4 Server", () => {
 
     it("should delete associated cache files", async () => {
       const filename = 'cache_test.js';
-      
+
       // Create a JS file that will generate cache files
       await fetch(url + testrepo + "/" + filename, {
         method: "PUT",
@@ -338,19 +338,19 @@ describe("Lively4 Server", () => {
 
       // Verify cache files are created
       await fetch(url + testrepo + "/" + filename); // This should trigger cache creation
-      
+
       // Delete the file
       await fetch(url + testrepo + "/" + filename, {
         method: "DELETE"
       });
 
       // Check that cache files are also deleted
-      const optionsPath = `${url}${testrepo}/${Lively4optionsDir}/${filename.replace(/\//g,"_")}`;
-      const transpilePath = `${url}${testrepo}/${Lively4transpileDir}/${filename.replace(/\//g,"_")}`;
-      
+      const optionsPath = `${url}${testrepo}/${Lively4optionsDir}/${filename.replace(/\//g, "_")}`;
+      const transpilePath = `${url}${testrepo}/${Lively4transpileDir}/${filename.replace(/\//g, "_")}`;
+
       const optionsResponse = await fetch(optionsPath);
       const transpileResponse = await fetch(transpilePath);
-      
+
       expect(optionsResponse.status).to.equal(404);
       expect(transpileResponse.status).to.equal(404);
     });
@@ -362,7 +362,7 @@ describe("Lively4 Server", () => {
       const sourceFile = 'source.txt';
       const destFile = 'destination.txt';
       const content = "move test content";
-      
+
       await fetch(url + testrepo + "/" + sourceFile, {
         method: "PUT",
         body: content
