@@ -192,6 +192,7 @@ export class Server {
     log('Myurl: ' + Server.options.myurl);
 
     this.tmpStorage = {};
+    this.tmpStorageTimeouts = new Map(); // Track timeouts
     this.requestCounter = 0;
     this.activeSockets = new Set(); // Track active sockets
     
@@ -218,6 +219,15 @@ export class Server {
 
   static async stop() {
     this.isRunning = false;
+    
+    // Clear all timeouts
+    if (this.tmpStorageTimeouts) {
+        for (let timeout of this.tmpStorageTimeouts.values()) {
+            clearTimeout(timeout);
+        }
+        this.tmpStorageTimeouts.clear();
+    }
+    
     return new Promise((resolve, reject) => {
       if (!this.httpServer) {
         resolve(); // Server was never started
@@ -1453,10 +1463,21 @@ export class Server {
       });
       req.on('end', async () => {
         this.tmpStorage[file] = fullBody;
-        setTimeout(() => {
-          log('cleanup ' + file);
-          delete this.tmpStorage[file];
+        
+        // Clear existing timeout if present
+        if (this.tmpStorageTimeouts.has(file)) {
+            clearTimeout(this.tmpStorageTimeouts.get(file));
+        }
+        
+        // Set new timeout and store it
+        const timeout = setTimeout(() => {
+            log('cleanup ' + file);
+            delete this.tmpStorage[file];
+            this.tmpStorageTimeouts.delete(file);
         }, 5 * 60 * 1000); // cleanup after 5min
+        
+        this.tmpStorageTimeouts.set(file, timeout);
+        
         res.writeHead(200); // done
         res.end();
       });
