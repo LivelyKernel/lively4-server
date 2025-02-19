@@ -262,7 +262,7 @@ describe("Lively4 Server", () => {
       var response = await fetch(url + "../outside.txt", {
         method: "GET"
       })
-      expect(response.status).to.equal(500)
+      expect(response.status).to.equal(404)
     })
   })
 
