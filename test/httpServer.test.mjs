@@ -466,4 +466,183 @@ describe("Lively4 Server", () => {
       expect(await response.text()).to.equal(content1);
     });
   });
+
+  describe("GRAPHVIZ", function() {
+    it("should generate SVG from DOT file", async () => {
+      const dotContent = `digraph { a -> b }`;
+      const response = await fetch(url + "_graphviz/test", {
+        method: "POST",
+        body: dotContent,
+        headers: {
+          'graphlayout': 'dot'
+        }
+      });
+      expect(response.status).to.equal(200);
+      const svg = await response.text();
+      expect(svg).to.include('<svg');
+    });
+
+    it("should handle different layout engines", async () => {
+      const dotContent = `digraph { a -> b }`;
+      const layouts = ['neato', 'fdp', 'circo'];
+      
+      for (const layout of layouts) {
+        const response = await fetch(url + "_graphviz/test", {
+          method: "POST",
+          body: dotContent,
+          headers: {
+            'graphlayout': layout
+          }
+        });
+        expect(response.status).to.equal(200);
+        const svg = await response.text();
+        expect(svg).to.include('<svg');
+      }
+    });
+  });
+
+  describe("CURL", function() {
+    it("should fetch external resources", async () => {
+      const response = await fetch(url + "_curl/?target=https://example.com");
+      expect(response.status).to.equal(200);
+      const body = await response.text();
+      expect(body).to.include('<!doctype html>');
+    });
+
+    it("should handle missing target parameter", async () => {
+      const response = await fetch(url + "_curl/");
+      expect(response.status).to.equal(300);
+    });
+  });
+
+  describe("SEARCH", function() {
+    before(async function() {
+      // Create test files for searching
+      await fetch(url + testrepo + "/searchtest1.txt", {
+        method: "PUT",
+        body: "test content to search"
+      });
+      await fetch(url + testrepo + "/searchtest2.txt", {
+        method: "PUT",
+        body: "different content"
+      });
+    });
+
+    it("should search files for pattern", async () => {
+      const response = await fetch(url + "_search/files", {
+        headers: {
+          'searchpattern': 'test content',
+          'rootdirs': 'lively4-dummy',
+          'excludes': 'node_modules'
+        }
+      });
+      expect(response.status).to.equal(200);
+      const results = await response.text();
+      expect(results).to.include('searchtest1.txt');
+      expect(results).to.not.include('searchtest2.txt');
+    });
+  });
+
+  describe("Cache Invalidation", function() {
+    it("should invalidate options file when source changes", async function() {
+      const filename = 'cache_invalidation_test.js';
+      
+      // Create initial file
+      await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: "console.log('test');"
+      });
+      
+      // Get initial options
+      const optionsPath = `${url}${testrepo}/${Lively4optionsDir}/${filename}`;
+      const response1 = await fetch(optionsPath);
+      const options1 = await response1.json();
+      
+      // Wait a moment to ensure different timestamp
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Modify file
+      await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: "console.log('modified');"
+      });
+
+      // Check that options were updated
+      const response2 = await fetch(optionsPath);
+      const options2 = await response2.json();
+      
+      expect(options2.modified).to.not.equal(options1.modified);
+      expect(options2.version).to.not.equal(options1.version);
+    });
+  });
+
+  describe("GIT Operations", function() {
+    it("should show git diff", async () => {
+      const response = await fetch(url + "_git/diff", {
+        headers: {
+          'gitrepository': testrepo,
+          'gitbranch': 'master',
+          'gitusername': 'test',
+          'gitemail': 'test@example.com',
+          'gitpassword': 'test'
+        }
+      });
+      expect(response.status).to.equal(200);
+    });
+
+    it("should handle git reset", async () => {
+      const response = await fetch(url + "_git/reset", {
+        headers: {
+          'gitrepository': testrepo,
+          'gitbranch': 'master',
+          'gitusername': 'test',
+          'gitemail': 'test@example.com',
+          'gitpassword': 'test'
+        }
+      });
+      expect(response.status).to.equal(200);
+    });
+  });
+
+  describe("Path Validation Edge Cases", function() {
+    it("should handle unicode characters in paths", async () => {
+      const filename = 'test-😊.txt';
+      const content = "Unicode test content";
+      
+      const putResponse = await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: content
+      });
+      expect(putResponse.status).to.equal(200);
+
+      const getResponse = await fetch(url + testrepo + "/" + filename);
+      expect(getResponse.status).to.equal(200);
+      expect(await getResponse.text()).to.equal(content);
+    });
+
+    it("should handle very long paths", async () => {
+      const longPath = "a".repeat(255) + ".txt";
+      const response = await fetch(url + testrepo + "/" + longPath, {
+        method: "PUT",
+        body: "test"
+      });
+      // Most filesystems have a path length limit
+      expect(response.status).to.equal(500);
+    });
+
+    it("should handle spaces in paths", async () => {
+      const filename = 'test with spaces.txt';
+      const content = "content with spaces";
+      
+      const putResponse = await fetch(url + testrepo + "/" + filename, {
+        method: "PUT",
+        body: content
+      });
+      expect(putResponse.status).to.equal(200);
+
+      const getResponse = await fetch(url + testrepo + "/" + filename);
+      expect(getResponse.status).to.equal(200);
+      expect(await getResponse.text()).to.equal(content);
+    });
+  });
 });
