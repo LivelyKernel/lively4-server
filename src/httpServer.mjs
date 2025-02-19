@@ -1276,13 +1276,35 @@ export class Server {
         );
       }
       RepositoryInSync[repository] = true;
-      cmd = `${server}/bin/lively4sync.sh '${lively4DirUnix +
-        '/' +
-        repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
-      await respondWithCMD(cmd, res, dryrun);
-      RepositoryInSync[repository] = undefined;
-      logRequest(req, "delete bundle: " + repositorypath)
-      await this.deleteBundleFile(repositorypath)
+      try {
+        cmd = `${server}/bin/lively4sync.sh '${lively4DirUnix +
+          '/' +
+          repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
+        const result = await run(cmd);
+        
+        // Check for authentication/credential errors in stderr
+        if (result.stderr && (
+          result.stderr.includes('Authentication failed') || 
+          result.stderr.includes('fatal: could not read Username') ||
+          result.stderr.includes('fatal: Authentication failed')
+        )) {
+          res.writeHead(401); // Unauthorized
+          res.end('Git authentication failed. Please check your credentials.');
+          return;
+        }
+        
+        // If we get here, send the normal response
+        res.writeHead(200);
+        res.end(result.stdout + '\n' + result.stderr);
+        
+        logRequest(req, "delete bundle: " + repositorypath);
+        await this.deleteBundleFile(repositorypath);
+      } catch (error) {
+        res.writeHead(500);
+        res.end('Git sync failed: ' + error.message);
+      } finally {
+        RepositoryInSync[repository] = undefined;
+      }
     } else if (sPath.match(/\/_git\/resolve/)) {
       cmd =
         `${server}/bin/lively4resolve.sh '` +

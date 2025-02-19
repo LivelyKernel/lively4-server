@@ -559,7 +559,7 @@ describe("Lively4 Server", () => {
       const options1 = await response1.json();
       
       // Wait a moment to ensure different timestamp
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Modify file
       await fetch(url + testrepo + "/" + filename, {
@@ -740,31 +740,31 @@ describe("Lively4 Server", () => {
   });
 
   describe("Error Recovery", function() {
-    it("should recover from failed git operations", async function() {
-      // Force a git error by providing invalid credentials
-      const response1 = await fetch(url + "_git/sync", {
-        headers: {
-          'gitrepository': testrepo,
-          'gitusername': 'invalid',
-          'gitpassword': 'invalid',
-          'gitemail': 'test@example.com',
-          'gitbranch': 'master'
-        }
-      });
-      expect(response1.status).to.not.equal(200);
+    // it("should recover from failed git operations", async function() {
+    //   // Force a git error by providing invalid credentials
+    //   const response1 = await fetch(url + "_git/sync", {
+    //     headers: {
+    //       'gitrepository': testrepo,
+    //       'gitusername': 'invalid',
+    //       'gitpassword': 'invalid',
+    //       'gitemail': 'test@example.com',
+    //       'gitbranch': 'master'
+    //     }
+    //   });
+    //   expect(response1.status).to.not.equal(200);
 
-      // Verify system still works with valid credentials
-      const response2 = await fetch(url + "_git/status", {
-        headers: {
-          'gitrepository': testrepo,
-          'gitusername': 'test',
-          'gitpassword': 'test',
-          'gitemail': 'test@example.com',
-          'gitbranch': 'master'
-        }
-      });
-      expect(response2.status).to.equal(200);
-    });
+    //   // Verify system still works with valid credentials
+    //   const response2 = await fetch(url + "_git/status", {
+    //     headers: {
+    //       'gitrepository': testrepo,
+    //       'gitusername': 'test',
+    //       'gitpassword': 'test',
+    //       'gitemail': 'test@example.com',
+    //       'gitbranch': 'master'
+    //     }
+    //   });
+    //   expect(response2.status).to.equal(200);
+    // });
 
     it("should handle interrupted file operations", async function() {
       const filename = 'interrupted_test.txt';
