@@ -14,7 +14,6 @@
  * - /_git/* - Git operations (sync, commit, clone, etc)
  * - /_meta/* - Server control operations
  * - /_tmp/* - Temporary file storage
- * - /_github/* - GitHub proxy
  * - /_webhook/* - GitHub webhook handling
  * - /_curl/* - URL fetching proxy
  * - /_search/* - File content search
@@ -446,11 +445,6 @@ export class Server {
 
         if (pathname.match(/\/_tmp\//)) {
           return this.TMP(pathname, req, res);
-        }
-
-        if (pathname.match(/\/_github\//)) {
-          req.url = req.url.replace('/_github/', '');
-          return proxy.web(req, res, { target: 'http://172.16.64.132:9001/' });
         }
 
         if (pathname.match(/\/_meta\//)) {
