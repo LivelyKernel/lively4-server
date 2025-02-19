@@ -91,7 +91,7 @@ var RepositoryGitInUse = {};// cheap semaphore
 var breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 var isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
 
-class Server {
+export class Server {
   static get optionsSpec() {
     return [
       {
@@ -192,22 +192,56 @@ class Server {
     log('Myurl: ' + Server.options.myurl);
 
     this.tmpStorage = {};
-    this.requestCounter = 0
-    
+    this.requestCounter = 0;
+    this.activeSockets = new Set(); // Track active sockets
     
     var proxy = httpProxy.createProxyServer({});
 
-    http
+    this.httpServer = http
       .createServer((req, res) => this.onRequest(req, res, proxy))
-      .listen(this.port, function(err) {
+      .listen(this.port, (err) => {
         if (err) {
           throw err;
         }
-
+        this.isRunning = true;
         log('Server running on port ' + port + ' in directory ' + sourceDir);
       });
+
+    // Track new connections
+    this.httpServer.on('connection', socket => {
+      this.activeSockets.add(socket);
+      socket.on('close', () => {
+        this.activeSockets.delete(socket);
+      });
+    });
   }
 
+  static async stop() {
+    this.isRunning = false;
+    return new Promise((resolve, reject) => {
+      if (!this.httpServer) {
+        resolve(); // Server was never started
+        return;
+      }
+      
+      // Force close all tracked sockets
+      for (const socket of this.activeSockets) {
+        console.log("FORCE CLOSE SOCKET" + socket);
+        socket.destroy();
+      }
+      this.activeSockets.clear();
+
+      this.httpServer.close((err) => {
+        if (err) {
+          log('Error closing server: ' + err);
+          reject(err);
+        } else {
+          log('Server closed');
+          resolve();
+        }
+      });
+    });
+  }
   static setCORSHeaders(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Request-Method', '*');
@@ -216,6 +250,8 @@ class Server {
   }
 
   static async onRequest(req, res, proxy) {
+
+
     req._logId = this.requestCounter++
     req._startTime = Date.now()
     logRequest(req, "START " + req.method + "\t" + req.url)
@@ -788,7 +824,6 @@ class Server {
    * write file to disk
    */
   static async PUT(repositorypath, filepath, req, res) {
-    
     var fullpath = Path.join(repositorypath, filepath);
     var fullBody = '';
     // if (filepath.match(/png$/)) {
@@ -798,7 +833,6 @@ class Server {
       logRequest(req, 'set binary encoding');
       req.setEncoding('binary');
     }
-    // }
 
     //read chunks of data and store it in buffer
     req.on('data', function(chunk) {
@@ -828,9 +862,6 @@ class Server {
     var lastVersion = req.headers['lastversion'];
     var currentVersion = await this.getVersion(repositorypath, filepath);
 
-    // logRequest(req, 'last version: ' + lastVersion);
-    // logRequest(req, 'current version: ' + currentVersion);
-
     // we have version information and there is a conflict
     if (lastVersion && currentVersion && lastVersion !== currentVersion) {
       logRequest(req, '[writeFile] CONFLICT DETECTED');
@@ -843,12 +874,11 @@ class Server {
       return;
     }
 
-    // ogRequest(req, 'size ' + fullBody.length);
-    let result = await fs_writeFile(fullpath, fullBody, fullpath.match(isTextRegEx) ? undefined : 'binary')
-    if (result.err) {
-      // throw err;
-      logRequest(req, result.err);
-      throw new Error("Error in writeFile " + fullpath, result.err)
+    try {
+      await fs_writeFile(fullpath, fullBody, fullpath.match(isTextRegEx) ? undefined : 'binary');
+    } catch(err) {
+      logRequest(req, err);
+      throw new Error("Error in writeFile " + fullpath + ": " + err);
     }
 
     if (!autoCommit || req.headers['nocommit'])  {
@@ -1590,12 +1620,11 @@ var autoCommit = args.options['auto-commit'] || false;
 
 Server.setup();
 
+
 // Only start the server if this file is being run directly
 if (import.meta.url.startsWith('file:')) {
   const modulePath = URL.fileURLToPath(import.meta.url);
   if (process.argv[1] === modulePath) {
-    Server.start();
+    // Server.start();
   }
 }
-
-export default Server; 

@@ -1,22 +1,23 @@
-process.env.NODE_ENV = 'test';
 
 import fetch from 'node-fetch'
 import {expect} from "chai"
 import {exec} from "child_process"
-import Server from './httpServer.js'
-import JSZip  from "jszip"
+
+// TODO: start server in a separate process
+import {Server} from '../src/httpServer.mjs'
+
+import JSZip from "jszip"
+import fs from 'node:fs'
 
 const Lively4bootfilelistName = ".lively4bootfilelist"
 const Lively4bundleName = ".lively4bundle.zip"
 const Lively4transpileDir = ".transpiled"
 const Lively4optionsDir = ".options"
 
-import fs from 'fs';
-
 var port = 8081;
 
 function run(cmd) {
-  return  new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     exec(cmd, (error, stdout, stderr) => {
       // if (error) reject(stderr)
       resolve({stdout, stderr, error});      
@@ -39,17 +40,25 @@ describe("Lively4 Server", () => {
     Server.port = port;
     Server.autoCommit = true
     this.timeout(35000);
-    var result = await run(`rm -rv "${tmp}"; mkdir -v "${tmp}"; cd "${tmp}";` +
+    var result = await run(`rm -rv "${tmp}"; mkdir -p "${tmp}"; cd "${tmp}";` +
       `git clone https://github.com/LivelyKernel/${testrepo};` +
-      `cd ${testrepo}; git --reset hard`);
-    
+      `cd ${testrepo}; git reset --hard`);
     
     console.log("stdout: " + result.stdout);
-    await Server.start();
     
-   
-
+    console.log("start server")
+    Promise.resolve().then(() => Server.start());
+    await new Promise(resolve => setTimeout(resolve, 100));
+    console.log("server started")
   });
+
+  after(async () => {
+    console.log("stop server")
+    Server.stop();
+    // process.exit(0);
+    console.log("server stopped")
+  })
+
 
   describe("GET", () => {
     it("read directory", async () => {
@@ -59,7 +68,7 @@ describe("Lively4 Server", () => {
       var body = await response.text() 
       expect(body).to.match(/lively4-dummy/);
     });
-
+  
     it("read file", async () => {
       var response = await fetch(url + "lively4-dummy/README.md", {
         method: "GET",
@@ -155,6 +164,7 @@ describe("Lively4 Server", () => {
       expect(content.versions, "versions").length.to.be.gt(0)
     })
     
+
     it("should show versions on directories", async() => {
       var response = await fetch(url + "lively4-dummy/", {
         method: "OPTIONS",
