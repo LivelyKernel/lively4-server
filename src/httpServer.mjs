@@ -63,6 +63,8 @@ import fetch from 'node-fetch';
 import * as utils from './utils.js';
 import { cleanString, run, respondWithCMD } from './utils.js';
 
+import MKCOL from './service/mkcol.mjs';
+
 // Promisified fs functions
 const fs_exists = function (file) {
   return new Promise(resolve =>
@@ -189,7 +191,7 @@ export class Server {
     this.options = args.options
     this.sourceDir = args.options.directory || '../';
     this.lively4dir = this.sourceDir;
-    this.server = args.options.server || '.';
+    this.serverDir = args.options.server || '.';
     this.bashBin = args.options['bash-bin'] || 'bash';
     utils.config.bashBin = this.bashBin;
     this.lively4DirUnix = args.options['lively4dir-unix'] || this.lively4dir;
@@ -211,7 +213,7 @@ export class Server {
 
   static start() {
     log('Welcome to Lively4!');
-    log('Server: ' + this.server);
+    log('Server: ' + this.serverDir);
     log('Lively4: ' + this.lively4dir);
     log('Port: ' + this.port);
     log('Auto-commit: ' + this.autoCommit);
@@ -475,7 +477,7 @@ export class Server {
         } else if (req.method == 'DELETE') {
           await this.DELETE(repositorypath, filepath, res);
         } else if (req.method == 'MKCOL') {
-          await this.MKCOL(repositorypath, filepath, res);
+          await new MKCOL(this).request(repositorypath, filepath, res);
         } else if (req.method == 'OPTIONS') {
           await this.OPTIONS(repositorypath, filepath, req, res);
         } else if (req.method == 'MOVE') {
@@ -492,7 +494,7 @@ export class Server {
   }
 
   static GET(repositorypath, filepath, fileversion, req, res) {
-    if (filepath.match(Server.Config.bundleName)) {
+    if (filepath.match(this.Config.bundleName)) {
       return this.ensureBundleFile(repositorypath, filepath, req, res);
     } else if (fileversion && fileversion != 'undefined') {
       return this.readFileVersion(repositorypath, filepath, fileversion, req, res);
@@ -509,16 +511,16 @@ export class Server {
     var bundleFile = Path.join(repositorypath, bundleFilepath)
     if (!await fs_exists(bundleFile)) {
       logRequest(req, "CREATE BUNDLE for " + repositorypath)
-      await this.ensureDirectory(repositorypath, Server.Config.optionsDir)
-      let optionsDir = Path.join(repositorypath, Server.Config.optionsDir)
+      await this.ensureDirectory(repositorypath, this.Config.optionsDir)
+      let optionsDir = Path.join(repositorypath, this.Config.optionsDir)
 
-      await this.ensureDirectory(repositorypath, Server.Config.transpileDir)
-      let transpileDir = Path.join(repositorypath, Server.Config.transpileDir)
+      await this.ensureDirectory(repositorypath, this.Config.transpileDir)
+      let transpileDir = Path.join(repositorypath, this.Config.transpileDir)
 
       try {
-        var bootlist = (await fs_readFile(repositorypath + "/" + Server.Config.bootfilelistName)).toString()
+        var bootlist = (await fs_readFile(repositorypath + "/" + this.Config.bootfilelistName)).toString()
       } catch (e) {
-        logRequest(req, "WARNING, could not read " + Server.Config.bootfilelistName + ":" + e)
+        logRequest(req, "WARNING, could not read " + this.Config.bootfilelistName + ":" + e)
       }
       var relativeBootFiles = []
       var relativeOptionFiles = []
@@ -551,7 +553,7 @@ export class Server {
             logRequest(req, "UPDATE OPTIONS " + optionsFile)
             await fs_writeFile(optionsFile, JSON.stringify(updatedOptions, null, 2))
           }
-          relativeOptionFiles.push(Path.join(Server.Config.optionsDir, filehash))
+          relativeOptionFiles.push(Path.join(this.Config.optionsDir, filehash))
 
           let transpileStats = await try_fs_stat(transpileFile)
           if (transpileStats) {
@@ -559,7 +561,7 @@ export class Server {
               logRequest(req, "DELETE " + transpileFile)
               await this.deletePath(transpileFile)
             } else {
-              relativeTranspileFiles.push(Path.join(Server.Config.transpileDir, filehash))
+              relativeTranspileFiles.push(Path.join(this.Config.transpileDir, filehash))
             }
           }
           let transpileMapStats = await try_fs_stat(transpileMapFile)
@@ -568,7 +570,7 @@ export class Server {
               logRequest(req, "DELETE " + transpileMapFile)
               await this.deletePath(transpileMapFile)
             } else {
-              relativeTranspileFiles.push(Path.join(Server.Config.transpileDir, filehash + ".json.map"))
+              relativeTranspileFiles.push(Path.join(this.Config.transpileDir, filehash + ".json.map"))
 
             }
           }
@@ -603,8 +605,8 @@ export class Server {
       }
 
       var cmd = `cd ${repositorypath}; 
-        if [ ! -e ${Server.Config.bundleName} ]; then
-          zip -r ${Server.Config.bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
+        if [ ! -e ${this.Config.bundleName} ]; then
+          zip -r ${this.Config.bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
         fi`
       // logRequest(req, "ZIP " + cmd)
       var result = await run(cmd)
@@ -616,16 +618,16 @@ export class Server {
 
 
   static async isInBootfile(repositorypath, filepath) {
-    console.log("isInBootfile " + Server.Config.bootfilelistName + " in " + repositorypath + " " + filepath)
-    if (filepath.match(Server.Config.bootfilelistName)) {
+    console.log("isInBootfile " + this.Config.bootfilelistName + " in " + repositorypath + " " + filepath)
+    if (filepath.match(this.Config.bootfilelistName)) {
       return true // the bootfilelist always invalidates itself...
     }
 
     // costs... 10ms ... so #Refactor before using it every GET requests
     var result = (await run(`cd ${repositorypath}; 
-      echo ${Server.Config.bootfilelistName}
-      if [ -e ${Server.Config.bootfilelistName} ]; then
-        grep ${filepath} ${Server.Config.bootfilelistName}
+      echo ${this.Config.bootfilelistName}
+      if [ -e ${this.Config.bootfilelistName} ]; then
+        grep ${filepath} ${this.Config.bootfilelistName}
       fi`)).stdout
     return result.match(filepath)
   }
@@ -663,9 +665,9 @@ export class Server {
 
 
   static async invalidateBundleFile(repositorypath, filepath) {
-    if (filepath.match(Server.Config.transpileDir) // all compiled files are bundled?
+    if (filepath.match(this.Config.transpileDir) // all compiled files are bundled?
       || await this.isInBootfile(repositorypath, filepath)) {
-      log("INVALIDATE " + Server.Config.bundleName + " in " + repositorypath)
+      log("INVALIDATE " + this.Config.bundleName + " in " + repositorypath)
       // remove bundle if we uploaded a file that belongs into it
       await this.deleteBundleFile(repositorypath)
     } else {
@@ -675,8 +677,8 @@ export class Server {
 
   static async deleteBundleFile(repositorypath) {
     return await run(`cd ${repositorypath}; 
-      if [ -e ${Server.Config.bundleName} ]; then
-        rm ${Server.Config.bundleName}
+      if [ -e ${this.Config.bundleName} ]; then
+        rm ${this.Config.bundleName}
       fi`)
   }
 
@@ -692,37 +694,37 @@ export class Server {
   }
 
   static async ensureSpecialParentDirectories(repositorypath, filepath, req) {
-    if (filepath.match(Server.Config.transpileDir)) {
-      await this.ensureDirectory(repositorypath, Server.Config.transpileDir)
+    if (filepath.match(this.Config.transpileDir)) {
+      await this.ensureDirectory(repositorypath, this.Config.transpileDir)
     }
 
-    // if (filepath.match(Server.Config.optionsDir)) { 
-    //   await this.ensureDirectory(repositorypath, Server.Config.optionsDir)
+    // if (filepath.match(this.Config.optionsDir)) { 
+    //   await this.ensureDirectory(repositorypath, this.Config.optionsDir)
     // }
   }
 
   static async invalidateOptionsFile(repositorypath, filepath, req) {
-    if (filepath.match(Server.Config.optionsDir)) return  // don't do it on yourself
+    if (filepath.match(this.Config.optionsDir)) return  // don't do it on yourself
     if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
 
-    logRequest(req, "invalidate options files" + Server.Config.bundleName + " in " + repositorypath)
+    logRequest(req, "invalidate options files" + this.Config.bundleName + " in " + repositorypath)
     var hashedpath = filepath.replace(/\//g, "_")
     await run(`cd ${repositorypath}; 
-        if [[ -e ${Server.Config.optionsDir}/${hashedpath} ]]; then
-          rm ${Server.Config.optionsDir}/${hashedpath}
+        if [[ -e ${this.Config.optionsDir}/${hashedpath} ]]; then
+          rm ${this.Config.optionsDir}/${hashedpath}
         fi`)
   }
 
   static async invalidateTranspiledFile(repositorypath, filepath, req) {
-    if (filepath.match(Server.Config.transpileDir)) return  // don't do it on yourself
+    if (filepath.match(this.Config.transpileDir)) return  // don't do it on yourself
     if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
 
-    logRequest(req, "invalidate transpilation files" + Server.Config.bundleName + " in " + repositorypath)
+    logRequest(req, "invalidate transpilation files" + this.Config.bundleName + " in " + repositorypath)
     var hashedpath = filepath.replace(/\//g, "_")
     var result = await run(`cd ${repositorypath}; 
-        if [ -e ${Server.Config.transpileDir} ]; then
-          rm ${Server.Config.transpileDir}/${hashedpath}
-          rm ${Server.Config.transpileDir}/${hashedpath}.map.json
+        if [ -e ${this.Config.transpileDir} ]; then
+          rm ${this.Config.transpileDir}/${hashedpath}
+          rm ${this.Config.transpileDir}/${hashedpath}.map.json
         fi`)
     logRequest(req, "RESULT " + result.stdout)
   }
@@ -993,11 +995,11 @@ export class Server {
   }
 
   static optionsPath(repositorypath, filepath) {
-    return repositorypath + "/" + Server.Config.optionsDir + "/" + filepath.replace(/\//g, "_")
+    return repositorypath + "/" + this.Config.optionsDir + "/" + filepath.replace(/\//g, "_")
   }
 
   static transpilePath(repositorypath, filepath) {
-    return repositorypath + "/" + Server.Config.transpileDir + "/" + filepath.replace(/\//g, "_")
+    return repositorypath + "/" + this.Config.transpileDir + "/" + filepath.replace(/\//g, "_")
   }
 
   static async deletePath(fullpath) {
@@ -1072,20 +1074,6 @@ export class Server {
   }
 
 
-  /*
-   * create directory
-   */
-  static async MKCOL(repositorypath, filepath, res) {
-    let fullpath = Path.join(repositorypath, filepath)
-    // #TODO check for existing directory and return 409 ?
-    var result = await run(`mkdir -v "${fullpath}"`);
-    if (result.error) {
-      res.writeHead(404);
-      return res.end("Error " + result.stdout + "\n" + result.stderr);
-    }
-    res.writeHead(200);
-    res.end("created directory: " + fullpath);
-  }
 
   static async readOptions(repositorypath, filepath, stats) {
     var fullpath = Path.join(repositorypath, filepath)
@@ -1276,7 +1264,7 @@ export class Server {
       }
       RepositoryInSync[repository] = true;
       try {
-        cmd = `${this.server}/bin/lively4sync.sh '${this.lively4DirUnix +
+        cmd = `${this.serverDir}/bin/lively4sync.sh '${this.lively4DirUnix +
           '/' +
           repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
         const result = await run(cmd);
@@ -1306,7 +1294,7 @@ export class Server {
       }
     } else if (sPath.match(/\/_git\/resolve/)) {
       cmd =
-        `${this.server}/bin/lively4resolve.sh '` +
+        `${this.serverDir}/bin/lively4resolve.sh '` +
         this.lively4DirUnix +
         '/' +
         repository +
@@ -1415,21 +1403,21 @@ export class Server {
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/branch$/)) {
       cmd =
-        `${this.server}/bin/lively4branch.sh '${repository}' ` +
+        `${this.serverDir}/bin/lively4branch.sh '${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/merge$/)) {
       cmd =
-        `${this.server}/bin/lively4merge.sh '${this.lively4DirUnix}/${repository}' ` +
+        `${this.serverDir}/bin/lively4merge.sh '${this.lively4DirUnix}/${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/squash$/)) {
       cmd =
-        `${this.server}/bin/lively4squash.sh '${this.lively4DirUnix}/${repository}' ` +
+        `${this.serverDir}/bin/lively4squash.sh '${this.lively4DirUnix}/${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}' '${msg}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/delete$/)) {
-      cmd = `${this.server}/bin/lively4deleterepository.sh '${this.lively4DirUnix}/${repository}'`;
+      cmd = `${this.serverDir}/bin/lively4deleterepository.sh '${this.lively4DirUnix}/${repository}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/show$/)) {
       cmd = `cd ${this.lively4DirUnix}/${repository};\n` + `git show ${usecolor ? " --color=always " : ""}` + gitcommit;
@@ -1466,7 +1454,7 @@ export class Server {
 
   static BIBTEX(sPath, req, res) {
     var query = cleanString(URL.parse(req.url, true).query["search"])
-    return respondWithCMD(`${this.server}/bin/search-bibtex.py "${query}"`, res);
+    return respondWithCMD(`${this.serverDir}/bin/search-bibtex.py "${query}"`, res);
   }
 
   static SEARCH(sPath, req, res) {
