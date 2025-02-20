@@ -1702,6 +1702,6 @@ Server.setup();
 if (import.meta.url.startsWith('file:')) {
   const modulePath = URL.fileURLToPath(import.meta.url);
   if (process.argv[1] === modulePath) {
-    // Server.start();
+    Server.start();
   }
 }
