@@ -185,38 +185,36 @@ export class Server {
   }
 
   static setup() {
-    this.port = port;
-    this.server = server;
+    var args = argv.option(Server.optionsSpec).run();
+    this.options = args.options
+    this.sourceDir = args.options.directory || '../';
+    this.lively4dir = this.sourceDir;
+    this.server = args.options.server || '.';
+    this.bashBin = args.options['bash-bin'] || 'bash';
+    utils.config.bashBin = this.bashBin;
+    this.lively4DirUnix = args.options['lively4dir-unix'] || this.lively4dir;
+    this.autoCommit = args.options['auto-commit'] || false;
+    this.port = args.options.port || 8080;
   }
 
   static get lively4dir() {
-    return lively4dir;
+    return this._lively4dir;
   }
 
   static set lively4dir(path) {
     log('set lively4dir to:' + path);
-    sourceDir = path;
-    lively4dir = path;
-    lively4DirUnix = path;
-    return lively4dir;
+    this.sourceDir = path;
+    this._lively4dir = path;
+    this.lively4DirUnix = path;
+    return this._lively4dir;
   }
-
-  static get autoCommit() {
-    return autoCommit;
-  }
-
-  static set autoCommit(bool) {
-    log('set autoCommit to: ' + bool);
-    return (autoCommit = bool);
-  }
-
 
   static start() {
     log('Welcome to Lively4!');
     log('Server: ' + this.server);
-    log('Lively4: ' + lively4dir);
+    log('Lively4: ' + this.lively4dir);
     log('Port: ' + this.port);
-    log('Auto-commit: ' + autoCommit);
+    log('Auto-commit: ' + this.autoCommit);
     log('Myurl: ' + Server.options.myurl);
 
     this.tmpStorage = {};
@@ -233,7 +231,7 @@ export class Server {
           throw err;
         }
         this.isRunning = true;
-        log('Server running on port ' + port + ' in directory ' + sourceDir);
+        log('Server running on port ' + this.port + ' in directory ' + this.sourceDir);
       });
 
     // Track new connections
@@ -353,10 +351,10 @@ export class Server {
         var m = path.match(/^\/([^/]*)\/(.*)/)
 
         if (m) {
-          var repositorypath = Path.join(sourceDir, m[1]);
+          var repositorypath = Path.join(this.sourceDir, m[1]);
           var filepath = m[2]
         } else {
-          repositorypath = sourceDir
+          repositorypath = this.sourceDir
           filepath = path
         }
 
@@ -920,7 +918,7 @@ export class Server {
       throw new Error("Error in writeFile " + fullpath + ": " + err);
     }
 
-    if (!autoCommit || req.headers['nocommit']) {
+    if (!this.autoCommit || req.headers['nocommit']) {
       // logRequest(req, 'saved ' + fullpath);
       res.writeHead(200, 'OK');
       res.end();
@@ -1248,7 +1246,7 @@ export class Server {
     var versionA = req.headers['gitversiona'];
     var versionB = req.headers['gitversionb'];
 
-    var repositorypath = Path.join(sourceDir, repository)
+    var repositorypath = Path.join(this.sourceDir, repository)
 
     if (!email) {
       return res.end('please provide email!');
@@ -1278,7 +1276,7 @@ export class Server {
       }
       RepositoryInSync[repository] = true;
       try {
-        cmd = `${server}/bin/lively4sync.sh '${lively4DirUnix +
+        cmd = `${this.server}/bin/lively4sync.sh '${this.lively4DirUnix +
           '/' +
           repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
         const result = await run(cmd);
@@ -1308,24 +1306,24 @@ export class Server {
       }
     } else if (sPath.match(/\/_git\/resolve/)) {
       cmd =
-        `${server}/bin/lively4resolve.sh '` +
-        lively4DirUnix +
+        `${this.server}/bin/lively4resolve.sh '` +
+        this.lively4DirUnix +
         '/' +
         repository +
         "'";
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/status/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};
+      cmd = `cd ${this.lively4DirUnix}/${repository};
         git -c color.status=always  status ; git log --color=always HEAD...origin/${branch} --pretty="format:%h\t%aN\t%cD\t%f"`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/log/)) {
       cmd =
-        'cd ' + lively4DirUnix + '/' + repository + '; git log --color=always';
+        'cd ' + this.lively4DirUnix + '/' + repository + '; git log --color=always';
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/graph/)) {
       cmd =
         'cd ' +
-        lively4DirUnix +
+        this.lively4DirUnix +
         '/' +
         repository +
         '; git log --graph -100 --color=always';
@@ -1336,7 +1334,7 @@ export class Server {
       }
       cmd =
         "cd '" +
-        lively4DirUnix +
+        this.lively4DirUnix +
         '/' +
         repository +
         "';\n" +
@@ -1360,17 +1358,17 @@ export class Server {
       if (gitcommit) {
         commit = gitcommit + '~1 ' + gitcommit;
       }
-      cmd = `cd ${lively4DirUnix}/${repository}; git diff --word-diff --color=always ${commit}`;
+      cmd = `cd ${this.lively4DirUnix}/${repository}; git diff --word-diff --color=always ${commit}`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/clone/)) {
       let url = repositoryurl.replace("https://", `https://${username}:${password}@`)
       cmd =
-        `cd ${lively4DirUnix}; \n` +
+        `cd ${this.lively4DirUnix}; \n` +
         'git clone --recursive ' +
         url +
         ' ' +
         repository + `;\n` + // this will leave the password in the config
-        `cd ${lively4DirUnix}/${repository}; \n` +
+        `cd ${this.lively4DirUnix}/${repository}; \n` +
         // #TODO can we avoid the and prevent the storing of username and password in the first place, e.g. is there is method of handing git the usename and password without encoding them in the url?
         // remove the username password from the config       
         `git remote set-url origin ${repositoryurl}`
@@ -1393,7 +1391,7 @@ export class Server {
       // WARNING: the changes will appear as local changes but should be resolved by the merge later
       // from git's standpoint it will appeach as two changes with the same content
       let url = repositoryurl.replace("https://", `https://${username}:${password}@`)
-      cmd = `cd ${lively4DirUnix}/${repository};\n` +
+      cmd = `cd ${this.lively4DirUnix}/${repository};\n` +
         `git remote set-url origin ${url};\n` +
         `git fetch; \n` +
         `git checkout origin/${branch} -- ${filepath}; \n` +
@@ -1402,48 +1400,48 @@ export class Server {
       await respondWithCMD(cmd, res, dryrun);
       RepositoryInSync[repository] = undefined;
     } else if (sPath.match(/\/_git\/npminstall/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};\n` + 'npm install';
+      cmd = `cd ${this.lively4DirUnix}/${repository};\n` + 'npm install';
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/npmtest/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};\n` + 'npm test';
+      cmd = `cd ${this.lively4DirUnix}/${repository};\n` + 'npm test';
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/remoteurl/)) {
       cmd =
-        `cd ${lively4DirUnix}/${repository};\n` +
+        `cd ${this.lively4DirUnix}/${repository};\n` +
         'git config --get remote.origin.url';
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/branches$/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};\n` + 'git branch -a ';
+      cmd = `cd ${this.lively4DirUnix}/${repository};\n` + 'git branch -a ';
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/branch$/)) {
       cmd =
-        `${server}/bin/lively4branch.sh '${repository}' ` +
+        `${this.server}/bin/lively4branch.sh '${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/merge$/)) {
       cmd =
-        `${server}/bin/lively4merge.sh '${lively4DirUnix}/${repository}' ` +
+        `${this.server}/bin/lively4merge.sh '${this.lively4DirUnix}/${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/squash$/)) {
       cmd =
-        `${server}/bin/lively4squash.sh '${lively4DirUnix}/${repository}' ` +
+        `${this.server}/bin/lively4squash.sh '${this.lively4DirUnix}/${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}' '${msg}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/delete$/)) {
-      cmd = `${server}/bin/lively4deleterepository.sh '${lively4DirUnix}/${repository}'`;
+      cmd = `${this.server}/bin/lively4deleterepository.sh '${this.lively4DirUnix}/${repository}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/show$/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};\n` + `git show ${usecolor ? " --color=always " : ""}` + gitcommit;
+      cmd = `cd ${this.lively4DirUnix}/${repository};\n` + `git show ${usecolor ? " --color=always " : ""}` + gitcommit;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/reset$/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
+      cmd = `cd ${this.lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/mergebase$/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};\n` + `git merge-base ${versionA} ${versionB} `;
+      cmd = `cd ${this.lively4DirUnix}/${repository};\n` + `git merge-base ${versionA} ${versionB} `;
       respondWithCMD(cmd, res, dryrun);
     } else if (sPath.match(/\/_git\/reset-hard/)) {
-      cmd = `cd ${lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
+      cmd = `cd ${this.lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
       respondWithCMD(cmd, res, dryrun);
     } else {
       res.writeHead(200);
@@ -1468,7 +1466,7 @@ export class Server {
 
   static BIBTEX(sPath, req, res) {
     var query = cleanString(URL.parse(req.url, true).query["search"])
-    return respondWithCMD(`${server}/bin/search-bibtex.py "${query}"`, res);
+    return respondWithCMD(`${this.server}/bin/search-bibtex.py "${query}"`, res);
   }
 
   static SEARCH(sPath, req, res) {
@@ -1477,7 +1475,7 @@ export class Server {
     var excludes = '.git,' + req.headers['excludes'];
 
     if (sPath.match(/\/_search\/files/)) {
-      var cmd = 'cd ' + lively4DirUnix + '; ';
+      var cmd = 'cd ' + this.lively4DirUnix + '; ';
       cmd += 'find ' + rootdirs.replace(/,/g, ' ') + ' -type f ';
       cmd += excludes
         .split(',')
@@ -1585,7 +1583,7 @@ export class Server {
     console.log("MAKE " + path)
     var params = URL.parse(req.url, true).query
     var dir = path.replace(/.*_make\//, "")
-    return respondWithCMD("cd " + lively4DirUnix + dir + "; make " + (params.target || ""), res)
+    return respondWithCMD("cd " + this.lively4DirUnix + dir + "; make " + (params.target || ""), res)
   }
 
   static OPEN(path, req, res) {
@@ -1595,7 +1593,7 @@ export class Server {
     var dir = relativePath.replace(/[^/]*$/, "")
     var file = relativePath.replace(/.*\//, "")
 
-    return respondWithCMD("cd \"" + lively4DirUnix + dir + "\"; open \"" + file + "\"", res)
+    return respondWithCMD("cd \"" + this.lively4DirUnix + dir + "\"; open \"" + file + "\"", res)
   }
 
   static webhookListeners(key) {
@@ -1672,28 +1670,6 @@ export class Server {
 
 }
 
-// #REFACTOR
-// parse command line arguments
-var args = argv.option(Server.optionsSpec).run();
-Server.options = args.options
-var port = args.options.port || 8080;
-var sourceDir = args.options.directory || '../';
-var indexFiles = args.options['index-files'];
-var lively4dir = sourceDir;
-var server = args.options.server || '.';
-var bashBin = args.options['bash-bin'] || 'bash';
-utils.config.bashBin = bashBin;
-var lively4DirUnix = args.options['lively4dir-unix'] || lively4dir;
-var autoCommit = args.options['auto-commit'] || false;
-
-// Does this work?
-// process.on('uncaughtException', function(error) {
-//   console.log("uncaughtException: " + error)
-//   process.exit(1)
-// });
-// process.on('unhandledRejection', function(reason, p){
-//   console.log("unhandledRejection: " + reason)
-// });
 
 Server.setup();
 
