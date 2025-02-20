@@ -66,12 +66,8 @@ import { cleanString, run, respondWithCMD } from './utils.js';
 import MKCOL from './service/mkcol.mjs';
 
 // Promisified fs functions
-const fs_exists = function (file) {
-  return new Promise(resolve =>
-    fs.exists(file, exists => {
-      resolve(exists);
-    })
-  );
+const fs_exists = async (file) => {
+  return (await try_fs_stat(file)) !== null;
 };
 const fs_stat = promisify(fs.stat);
 const fs_readdir = promisify(fs.readdir);
