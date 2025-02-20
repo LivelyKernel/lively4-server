@@ -5,7 +5,7 @@
   "main": "httpServer.js",
   "scripts": {
     "test": "mocha",
-    "start": "node src/httpServer.js"
+    "start": "node src/httpServer.mjs"
   },
   "repository": {
     "type": "git",
