@@ -76,12 +76,6 @@ const fs_readdir = promisify(fs.readdir);
 const fs_writeFile = promisify(fs.writeFile);
 const fs_readFile = promisify(fs.readFile);
 
-// Constants
-const Lively4bootfilelistName = ".lively4bootfilelist";
-const Lively4bundleName = ".lively4bundle.zip";
-const Lively4transpileDir = ".transpiled";
-const Lively4optionsDir = ".options";
-
 // Cache objects
 const GithubOriganizationMemberCache = {};
 const RepositoryBootfiles = {};
@@ -113,6 +107,13 @@ async function try_fs_stat(file) {
 }
 
 export class Server {
+  static Config = {
+    bootfilelistName: ".lively4bootfilelist",
+    bundleName: ".lively4bundle.zip", 
+    transpileDir: ".transpiled",
+    optionsDir: ".options"
+  };
+
   static get optionsSpec() {
     return [
       {
@@ -493,7 +494,7 @@ export class Server {
   }
 
   static GET(repositorypath, filepath, fileversion, req, res) {
-    if (filepath.match(Lively4bundleName)) {
+    if (filepath.match(Server.Config.bundleName)) {
       return this.ensureBundleFile(repositorypath, filepath, req, res);
     } else if (fileversion && fileversion != 'undefined') {
       return this.readFileVersion(repositorypath, filepath, fileversion, req, res);
@@ -510,18 +511,16 @@ export class Server {
     var bundleFile = Path.join(repositorypath, bundleFilepath)
     if (!await fs_exists(bundleFile)) {
       logRequest(req, "CREATE BUNDLE for " + repositorypath)
-      // #TODO pull file existence logic into javascript?
-      await this.ensureDirectory(repositorypath, Lively4optionsDir)
-      let optionsDir = Path.join(repositorypath, Lively4optionsDir)
+      await this.ensureDirectory(repositorypath, Server.Config.optionsDir)
+      let optionsDir = Path.join(repositorypath, Server.Config.optionsDir)
 
-      await this.ensureDirectory(repositorypath, Lively4transpileDir)
-      let transpileDir = Path.join(repositorypath, Lively4transpileDir)
+      await this.ensureDirectory(repositorypath, Server.Config.transpileDir)
+      let transpileDir = Path.join(repositorypath, Server.Config.transpileDir)
 
       try {
-        // Convert Buffer to string when reading bootlist
-        var bootlist = (await fs_readFile(repositorypath + "/" + Lively4bootfilelistName)).toString()
+        var bootlist = (await fs_readFile(repositorypath + "/" + Server.Config.bootfilelistName)).toString()
       } catch (e) {
-        logRequest(req, "WARNING, could not read " + Lively4bootfilelistName + ":" + e)
+        logRequest(req, "WARNING, could not read " + Server.Config.bootfilelistName + ":" + e)
       }
       var relativeBootFiles = []
       var relativeOptionFiles = []
@@ -554,7 +553,7 @@ export class Server {
             logRequest(req, "UPDATE OPTIONS " + optionsFile)
             await fs_writeFile(optionsFile, JSON.stringify(updatedOptions, null, 2))
           }
-          relativeOptionFiles.push(Path.join(Lively4optionsDir, filehash))
+          relativeOptionFiles.push(Path.join(Server.Config.optionsDir, filehash))
 
           let transpileStats = await try_fs_stat(transpileFile)
           if (transpileStats) {
@@ -562,7 +561,7 @@ export class Server {
               logRequest(req, "DELETE " + transpileFile)
               await this.deletePath(transpileFile)
             } else {
-              relativeTranspileFiles.push(Path.join(Lively4transpileDir, filehash))
+              relativeTranspileFiles.push(Path.join(Server.Config.transpileDir, filehash))
             }
           }
           let transpileMapStats = await try_fs_stat(transpileMapFile)
@@ -571,7 +570,7 @@ export class Server {
               logRequest(req, "DELETE " + transpileMapFile)
               await this.deletePath(transpileMapFile)
             } else {
-              relativeTranspileFiles.push(Path.join(Lively4transpileDir, filehash + ".json.map"))
+              relativeTranspileFiles.push(Path.join(Server.Config.transpileDir, filehash + ".json.map"))
 
             }
           }
@@ -606,8 +605,8 @@ export class Server {
       }
 
       var cmd = `cd ${repositorypath}; 
-        if [ ! -e ${Lively4bundleName} ]; then
-          zip -r ${Lively4bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
+        if [ ! -e ${Server.Config.bundleName} ]; then
+          zip -r ${Server.Config.bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
         fi`
       // logRequest(req, "ZIP " + cmd)
       var result = await run(cmd)
@@ -619,16 +618,16 @@ export class Server {
 
 
   static async isInBootfile(repositorypath, filepath) {
-    console.log("isInBootfile " + Lively4bootfilelistName + " in " + repositorypath + " " + filepath)
-    if (filepath.match(Lively4bootfilelistName)) {
+    console.log("isInBootfile " + Server.Config.bootfilelistName + " in " + repositorypath + " " + filepath)
+    if (filepath.match(Server.Config.bootfilelistName)) {
       return true // the bootfilelist always invalidates itself...
     }
 
     // costs... 10ms ... so #Refactor before using it every GET requests
     var result = (await run(`cd ${repositorypath}; 
-      echo ${Lively4bootfilelistName}
-      if [ -e ${Lively4bootfilelistName} ]; then
-        grep ${filepath} ${Lively4bootfilelistName}
+      echo ${Server.Config.bootfilelistName}
+      if [ -e ${Server.Config.bootfilelistName} ]; then
+        grep ${filepath} ${Server.Config.bootfilelistName}
       fi`)).stdout
     return result.match(filepath)
   }
@@ -666,9 +665,9 @@ export class Server {
 
 
   static async invalidateBundleFile(repositorypath, filepath) {
-    if (filepath.match(Lively4transpileDir) // all compiled files are bundled?
+    if (filepath.match(Server.Config.transpileDir) // all compiled files are bundled?
       || await this.isInBootfile(repositorypath, filepath)) {
-      log("INVALIDATE " + Lively4bundleName + " in " + repositorypath)
+      log("INVALIDATE " + Server.Config.bundleName + " in " + repositorypath)
       // remove bundle if we uploaded a file that belongs into it
       await this.deleteBundleFile(repositorypath)
     } else {
@@ -678,8 +677,8 @@ export class Server {
 
   static async deleteBundleFile(repositorypath) {
     return await run(`cd ${repositorypath}; 
-      if [ -e ${Lively4bundleName} ]; then
-        rm ${Lively4bundleName}
+      if [ -e ${Server.Config.bundleName} ]; then
+        rm ${Server.Config.bundleName}
       fi`)
   }
 
@@ -695,37 +694,37 @@ export class Server {
   }
 
   static async ensureSpecialParentDirectories(repositorypath, filepath, req) {
-    if (filepath.match(Lively4transpileDir)) {
-      await this.ensureDirectory(repositorypath, Lively4transpileDir)
+    if (filepath.match(Server.Config.transpileDir)) {
+      await this.ensureDirectory(repositorypath, Server.Config.transpileDir)
     }
 
-    // if (filepath.match(Lively4optionsDir)) { 
-    //   await this.ensureDirectory(repositorypath, Lively4optionsDir)
+    // if (filepath.match(Server.Config.optionsDir)) { 
+    //   await this.ensureDirectory(repositorypath, Server.Config.optionsDir)
     // }
   }
 
   static async invalidateOptionsFile(repositorypath, filepath, req) {
-    if (filepath.match(Lively4optionsDir)) return  // don't do it on yourself
+    if (filepath.match(Server.Config.optionsDir)) return  // don't do it on yourself
     if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
 
-    logRequest(req, "invalidate options files" + Lively4bundleName + " in " + repositorypath)
+    logRequest(req, "invalidate options files" + Server.Config.bundleName + " in " + repositorypath)
     var hashedpath = filepath.replace(/\//g, "_")
     await run(`cd ${repositorypath}; 
-        if [[ -e ${Lively4optionsDir}/${hashedpath} ]]; then
-          rm ${Lively4optionsDir}/${hashedpath}
+        if [[ -e ${Server.Config.optionsDir}/${hashedpath} ]]; then
+          rm ${Server.Config.optionsDir}/${hashedpath}
         fi`)
   }
 
   static async invalidateTranspiledFile(repositorypath, filepath, req) {
-    if (filepath.match(Lively4transpileDir)) return  // don't do it on yourself
+    if (filepath.match(Server.Config.transpileDir)) return  // don't do it on yourself
     if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
 
-    logRequest(req, "invalidate transpilation files" + Lively4bundleName + " in " + repositorypath)
+    logRequest(req, "invalidate transpilation files" + Server.Config.bundleName + " in " + repositorypath)
     var hashedpath = filepath.replace(/\//g, "_")
     var result = await run(`cd ${repositorypath}; 
-        if [ -e ${Lively4transpileDir} ]; then
-          rm ${Lively4transpileDir}/${hashedpath}
-          rm ${Lively4transpileDir}/${hashedpath}.map.json
+        if [ -e ${Server.Config.transpileDir} ]; then
+          rm ${Server.Config.transpileDir}/${hashedpath}
+          rm ${Server.Config.transpileDir}/${hashedpath}.map.json
         fi`)
     logRequest(req, "RESULT " + result.stdout)
   }
@@ -996,11 +995,11 @@ export class Server {
   }
 
   static optionsPath(repositorypath, filepath) {
-    return repositorypath + "/" + Lively4optionsDir + "/" + filepath.replace(/\//g, "_")
+    return repositorypath + "/" + Server.Config.optionsDir + "/" + filepath.replace(/\//g, "_")
   }
 
   static transpilePath(repositorypath, filepath) {
-    return repositorypath + "/" + Lively4transpileDir + "/" + filepath.replace(/\//g, "_")
+    return repositorypath + "/" + Server.Config.transpileDir + "/" + filepath.replace(/\//g, "_")
   }
 
   static async deletePath(fullpath) {
