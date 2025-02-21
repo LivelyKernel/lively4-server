@@ -49,7 +49,6 @@ import URL from 'url';
 import Path from 'path';
 import { mkdir } from 'fs/promises';
 import { exec } from 'child_process';
-import { promisify } from 'util';
 
 // Third-party imports
 import httpProxy from 'http-proxy';
@@ -59,22 +58,11 @@ import slash from 'slash'; // Convert Windows backslash paths to slash paths: fo
 import 'log-timestamp'; // this adds a timestamp to all log messages
 import fetch from 'node-fetch';
 
-// Local imports
-import * as utils from './utils.js';
-import { cleanString, run, respondWithCMD } from './utils.js';
+import {config, cleanString, run, respondWithCMD, fs_exists, fs_readFile, fs_readdir, fs_stat, fs_writeFile, log, logRequest, try_fs_stat } from './utils.js';
 
 import MKCOL from './services/mkcol.mjs';
 import BIBTEX from './services/bibtex.mjs';
 import SEARCH from './services/search.mjs';
-
-// Promisified fs functions
-const fs_exists = async (file) => {
-  return (await try_fs_stat(file)) !== null;
-};
-const fs_stat = promisify(fs.stat);
-const fs_readdir = promisify(fs.readdir);
-const fs_writeFile = promisify(fs.writeFile);
-const fs_readFile = promisify(fs.readFile);
 
 // Cache objects
 const GithubOriganizationMemberCache = {};
@@ -87,29 +75,10 @@ const RepositoryGitInUse = {}; // cheap semaphore
 const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 const isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
 
-// Logging functions
-export function log(...args) {
-  console.log('[server]', ...args);
-}
-
-// #UseCase #ContextJS #AsyncContext it is really hard to hand down the request object into all methods, just so they can log properly...
-export function logRequest(req, ...args) {
-  log("REQUEST[" + req._logId + "] ", ...args);
-}
-
-// Helper functions
-async function try_fs_stat(file) {
-  try {
-    return await fs_stat(file)
-  } catch (e) {
-    return null
-  }
-}
-
 export class Server {
   static Config = {
     bootfilelistName: ".lively4bootfilelist",
-    bundleName: ".lively4bundle.zip", 
+    bundleName: ".lively4bundle.zip",
     transpileDir: ".transpiled",
     optionsDir: ".options"
   };
@@ -191,7 +160,7 @@ export class Server {
     this.lively4dir = this.sourceDir;
     this.serverDir = args.options.server || '.';
     this.bashBin = args.options['bash-bin'] || 'bash';
-    utils.config.bashBin = this.bashBin;
+    config.bashBin = this.bashBin;
     this.lively4DirUnix = args.options['lively4dir-unix'] || this.lively4dir;
     this.autoCommit = args.options['auto-commit'] || false;
     this.port = args.options.port || 8080;
@@ -1266,10 +1235,10 @@ export class Server {
           '/' +
           repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
         const result = await run(cmd);
-        
+
         // Check for authentication/credential errors in stderr
         if (result.stderr && (
-          result.stderr.includes('Authentication failed') || 
+          result.stderr.includes('Authentication failed') ||
           result.stderr.includes('fatal: could not read Username') ||
           result.stderr.includes('fatal: Authentication failed')
         )) {
@@ -1277,11 +1246,11 @@ export class Server {
           res.end('Git authentication failed. Please check your credentials.');
           return;
         }
-        
+
         // If we get here, send the normal response
         res.writeHead(200);
         res.end(result.stdout + '\n' + result.stderr);
-        
+
         logRequest(req, "delete bundle: " + repositorypath);
         await this.deleteBundleFile(repositorypath);
       } catch (error) {
@@ -1450,7 +1419,7 @@ export class Server {
 
   }
 
-  
+
   /*
    * Experimental in memory tmp file for drag and drop #Hack
    */

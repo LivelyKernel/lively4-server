@@ -1,5 +1,6 @@
 import {exec} from "child_process"
 import child_process from "child_process";
+import fs from 'fs';
 
 export var config = {
   bashBin: "bash"
@@ -17,10 +18,8 @@ export function cleanString(str) {
   return str.replace(/[^A-Za-z0-9 ,.()\[\]#]/g,"_")
 }
 
+import { promisify } from 'util';
 
-export function log(...args) {
-  console.log(...args)
-}
 
 export async function respondWithCMD(cmd, res, dryrun) {
   return new Promise( resolve => {
@@ -52,4 +51,34 @@ export async function respondWithCMD(cmd, res, dryrun) {
       resolve();
     });    
   })
+}
+
+// Promisified fs functions
+export const fs_exists = async (file) => {
+  return (await try_fs_stat(file)) !== null;
+};
+export const fs_stat = promisify(fs.stat);
+export const fs_readdir = promisify(fs.readdir);
+export const fs_writeFile = promisify(fs.writeFile);
+export const fs_readFile = promisify(fs.readFile);
+
+
+
+// Logging functions
+export function log(...args) {
+  console.log('[server]', ...args);
+}
+
+// #UseCase #ContextJS #AsyncContext it is really hard to hand down the request object into all methods, just so they can log properly...
+export function logRequest(req, ...args) {
+  log("REQUEST[" + req._logId + "] ", ...args);
+}
+
+// Helper functions
+export async function try_fs_stat(file) {
+  try {
+    return await fs_stat(file)
+  } catch (e) {
+    return null
+  }
 }
