@@ -3,7 +3,9 @@ import child_process from "child_process";
 import fs from 'fs';
 
 export var config = {
-  bashBin: "bash"
+  bashBin: "bash",
+  testMode: false,
+  testCallback: null
 }
 
 export async function run(cmd) {
@@ -23,15 +25,23 @@ import { promisify } from 'util';
 
 export async function respondWithCMD(cmd, res, dryrun) {
   return new Promise( resolve => {
-    // log(cmd);
-
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Transfer-Encoding', 'chunked');
     res.writeHead(200);
 
-    if (dryrun) {
-      return res.end("dry run:\n" + cmd);
+    if (config.testMode && config.testCallback) {
+      const output = config.testCallback(cmd);
+      res.write(output);
+      res.end();
+      return resolve();
     }
+
+    if (dryrun) {
+      res.write("dry run:\n" + cmd);
+      res.end();
+      return resolve();
+    }
+
 
     var process = child_process.spawn(config.bashBin, ["-c", cmd]);
     process.stdout.on('data', function (data) {
