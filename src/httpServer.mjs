@@ -63,9 +63,9 @@ import fetch from 'node-fetch';
 import * as utils from './utils.js';
 import { cleanString, run, respondWithCMD } from './utils.js';
 
-import MKCOL from './service/mkcol.mjs';
-import BIBTEX from './service/bibtex.mjs';
-import SEARCH from './service/search.mjs';
+import MKCOL from './services/mkcol.mjs';
+import BIBTEX from './services/bibtex.mjs';
+import SEARCH from './services/search.mjs';
 
 // Promisified fs functions
 const fs_exists = async (file) => {
