@@ -64,6 +64,8 @@ import * as utils from './utils.js';
 import { cleanString, run, respondWithCMD } from './utils.js';
 
 import MKCOL from './service/mkcol.mjs';
+import BIBTEX from './service/bibtex.mjs';
+import SEARCH from './service/search.mjs';
 
 // Promisified fs functions
 const fs_exists = async (file) => {
@@ -460,11 +462,11 @@ export class Server {
         if (pathname.match(/\/_curl\//)) {
           return this.CURL(pathname, req, res);
         }
-        if (pathname.match(/\/_search\//)) {
-          return this.SEARCH(pathname, req, res);
+        if (pathname.match(/\/_search\/files/)) {
+          return new SEARCH(this).request(pathname, req, res);
         }
         if (pathname.match(/\/_bibtex/)) {
-          return this.BIBTEX(pathname, req, res);
+          return new BIBTEX(this).request(req, res);
         }
         if (req.method == 'GET') {
           await this.GET(repositorypath, filepath, fileversion, req, res);
@@ -1448,35 +1450,7 @@ export class Server {
 
   }
 
-  static BIBTEX(sPath, req, res) {
-    var query = cleanString(URL.parse(req.url, true).query["search"])
-    return respondWithCMD(`${this.serverDir}/bin/search-bibtex.py "${query}"`, res);
-  }
-
-  static SEARCH(sPath, req, res) {
-    var pattern = req.headers['searchpattern'];
-    var rootdirs = req.headers['rootdirs'];
-    var excludes = '.git,' + req.headers['excludes'];
-
-    if (sPath.match(/\/_search\/files/)) {
-      var cmd = 'cd ' + this.lively4DirUnix + '; ';
-      cmd += 'find ' + rootdirs.replace(/,/g, ' ') + ' -type f ';
-      cmd += excludes
-        .split(',')
-        .map(function (ea) {
-          return ' -not -wholename "*' + ea + '*"';
-        })
-        .join(' ');
-      cmd +=
-        ' | while read file; do grep -H "' +
-        pattern +
-        '" "$file" ; done | cut -b 1-200';
-      return respondWithCMD(cmd, res);
-    } else {
-      res.writeHead(200);
-      res.end('Lively4 Search! ' + sPath + ' not implemented!');
-    }
-  }
+  
   /*
    * Experimental in memory tmp file for drag and drop #Hack
    */
