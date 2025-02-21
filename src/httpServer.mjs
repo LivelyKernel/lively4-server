@@ -63,6 +63,7 @@ import {config, cleanString, run, respondWithCMD, fs_exists, fs_readFile, fs_rea
 import MKCOL from './services/mkcol.mjs';
 import BIBTEX from './services/bibtex.mjs';
 import SEARCH from './services/search.mjs';
+import WebHookService from './services/webhook.mjs';
 
 // Cache objects
 const GithubOriganizationMemberCache = {};
@@ -414,7 +415,7 @@ export class Server {
           return this.META(pathname, req, res);
         }
         if (pathname.match(/\/_webhook\//)) {
-          return this.WEBHOOK(pathname, req, res);
+          return new WebHookService(this).request(pathname, req, res);
         }
         if (path.match(/\/_git.*/)) {
           return this.GIT(path, req, res);
@@ -1521,77 +1522,6 @@ export class Server {
     var file = relativePath.replace(/.*\//, "")
 
     return respondWithCMD("cd \"" + this.lively4DirUnix + dir + "\"; open \"" + file + "\"", res)
-  }
-
-  static webhookListeners(key) {
-    if (!this.webhookListeners) {
-      this.webhookListeners = new Map()
-    }
-    var set = this.webhookListeners[key]
-    if (!set) {
-      set = new Set()
-      this.webhookListeners[key] = set
-    }
-    return set
-  }
-
-
-  /* 
-    Very basic forward of github webhooks to subscriptions...
-    see https://github.com/LivelyKernel/lively4-core/settings/hooks
-  */
-  static async WEBHOOK(pathname, req, res) {
-    log("WEBHOOK " + req.method + ": " + pathname)
-
-    if (req.method == 'GET' && pathname.match("/_webhook/register")) {
-      let key = req.headers['repositoryname'];
-      log("webhook register " + key)
-
-      this.webhookListeners(key).add({
-        response: res
-      })
-      // do not answer it... do a long poll
-
-      // res.writeHead(200); // done
-      // res.end();
-
-    } else if ((req.method == 'PUT' || req.method == 'POST') && pathname.match("/_webhook/signal")) {
-
-      log("webhook signal ")
-      var body = '';
-      req.on('data', (data) => {
-        body += data;
-      });
-      req.on('end', () => {
-
-        try {
-          var json = JSON.parse(body)
-        } catch (e) {
-          res.writeHead(400); // done
-          res.end("could not parse: " + body);
-        }
-        if (json) {
-          var key = json.repository.full_name
-          var listeners = this.webhookListeners(key)
-          // log("found listeners: " + listeners.size)
-          Array.from(listeners).forEach(ea => {
-            var response = ea.response
-            if (response) {
-              // log("answer " + response)
-              response.writeHead(200); // answer long poll 
-              response.end(JSON.stringify(json));
-            }
-            listeners.delete(ea)
-          })
-          res.writeHead(200); // done
-          res.end("");
-        }
-      });
-    } else {
-      log("webhook: " + pathname)
-      res.writeHead(200); // not 
-      res.end();
-    }
   }
 
 
