@@ -1,9 +1,28 @@
 import { log } from '../utils.js';
 
-export default class WebHookService {
+import Service from "./service.mjs";
+
+
+/**
+ * WebHookService handles GitHub webhook registrations and notifications
+ * Implements a long-polling mechanism for webhook subscribers
+ * 
+ * Configure webhooks at: https://github.com/LivelyKernel/lively4-core/settings/hooks
+ */
+export default class WebHookService extends Service {
+    /**
+     * Creates a new WebHookService instance
+     * @param {Server} server - The server instance to attach the service to
+     */
     constructor(server) {
-        this.server = server;
+        super(server)
     }
+
+    /**
+     * Gets or creates a Set of webhook listeners for a given repository
+     * @param {string} key - Repository name to get listeners for
+     * @returns {Set} Set of webhook listeners for the repository
+     */
     webhookListeners(key) {
         if (!this.webhookListeners) {
             this.webhookListeners = new Map()
@@ -16,11 +35,13 @@ export default class WebHookService {
         return set
     }
 
-
-    /* 
-      Very basic forward of github webhooks to subscriptions...
-      see https://github.com/LivelyKernel/lively4-core/settings/hooks
-    */
+    /**
+     * Handles webhook requests for registration and signal forwarding
+     * @param {string} pathname - Request path
+     * @param {http.IncomingMessage} req - HTTP request object
+     * @param {http.ServerResponse} res - HTTP response object
+     * @returns {Promise<void>} Resolves when webhook handling is complete
+     */
     async request(pathname, req, res) {
         log("WEBHOOK " + req.method + ": " + pathname)
 
