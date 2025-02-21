@@ -63,6 +63,7 @@ import {config, cleanString, run, respondWithCMD, fs_exists, fs_readFile, fs_rea
 import MKCOL from './services/mkcol.mjs';
 import BIBTEX from './services/bibtex.mjs';
 import SEARCH from './services/search.mjs';
+import OPEN from './services/open.mjs';
 import WebHookService from './services/webhook.mjs';
 
 // Cache objects
@@ -360,7 +361,7 @@ export class Server {
           return this.MAKE(path, req, res); // #TODO auth should be required
         }
         if (path.match(/\/_open.*/)) {
-          return this.OPEN(path, req, res); // #TODO auth should be required
+          return new OPEN(this).request(path, req, res); // #TODO auth should be required
         }
         if (pathname.match(/\/_curl\//)) {
           return this.CURL(pathname, req, res);
@@ -1447,15 +1448,7 @@ export class Server {
     return respondWithCMD("cd " + this.lively4DirUnix + dir + "; make " + (params.target || ""), res)
   }
 
-  static OPEN(path, req, res) {
-    console.log("OPEN " + path)
-    var params = URL.parse(req.url, true).query
-    var relativePath = path.replace(/.*_open\//, "")
-    var dir = relativePath.replace(/[^/]*$/, "")
-    var file = relativePath.replace(/.*\//, "")
 
-    return respondWithCMD("cd \"" + this.lively4DirUnix + dir + "\"; open \"" + file + "\"", res)
-  }
 
 
 }
