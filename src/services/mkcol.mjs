@@ -8,10 +8,6 @@ import { run } from "../utils.js";
  */
 export default class MKCOL extends Service {
   
-  constructor(server) {
-    super(server)
-  }
-
   /**
    * Handles MKCOL request to create a new directory
    * @param {string} repositorypath - Base path of the repository
