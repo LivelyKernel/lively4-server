@@ -65,6 +65,8 @@ import BIBTEX from './services/bibtex.mjs';
 import SEARCH from './services/search.mjs';
 import OPEN from './services/open.mjs';
 import OPTIONS from './services/options.mjs';
+import MOVE from './services/move.mjs';
+
 import WebHookService from './services/webhook.mjs';
 import GraphVizService from './services/graphviz.mjs';
 import MakeService from './services/make.mjs';
@@ -393,7 +395,7 @@ export class Server {
         } else if (req.method == 'OPTIONS') {
           await new OPTIONS(this).request(repositorypath, filepath, req, res);
         } else if (req.method == 'MOVE') {
-          await this.MOVE(repositorypath, filepath, req, res);
+          await new MOVE(this).request(repositorypath, filepath, req, res);
         }
       } catch (e) {
         console.error('ERROR on request ' + req.url, e);
@@ -561,9 +563,6 @@ export class Server {
     // console.log("[readfile version] version ", fileversion )
 
     headers['fileversion'] = fileversion;
-
-    // not supported by git...
-    // headers['modified'] =   await this.getLastModified(repositorypath, filepath);
 
     if (error == null) {
       res.writeHead(200, headers);
@@ -939,53 +938,6 @@ export class Server {
     res.end("deleted " + fullpath)
   }
 
-  /*
-  * move file or directory
-  */
-
-  static async moveResource(source, destination) {
-    return run(
-      `SOURCE="${source}";
-       DESTINATION="${destination}";
-       mv -v "$SOURCE" "$DESTINATION";       
-       `)
-  }
-
-  static async MOVE(repositorypath, filepath, req, res) {
-    var source = req.url
-
-    var destination = req.headers['destination']
-    if (!destination) {
-      res.writeHead(404);
-      return res.end("destination parameter is missing")
-    }
-
-    var re = new RegExp(Server.options.myurl + "(.*)")
-    var m = destination.match(re)
-
-    if (m) {
-      destination = m[1]
-    } else {
-      res.writeHead(404);
-      return res.end("Server for destination and source don't match! myurl=" + Server.options.myurl)
-    }
-
-    source = Server.options.directory + decodeURI(source.substr(1))
-    destination = Server.options.directory + decodeURI(destination)
-
-    var result = await this.moveResource(source, destination)
-    logRequest(req, 'MOVE from ' + source + ' to ' + destination)
-
-    if (result.error) {
-      res.writeHead(404)
-      return res.end("Error " + result.stdout + "\n" + result.stderr)
-    }
-    res.writeHead(200)
-    res.end("moved " + source + " to " + destination)
-
-  }
-
-
 
   static async readOptions(repositorypath, filepath, stats) {
     var fullpath = Path.join(repositorypath, filepath)
@@ -1004,14 +956,6 @@ export class Server {
     result.modified = await this.getLastModified(repositorypath, filepath) // PERFORMANCE WARNING
     return result
   }
-
-
-
-
-
-
-
-
   static async getVersion(repositorypath, filepath) {
     return (await run(
       `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`
