@@ -7,10 +7,6 @@ import { run, cleanString } from "../utils.js";
  */
 export default class BIBTEX extends Service {
   
-  constructor(server) {
-    super(server)
-  }
-
   /**
    * Handles BIBTEX request to search for BibTeX entries
    * @param {string} request - Search request

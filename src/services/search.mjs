@@ -6,10 +6,6 @@ import { cleanString, run, respondWithCMD } from '../utils.js';
  * @extends Service
  */
 export default class SEARCH extends Service {
-  
-  constructor(server) {
-    super(server)
-  }
 
   /**
    * Handles SEARCH request to search for file content

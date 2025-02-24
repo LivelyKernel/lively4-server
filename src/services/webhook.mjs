@@ -10,13 +10,6 @@ import Service from "./service.mjs";
  * Configure webhooks at: https://github.com/LivelyKernel/lively4-core/settings/hooks
  */
 export default class WebHookService extends Service {
-    /**
-     * Creates a new WebHookService instance
-     * @param {Server} server - The server instance to attach the service to
-     */
-    constructor(server) {
-        super(server)
-    }
 
     /**
      * Gets or creates a Set of webhook listeners for a given repository

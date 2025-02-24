@@ -3,18 +3,10 @@ import { respondWithCMD } from "../utils.js";
 
 /**
  * Service to handle opening files in the system's default application
- * @class
  * @extends {Service}
  */
 export default class OPEN extends Service {
-  /**
-   * Creates an instance of OPEN service
-   * @param {Server} server - The server instance
-   */
-  constructor(server) {
-    super(server)
-  }
-
+ 
   /**
    * Handles the OPEN request by using the system's 'open' command
    * @param {string} path - The full request path
