@@ -65,6 +65,9 @@ import BIBTEX from './services/bibtex.mjs';
 import SEARCH from './services/search.mjs';
 import OPEN from './services/open.mjs';
 import WebHookService from './services/webhook.mjs';
+import GraphVizService from './services/graphviz.mjs';
+import MakeService from './services/make.mjs';
+import CurlService from './services/curl.mjs';
 
 // Cache objects
 const GithubOriganizationMemberCache = {};
@@ -355,16 +358,16 @@ export class Server {
           return this.GIT(path, req, res);
         }
         if (path.match(/\/_graphviz.*/)) {
-          return this.GRAPHVIZ(path, req, res); // #TODO auth should be required 
+          return new GraphVizService(this).request(path, req, res);
         }
         if (path.match(/\/_make.*/)) {
-          return this.MAKE(path, req, res); // #TODO auth should be required
+          return new MakeService(this).request(path, req, res);
         }
         if (path.match(/\/_open.*/)) {
           return new OPEN(this).request(path, req, res); // #TODO auth should be required
         }
         if (pathname.match(/\/_curl\//)) {
-          return this.CURL(pathname, req, res);
+          return new CurlService(this).request(pathname, req, res);
         }
         if (pathname.match(/\/_search\/files/)) {
           return new SEARCH(this).request(pathname, req, res);
@@ -1339,22 +1342,6 @@ export class Server {
     }
   }
 
-  static async CURL(sPath, req, res) {
-    console.log("CURL url: " + req.url)
-    var target = URL.parse(req.url, true).query["target"]
-    if (!target || target.length == 0) {
-      res.writeHead(300);
-      res.end('no url parameter provided ');
-      return
-    }
-    exec(`curl -L "${target}"`, { encoding: 'binary', maxBuffer: 1024 * 1000 * 100 }, (error, stdout, stderr) => {
-      res.writeHead(200)
-      res.end(stdout, "binary");
-    });
-
-  }
-
-
   /*
    * Experimental in memory tmp file for drag and drop #Hack
    */
@@ -1399,57 +1386,6 @@ export class Server {
       });
     }
   }
-
-
-  static GRAPHVIZ(pathname, req, res) {
-    if (req.method == 'POST') {
-      var fullBody = '';
-      req.setEncoding('binary');
-      req.on('data', chunk => {
-        fullBody += chunk.toString();
-      });
-      req.on('end', async () => {
-        var tempFile = (await run("mktemp --suffix=.dot")).stdout.replace(/\n/g, "")
-
-        // log(`got tmp file '${tempFile}'`)
-        await fs_writeFile(tempFile, fullBody)
-        // log("wrote tmp file")
-
-        var layout = "dot"
-        var type = "svg"
-        if (req.headers['graphlayout']) {
-          layout = cleanString(req.headers['graphlayout'])
-        }
-
-
-        var result = (await run(`${layout} -T${type} '${tempFile}'`))
-        // log(`run dot '${ tempFile}'` )
-
-        // log("deleted temp")
-        await run(`rm '${tempFile}'`)
-
-        var source = "" + result.stdout
-        if (source == "") {
-          logRequest(req, "GraphViz ERR: " + result.stderr)
-          res.writeHead(400); // done
-          res.end(result.stderr);
-        } else {
-          res.writeHead(200); // done
-          res.end(source);
-        }
-      });
-    }
-  }
-
-  static MAKE(path, req, res) {
-    console.log("MAKE " + path)
-    var params = URL.parse(req.url, true).query
-    var dir = path.replace(/.*_make\//, "")
-    return respondWithCMD("cd " + this.lively4DirUnix + dir + "; make " + (params.target || ""), res)
-  }
-
-
-
 
 }
 
