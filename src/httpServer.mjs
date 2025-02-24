@@ -68,6 +68,8 @@ import WebHookService from './services/webhook.mjs';
 import GraphVizService from './services/graphviz.mjs';
 import MakeService from './services/make.mjs';
 import CurlService from './services/curl.mjs';
+import TMPService from './services/tmp.mjs';
+import METAService from './services/meta.mjs';
 
 // Cache objects
 const GithubOriganizationMemberCache = {};
@@ -102,6 +104,8 @@ export class Server {
     this.lively4DirUnix = args.options['lively4dir-unix'] || this.lively4dir;
     this.autoCommit = args.options['auto-commit'] || false;
     this.port = args.options.port || 8080;
+    this.tmpService = new TMPService(this);
+    this.metaService = new METAService(this);
   }
 
   static get lively4dir() {
@@ -152,6 +156,7 @@ export class Server {
 
   static async stop() {
     this.isRunning = false;
+    this.tmpService.cleanup();
 
     // Clear all timeouts
     if (this.tmpStorageTimeouts) {
@@ -345,11 +350,11 @@ export class Server {
         }
 
         if (pathname.match(/\/_tmp\//)) {
-          return this.TMP(pathname, req, res);
+          return this.tmpService.request(pathname, req, res);
         }
 
         if (pathname.match(/\/_meta\//)) {
-          return this.META(pathname, req, res);
+          return this.metaService.request(pathname, req, res);
         }
         if (pathname.match(/\/_webhook\//)) {
           return new WebHookService(this).request(pathname, req, res);
@@ -1096,16 +1101,6 @@ export class Server {
     );
   }
 
-  static META(pathname, req, res) {
-    if (pathname.match(/_meta\/exit/)) {
-      res.end('goodbye, we hope for the best!');
-      process.exit();
-    } else {
-      res.writeHead(500);
-      res.end('meta: ' + pathname + ' not implemented!');
-    }
-  }
-
   static async getVersion(repositorypath, filepath) {
     return (await run(
       `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`
@@ -1339,51 +1334,6 @@ export class Server {
     } else {
       res.writeHead(200);
       res.end('Lively4 git Control! ' + sPath + ' not implemented!');
-    }
-  }
-
-  /*
-   * Experimental in memory tmp file for drag and drop #Hack
-   */
-  static TMP(pathname, req, res) {
-    // log("tempFile " + pathname)
-    var file = pathname.replace(/^\/_tmp\//, '');
-    if (req.method == 'GET') {
-      var data = this.tmpStorage[file];
-      if (data) {
-        res.writeHead(200);
-        res.end(data, 'binary');
-      } else {
-        res.writeHead(404);
-        res.end('file not found');
-      }
-    }
-    if (req.method == 'PUT') {
-      var fullBody = '';
-      req.setEncoding('binary');
-      req.on('data', chunk => {
-        fullBody += chunk.toString();
-      });
-      req.on('end', async () => {
-        this.tmpStorage[file] = fullBody;
-
-        // Clear existing timeout if present
-        if (this.tmpStorageTimeouts.has(file)) {
-          clearTimeout(this.tmpStorageTimeouts.get(file));
-        }
-
-        // Set new timeout and store it
-        const timeout = setTimeout(() => {
-          log('cleanup ' + file);
-          delete this.tmpStorage[file];
-          this.tmpStorageTimeouts.delete(file);
-        }, this.options['tmp-cleanup-timeout'] || 5 * 60 * 1000); // use configured timeout or default to 5min
-
-        this.tmpStorageTimeouts.set(file, timeout);
-
-        res.writeHead(200); // done
-        res.end();
-      });
     }
   }
 
