@@ -52,7 +52,6 @@ import { exec } from 'child_process';
 
 // Third-party imports
 import httpProxy from 'http-proxy';
-import mime from 'mime-types';
 import argv from 'argv';
 import slash from 'slash'; // Convert Windows backslash paths to slash paths: foo\\bar ➔ foo/bar
 import 'log-timestamp'; // this adds a timestamp to all log messages
@@ -67,6 +66,7 @@ import OPEN from './services/open.mjs';
 import OPTIONS from './services/options.mjs';
 import MOVE from './services/move.mjs';
 import DELETE from './services/delete.mjs';
+import GET from './services/get.mjs';
 
 import WebHookService from './services/webhook.mjs';
 import GraphVizService from './services/graphviz.mjs';
@@ -393,7 +393,7 @@ export class Server {
           return new BIBTEX(this).request(req, res);
         }
         if (req.method == 'GET') {
-          await this.GET(repositorypath, filepath, fileversion, req, res);
+          await new GET(this).request(repositorypath, filepath, fileversion, req, res);
         } else if (req.method == 'PUT') {
           await this.PUT(repositorypath, filepath, req, res);
         } else if (req.method == 'DELETE') {
@@ -412,16 +412,6 @@ export class Server {
       }
     } finally {
       logRequest(req, "FINISHED " + req.method + " (" + Math.round(Date.now() - startRequestTime) + "ms) " + req.url + " ")
-    }
-  }
-
-  static GET(repositorypath, filepath, fileversion, req, res) {
-    if (filepath.match(this.Config.bundleName)) {
-      return this.bundleService.ensureBundleFile(repositorypath, filepath, req, res);
-    } else if (fileversion && fileversion != 'undefined') {
-      return this.readFileVersion(repositorypath, filepath, fileversion, req, res);
-    } else {
-      return this.readFile(repositorypath, filepath, req, res);
     }
   }
 
@@ -446,32 +436,6 @@ export class Server {
   }
 
 
-  /* load a specific version of a file through git */
-  static async readFileVersion(repositorypath, filepath, fileversion, req, res) {
-    var { stdout, stderr, error } = await run(
-      'cd ' + repositorypath + ';' + 'git show ' + fileversion + ':"' + filepath + '"',
-      res
-    );
-    var headers = {}
-    headers['Content-Type'] = mime.lookup(filepath);
-    // console.log("[readfile version] stderr " + stderr )
-    // console.log("[readfile version] err ", error == null )
-
-    // ok, this is not easy to figure out
-
-    // console.log("[readfile version] version ", fileversion )
-
-    headers['fileversion'] = fileversion;
-
-    if (error == null) {
-      res.writeHead(200, headers);
-      res.end(stdout);
-    } else {
-      // console.log("ERROR ERROR 300")
-      res.writeHead(300, headers);
-      res.end(stdout + stderr);
-    }
-  }
 
 
   static async invalidateBundleFile(repositorypath, filepath) {
@@ -526,45 +490,7 @@ export class Server {
   }
 
 
-  static async readFile(repositorypath, filepath, req, res) {
-    // First validate the path before attempting to read
-    if (!this.validatePath(filepath)) {
-      res.writeHead(500);
-      res.end('Invalid path: directory traversal not allowed');
-      return;
-    }
-
-    var fullpath = Path.join(repositorypath, filepath);
-
-    try {
-      var stats = await fs_stat(fullpath);
-    } catch (e) {
-      // nothing
-    }
-
-    if (!stats) {
-      console.log('FILE DOES NOT EXIST ' + fullpath)
-      res.writeHead(404);
-      return res.end('File not found!\n');
-    }
-    if (stats.isDirectory()) {
-      this.readDirectory(fullpath, req, res, 'text/html');
-    } else {
-      res.writeHead(200, {
-        'content-type': mime.lookup(fullpath),
-        fileversion: await this.versionsService.getVersion(repositorypath, filepath),
-        modified: await this.filesService.getLastModified(repositorypath, filepath)
-      });
-      var stream = fs.createReadStream(fullpath, {
-        bufferSize: 64 * 1024
-      });
-      stream.on('error', function (err) {
-        log('error reading: ' + fullpath + ' error: ' + err);
-        res.end('Error reading file\n');
-      });
-      stream.pipe(res);
-    }
-  }
+  
 
   static readDirectory(aPath, req, res, contentType) {
     fs.readdir(aPath, function (err, files) {

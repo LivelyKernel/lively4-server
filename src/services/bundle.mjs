@@ -109,7 +109,7 @@ export default class BundleService extends Service {
       var result = await run(cmd)
       // logRequest(req, "stdout: " + result.stdout + "\nstderr: " + result.stderr)
     }
-    return this.server.readFile(repositorypath, bundleFilepath, undefined, res)
+    return this.server.filesService.readFile(repositorypath, bundleFilepath, undefined, res)
   }
 
 
