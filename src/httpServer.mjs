@@ -71,6 +71,8 @@ import DELETE from './services/delete.mjs';
 import WebHookService from './services/webhook.mjs';
 import GraphVizService from './services/graphviz.mjs';
 import BundleService from './services/bundle.mjs';
+import VersionsService from './services/versions.mjs';
+import FilesService from './services/files.mjs';
 import MakeService from './services/make.mjs';
 import CurlService from './services/curl.mjs';
 import TMPService from './services/tmp.mjs';
@@ -115,6 +117,8 @@ export class Server {
     this.metaService = new METAService(this);
     this.gitService = new GITService(this);
     this.bundleService = new BundleService(this);
+    this.versionsService = new VersionsService(this);
+    this.filesService = new FilesService(this);
   }
 
   static get lively4dir() {
@@ -562,8 +566,8 @@ export class Server {
     } else {
       res.writeHead(200, {
         'content-type': mime.lookup(fullpath),
-        fileversion: await this.getVersion(repositorypath, filepath),
-        modified: await this.getLastModified(repositorypath, filepath)
+        fileversion: await this.versionsService.getVersion(repositorypath, filepath),
+        modified: await this.filesService.getLastModified(repositorypath, filepath)
       });
       var stream = fs.createReadStream(fullpath, {
         bufferSize: 64 * 1024
@@ -706,7 +710,7 @@ export class Server {
       });
     }
     var lastVersion = req.headers['lastversion'];
-    var currentVersion = await this.getVersion(repositorypath, filepath);
+    var currentVersion = await this.versionsService.getVersion(repositorypath, filepath);
 
     // we have version information and there is a conflict
     if (lastVersion && currentVersion && lastVersion !== currentVersion) {
@@ -808,8 +812,6 @@ export class Server {
   static transpilePath(repositorypath, filepath) {
     return repositorypath + "/" + this.Config.transpileDir + "/" + filepath.replace(/\//g, "_")
   }
-
-
   static async readOptions(repositorypath, filepath, stats) {
     var fullpath = Path.join(repositorypath, filepath)
     if (!stats) {
@@ -823,23 +825,10 @@ export class Server {
     var result = { type: 'file' }
     result.name = filepath
     result.size = stats.size
-    result.version = await this.getVersion(repositorypath, filepath)  // PERFORMANCE WARNING
-    result.modified = await this.getLastModified(repositorypath, filepath) // PERFORMANCE WARNING
+    result.version = await this.versionsService.getVersion(repositorypath, filepath)  // PERFORMANCE WARNING
+    result.modified = await this.filesService.getLastModified(repositorypath, filepath) // PERFORMANCE WARNING
     return result
   }
-  static async getVersion(repositorypath, filepath) {
-    return (await run(
-      `cd "${repositorypath}"; git log -n 1 --pretty=format:%H -- "${filepath}"`
-    )).stdout;
-  }
-
-  static async getLastModified(repositorypath, filepath) {
-    return (await run(
-      `cd "${repositorypath}"; find "${filepath}" -not -path '*/.git/*' -printf "%TY-%Tm-%Td %TH:%TM:%.2TS"`
-    )).stdout;
-  }
-
-
 }
 
 
