@@ -2,5 +2,5 @@
     "mochaExplorer.files": "test/**/*test.mjs",
     "mochaExplorer.require": [],
     "mochaExplorer.timeout": 60000,
-    "testExplorer.addToEditorContextMenu": true
+    "testExplorer.addToEditorContextMenu": true,
 }

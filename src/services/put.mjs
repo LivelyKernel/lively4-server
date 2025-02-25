@@ -33,7 +33,7 @@ export default class PUT extends Service {
         // only block at the end...
         await this.server.optionsService.invalidateOptionsFile(repositorypath, filepath, req)
         await this.server.transpileService.invalidateTranspiledFile(repositorypath, filepath, req,)
-        await this.server.invalidateBundleFile(repositorypath, filepath, req)
+        await this.server.bundleService.invalidateBundleFile(repositorypath, filepath, req)
         await this.server.ensureSpecialParentDirectories(repositorypath, filepath, req)
 
         if (fullpath.match(/\/$/)) {

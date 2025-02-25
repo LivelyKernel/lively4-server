@@ -78,7 +78,7 @@ export default class GITService extends Service {
         res.end(result.stdout + '\n' + result.stderr);
 
         logRequest(req, "delete bundle: " + repositorypath);
-        await this.server.deleteBundleFile(repositorypath);
+        await this.server.bundleService.deleteBundleFile(repositorypath);
       } catch (error) {
         res.writeHead(500);
         res.end('Git sync failed: ' + error.message);

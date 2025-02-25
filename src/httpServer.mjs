@@ -423,39 +423,6 @@ export class Server {
   }
 
 
-  static async isInBootfile(repositorypath, filepath) {
-    console.log("isInBootfile " + this.Config.bootfilelistName + " in " + repositorypath + " " + filepath)
-    if (filepath.match(this.Config.bootfilelistName)) {
-      return true // the bootfilelist always invalidates itself...
-    }
-
-    // costs... 10ms ... so #Refactor before using it every GET requests
-    var result = (await run(`cd ${repositorypath}; 
-      echo ${this.Config.bootfilelistName}
-      if [ -e ${this.Config.bootfilelistName} ]; then
-        grep ${filepath} ${this.Config.bootfilelistName}
-      fi`)).stdout
-    return result.match(filepath)
-  }
-
-  static async invalidateBundleFile(repositorypath, filepath) {
-    if (filepath.match(this.Config.transpileDir) // all compiled files are bundled?
-      || await this.isInBootfile(repositorypath, filepath)) {
-      log("INVALIDATE " + this.Config.bundleName + " in " + repositorypath)
-      // remove bundle if we uploaded a file that belongs into it
-      await this.deleteBundleFile(repositorypath)
-    } else {
-      log("NOTINBOOTFILE " + repositorypath + " " + filepath)
-    }
-  }
-
-  static async deleteBundleFile(repositorypath) {
-    return await run(`cd ${repositorypath}; 
-      if [ -e ${this.Config.bundleName} ]; then
-        rm ${this.Config.bundleName}
-      fi`)
-  }
-
   static async ensureDirectory(path, name) {
     // #TODO do it directly in JavaScript instead of Polyglot?
     var result = await run(`cd ${path}; 
@@ -476,10 +443,6 @@ export class Server {
     //   await this.ensureDirectory(repositorypath, this.Config.optionsDir)
     // }
   }
-
-
-
-
 }
 
 Server.setup();
