@@ -78,7 +78,7 @@ import CurlService from './services/curl.mjs';
 import TMPService from './services/tmp.mjs';
 import METAService from './services/meta.mjs';
 import GITService from './services/git.mjs';
-
+import TranspileService from './services/transpile.mjs';
 
 // Cache objects
 const GithubOriganizationMemberCache = {};
@@ -90,8 +90,6 @@ const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 const isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
 
 import optionsSpec from './options-spec.mjs';
-
-
 
 
 export class Server {
@@ -119,6 +117,7 @@ export class Server {
     this.bundleService = new BundleService(this);
     this.versionsService = new VersionsService(this);
     this.filesService = new FilesService(this);
+    this.transpileService = new TranspileService(this);
   }
 
   static get lively4dir() {
@@ -526,19 +525,6 @@ export class Server {
         fi`)
   }
 
-  static async invalidateTranspiledFile(repositorypath, filepath, req) {
-    if (filepath.match(this.Config.transpileDir)) return  // don't do it on yourself
-    if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
-
-    logRequest(req, "invalidate transpilation files" + this.Config.bundleName + " in " + repositorypath)
-    var hashedpath = filepath.replace(/\//g, "_")
-    var result = await run(`cd ${repositorypath}; 
-        if [ -e ${this.Config.transpileDir} ]; then
-          rm ${this.Config.transpileDir}/${hashedpath}
-          rm ${this.Config.transpileDir}/${hashedpath}.map.json
-        fi`)
-    logRequest(req, "RESULT " + result.stdout)
-  }
 
   static async readFile(repositorypath, filepath, req, res) {
     // First validate the path before attempting to read
@@ -695,7 +681,7 @@ export class Server {
 
     // only block at the end...
     await this.invalidateOptionsFile(repositorypath, filepath, req)
-    await this.invalidateTranspiledFile(repositorypath, filepath, req,)
+    await this.transpileService.invalidateTranspiledFile(repositorypath, filepath, req,)
     await this.invalidateBundleFile(repositorypath, filepath, req)
     await this.ensureSpecialParentDirectories(repositorypath, filepath, req)
 
@@ -809,9 +795,7 @@ export class Server {
     return repositorypath + "/" + this.Config.optionsDir + "/" + filepath.replace(/\//g, "_")
   }
 
-  static transpilePath(repositorypath, filepath) {
-    return repositorypath + "/" + this.Config.transpileDir + "/" + filepath.replace(/\//g, "_")
-  }
+
   static async readOptions(repositorypath, filepath, stats) {
     var fullpath = Path.join(repositorypath, filepath)
     if (!stats) {

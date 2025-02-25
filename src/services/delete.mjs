@@ -30,7 +30,7 @@ export default class DELETE extends Service {
 
         // Delete associated cache files first
         await DELETE.deletePath(this.server.optionsPath(repositorypath, filepath))
-        await DELETE.deletePath(this.server.transpilePath(repositorypath, filepath))
+        await DELETE.deletePath(this.server.transpileService.transpilePath(repositorypath, filepath))
 
         // Delete the actual file/directory
         var result = await DELETE.deletePath(fullpath)

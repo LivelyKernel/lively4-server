@@ -6,6 +6,10 @@ export default class Service {
     this.server = server;
   }
     
+  get Config() {
+    return this.server.Config;
+  }
+
   async request() {
     throw new Error("Not implemented");
   }
