@@ -70,6 +70,7 @@ import DELETE from './services/delete.mjs';
 
 import WebHookService from './services/webhook.mjs';
 import GraphVizService from './services/graphviz.mjs';
+import BundleService from './services/bundle.mjs';
 import MakeService from './services/make.mjs';
 import CurlService from './services/curl.mjs';
 import TMPService from './services/tmp.mjs';
@@ -87,6 +88,8 @@ const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 const isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
 
 import optionsSpec from './options-spec.mjs';
+
+
 
 
 export class Server {
@@ -111,6 +114,7 @@ export class Server {
     this.tmpService = new TMPService(this);
     this.metaService = new METAService(this);
     this.gitService = new GITService(this);
+    this.bundleService = new BundleService(this);
   }
 
   static get lively4dir() {
@@ -410,7 +414,7 @@ export class Server {
 
   static GET(repositorypath, filepath, fileversion, req, res) {
     if (filepath.match(this.Config.bundleName)) {
-      return this.ensureBundleFile(repositorypath, filepath, req, res);
+      return this.bundleService.ensureBundleFile(repositorypath, filepath, req, res);
     } else if (fileversion && fileversion != 'undefined') {
       return this.readFileVersion(repositorypath, filepath, fileversion, req, res);
     } else {
@@ -421,115 +425,6 @@ export class Server {
   static hashFilepath(filepath) {
     return filepath.replace(/\//g, "_")
   }
-
-  static async ensureBundleFile(repositorypath, bundleFilepath, req, res) {
-    var bundleFile = Path.join(repositorypath, bundleFilepath)
-    if (!await fs_exists(bundleFile)) {
-      logRequest(req, "CREATE BUNDLE for " + repositorypath)
-      await this.ensureDirectory(repositorypath, this.Config.optionsDir)
-      let optionsDir = Path.join(repositorypath, this.Config.optionsDir)
-
-      await this.ensureDirectory(repositorypath, this.Config.transpileDir)
-      let transpileDir = Path.join(repositorypath, this.Config.transpileDir)
-
-      try {
-        var bootlist = (await fs_readFile(repositorypath + "/" + this.Config.bootfilelistName)).toString()
-      } catch (e) {
-        logRequest(req, "WARNING, could not read " + this.Config.bootfilelistName + ":" + e)
-      }
-      var relativeBootFiles = []
-      var relativeOptionFiles = []
-      var relativeTranspileFiles = []
-
-      if (bootlist) {
-        var hashed = new Map()
-        for (let file of bootlist.split("\n")) {
-
-          let filehash = this.hashFilepath(file)
-          // logRequest(req, "filehash " + filehash)
-          hashed.set(filehash, file)
-
-          let filepath = Path.join(repositorypath, file)
-
-          var stats = await try_fs_stat(filepath)
-          if (!stats) {
-            logRequest(req, "ignore " + filepath)
-            continue;
-          }
-          let optionsFile = Path.join(optionsDir, filehash)
-          let transpileFile = Path.join(transpileDir, filehash)
-          let transpileMapFile = Path.join(transpileDir, filehash + ".json.map")
-
-          relativeBootFiles.push(file)
-
-          var optionsStats = await try_fs_stat(optionsFile)
-          if (!optionsStats || stats.mtime > optionsStats.mtime) {
-            var updatedOptions = await this.readOptions(repositorypath, filepath, stats)
-            logRequest(req, "UPDATE OPTIONS " + optionsFile)
-            await fs_writeFile(optionsFile, JSON.stringify(updatedOptions, null, 2))
-          }
-          relativeOptionFiles.push(Path.join(this.Config.optionsDir, filehash))
-
-          let transpileStats = await try_fs_stat(transpileFile)
-          if (transpileStats) {
-            if (stats.mtime > transpileStats.mtime) {
-              logRequest(req, "DELETE " + transpileFile)
-              await DELETE.deletePath(transpileFile)
-            } else {
-              relativeTranspileFiles.push(Path.join(this.Config.transpileDir, filehash))
-            }
-          }
-          let transpileMapStats = await try_fs_stat(transpileMapFile)
-          if (transpileMapStats) {
-            if (stats.mtime > transpileMapStats.mtime) {
-              logRequest(req, "DELETE " + transpileMapFile)
-              await DELETE.deletePath(transpileMapFile)
-            } else {
-              relativeTranspileFiles.push(Path.join(this.Config.transpileDir, filehash + ".json.map"))
-
-            }
-          }
-        }
-
-        // DELETE not unused options/transpiled caches
-        // should not be needed, because.... it will not end up in zip anyway...
-
-        // for (let optionfile of fs.readdirSync(optionsDir)) {
-        //   if (!hashed.get(optionfile)) {
-        //     let filePath =  optionsDir + "/" +optionfile
-        //     logRequest(req, "delete " + filePath)
-        //     await DELETE.deletePath(filePath)
-        //   } 
-        // }
-        // for (let transpiledfile of fs.readdirSync(transpileDir)) {
-        //   let filePath =  transpileDir + "/" +transpiledfile
-        //   if (!hashed.get(transpiledfile)) {
-        //     logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
-        //     await DELETE.deletePath(filePath)
-        //   }
-        //   if (!hashed.get(transpiledfile.replace(/\.json.map$/,""))) {
-        //     logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
-        //     await DELETE.deletePath(filePath)
-        //   }
-        // }
-
-      }
-
-      let quoteList = function (list) {
-        return list.map(ea => `"${ea}"`).join(" ")
-      }
-
-      var cmd = `cd ${repositorypath}; 
-        if [ ! -e ${this.Config.bundleName} ]; then
-          zip -r ${this.Config.bundleName} ${quoteList(relativeBootFiles)} ${quoteList(relativeOptionFiles)} ${quoteList(relativeTranspileFiles)};
-        fi`
-      // logRequest(req, "ZIP " + cmd)
-      var result = await run(cmd)
-      // logRequest(req, "stdout: " + result.stdout + "\nstderr: " + result.stderr)
-    }
-    return this.readFile(repositorypath, bundleFilepath, undefined, res)
-  }
-
 
 
   static async isInBootfile(repositorypath, filepath) {
