@@ -418,31 +418,7 @@ export class Server {
     }
   }
 
-  static hashFilepath(filepath) {
-    return filepath.replace(/\//g, "_")
-  }
 
-
-  static async ensureDirectory(path, name) {
-    // #TODO do it directly in JavaScript instead of Polyglot?
-    var result = await run(`cd ${path}; 
-      if [ ! -e ${name} ]; then
-        mkdir ${name}
-      fi`)
-    if (result.stderr) {
-      log("ensureDirectory stderr:" + result.stderr)
-    }
-  }
-
-  static async ensureSpecialParentDirectories(repositorypath, filepath, req) {
-    if (filepath.match(this.Config.transpileDir)) {
-      await this.ensureDirectory(repositorypath, this.Config.transpileDir)
-    }
-
-    // if (filepath.match(this.Config.optionsDir)) { 
-    //   await this.ensureDirectory(repositorypath, this.Config.optionsDir)
-    // }
-  }
 }
 
 Server.setup();

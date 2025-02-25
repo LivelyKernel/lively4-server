@@ -4,14 +4,18 @@ import { log, run, respondWithCMD, fs_stat, logRequest, try_fs_stat, fs_exists, 
 
 export default class BundleService extends Service {
 
+  generateFilepathHash(filepath) {
+    return filepath.replace(/\//g, "_")
+  }
+
   async ensureBundleFile(repositorypath, bundleFilepath, req, res) {
     var bundleFile = Path.join(repositorypath, bundleFilepath)
     if (!await fs_exists(bundleFile)) {
       logRequest(req, "CREATE BUNDLE for " + repositorypath)
-      await this.server.ensureDirectory(repositorypath, this.server.Config.optionsDir)
+      await this.server.directoryService.ensureDirectory(repositorypath, this.server.Config.optionsDir)
       let optionsDir = Path.join(repositorypath, this.server.Config.optionsDir)
 
-      await this.server.ensureDirectory(repositorypath, this.server.Config.transpileDir)
+      await this.server.directoryService.ensureDirectory(repositorypath, this.server.Config.transpileDir)
       let transpileDir = Path.join(repositorypath, this.server.Config.transpileDir)
 
       try {
@@ -27,7 +31,7 @@ export default class BundleService extends Service {
         var hashed = new Map()
         for (let file of bootlist.split("\n")) {
 
-          let filehash = this.server.hashFilepath(file)
+          let filehash = this.generateFilepathHash(file)
           // logRequest(req, "filehash " + filehash)
           hashed.set(filehash, file)
 

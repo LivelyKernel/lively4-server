@@ -98,4 +98,21 @@ export default class DirectoryService extends Service {
   }
 
 
+  async ensureSpecialParentDirectories(repositorypath, filepath, req) {
+    if (filepath.match(this.Config.transpileDir)) {
+      await this.ensureDirectory(repositorypath, this.Config.transpileDir)
+    }
+  }
+
+  async ensureDirectory(path, name) {
+    // #TODO do it directly in JavaScript instead of Polyglot?
+    var result = await run(`cd ${path}; 
+      if [ ! -e ${name} ]; then
+        mkdir ${name}
+      fi`)
+    if (result.stderr) {
+      log("ensureDirectory stderr:" + result.stderr)
+    }
+  }
+
 }
