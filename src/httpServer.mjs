@@ -66,6 +66,7 @@ import SEARCH from './services/search.mjs';
 import OPEN from './services/open.mjs';
 import OPTIONS from './services/options.mjs';
 import MOVE from './services/move.mjs';
+import DELETE from './services/delete.mjs';
 
 import WebHookService from './services/webhook.mjs';
 import GraphVizService from './services/graphviz.mjs';
@@ -389,7 +390,7 @@ export class Server {
         } else if (req.method == 'PUT') {
           await this.PUT(repositorypath, filepath, req, res);
         } else if (req.method == 'DELETE') {
-          await this.DELETE(repositorypath, filepath, res);
+          await new DELETE(this).request(repositorypath, filepath, res);
         } else if (req.method == 'MKCOL') {
           await new MKCOL(this).request(repositorypath, filepath, res);
         } else if (req.method == 'OPTIONS') {
@@ -473,7 +474,7 @@ export class Server {
           if (transpileStats) {
             if (stats.mtime > transpileStats.mtime) {
               logRequest(req, "DELETE " + transpileFile)
-              await this.deletePath(transpileFile)
+              await DELETE.deletePath(transpileFile)
             } else {
               relativeTranspileFiles.push(Path.join(this.Config.transpileDir, filehash))
             }
@@ -482,7 +483,7 @@ export class Server {
           if (transpileMapStats) {
             if (stats.mtime > transpileMapStats.mtime) {
               logRequest(req, "DELETE " + transpileMapFile)
-              await this.deletePath(transpileMapFile)
+              await DELETE.deletePath(transpileMapFile)
             } else {
               relativeTranspileFiles.push(Path.join(this.Config.transpileDir, filehash + ".json.map"))
 
@@ -497,18 +498,18 @@ export class Server {
         //   if (!hashed.get(optionfile)) {
         //     let filePath =  optionsDir + "/" +optionfile
         //     logRequest(req, "delete " + filePath)
-        //     await this.deletePath(filePath)
+        //     await DELETE.deletePath(filePath)
         //   } 
         // }
         // for (let transpiledfile of fs.readdirSync(transpileDir)) {
         //   let filePath =  transpileDir + "/" +transpiledfile
         //   if (!hashed.get(transpiledfile)) {
         //     logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
-        //     await this.deletePath(filePath)
+        //     await DELETE.deletePath(filePath)
         //   }
         //   if (!hashed.get(transpiledfile.replace(/\.json.map$/,""))) {
         //     logRequest(req, "delete " + transpileDir + "/" + transpiledfile)
-        //     await this.deletePath(filePath)
+        //     await DELETE.deletePath(filePath)
         //   }
         // }
 
@@ -911,31 +912,6 @@ export class Server {
 
   static transpilePath(repositorypath, filepath) {
     return repositorypath + "/" + this.Config.transpileDir + "/" + filepath.replace(/\//g, "_")
-  }
-
-  static async deletePath(fullpath) {
-    return run(
-      `f="${fullpath}";
-      if [ -d "$f" ]; then rmdir -v "$f"; else rm -v "$f"; fi`)
-  }
-
-  /*
-   * delete file
-   */
-  static async DELETE(repositorypath, filepath, res) {
-    let fullpath = Path.join(repositorypath, filepath)
-
-    // clear all caches associated with the file
-    await this.deletePath(this.optionsPath(repositorypath, filepath))
-    await this.deletePath(this.transpilePath(repositorypath, filepath))
-
-    var result = await this.deletePath(fullpath)
-    if (result.error) {
-      res.writeHead(404)
-      return res.end("Error " + result.stdout + "\n" + result.stderr)
-    }
-    res.writeHead(200)
-    res.end("deleted " + fullpath)
   }
 
 
