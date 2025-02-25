@@ -3,7 +3,7 @@ import Path from 'path';
 import { run, respondWithCMD, fs_stat, logRequest, } from '../utils.js';
 
 export default class OPTIONS extends Service {
-  
+
   /*
    * list directory contents and file meta information
    */
@@ -40,7 +40,7 @@ export default class OPTIONS extends Service {
       if (req.headers['showversions'] == 'true') {
         return this.listVersions(repositorypath, filepath, res, after, until);
       }
-      let data = await this.server.readOptions(repositorypath, filepath, stats)
+      let data = await this.readOptions(repositorypath, filepath, stats)
       res.writeHead(200, {
         'content-type': 'text/plain' // github return text/plain, therefore we need to do the same
       });
@@ -99,6 +99,42 @@ export default class OPTIONS extends Service {
         contents: list
       })
     );
+  }
+
+  async readOptions(repositorypath, filepath, stats) {
+    var fullpath = Path.join(repositorypath, filepath)
+    if (!stats) {
+      try {
+        stats = await fs_stat(fullpath);
+      } catch (e) {
+        console.error("STATS error " + filepath, e)
+        return JSON.stringify({ error: e }, null, 2)
+      }
+    }
+    var result = { type: 'file' }
+    result.name = filepath
+    result.size = stats.size
+    result.version = await this.server.versionsService.getVersion(repositorypath, filepath)  // PERFORMANCE WARNING
+    result.modified = await this.server.filesService.getLastModified(repositorypath, filepath) // PERFORMANCE WARNING
+    return result
+  }
+
+
+  async invalidateOptionsFile(repositorypath, filepath, req) {
+    if (filepath.match(this.Config.optionsDir)) return  // don't do it on yourself
+    if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
+
+    logRequest(req, "invalidate options files" + this.Config.bundleName + " in " + repositorypath)
+    var hashedpath = filepath.replace(/\//g, "_")
+    await run(`cd ${repositorypath}; 
+        if [[ -e ${this.Config.optionsDir}/${hashedpath} ]]; then
+          rm ${this.Config.optionsDir}/${hashedpath}
+        fi`)
+  }
+
+
+  optionsPath(repositorypath, filepath) {
+    return repositorypath + "/" + this.Config.optionsDir + "/" + filepath.replace(/\//g, "_")
   }
 
 }

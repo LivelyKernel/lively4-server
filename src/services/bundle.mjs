@@ -46,7 +46,7 @@ export default class BundleService extends Service {
 
           var optionsStats = await try_fs_stat(optionsFile)
           if (!optionsStats || stats.mtime > optionsStats.mtime) {
-            var updatedOptions = await this.server.readOptions(repositorypath, filepath, stats)
+            var updatedOptions = await this.server.optionsService.readOptions(repositorypath, filepath, stats)
             logRequest(req, "UPDATE OPTIONS " + optionsFile)
             await fs_writeFile(optionsFile, JSON.stringify(updatedOptions, null, 2))
           }

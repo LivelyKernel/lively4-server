@@ -90,6 +90,7 @@ const GithubOriganizationMemberCache = {};
 // Regex constants
 const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 import optionsSpec from './options-spec.mjs';
+import { runInThisContext } from 'vm';
 
 
 export class Server {
@@ -119,6 +120,7 @@ export class Server {
     this.filesService = new FilesService(this);
     this.directoryService = new DirectoryService(this);
     this.transpileService = new TranspileService(this);
+    this.optionsService = new OPTIONS(this);
   }
 
   static get lively4dir() {
@@ -402,7 +404,7 @@ export class Server {
         } else if (req.method == 'MKCOL') {
           await new MKCOL(this).request(repositorypath, filepath, res);
         } else if (req.method == 'OPTIONS') {
-          await new OPTIONS(this).request(repositorypath, filepath, req, res);
+          await this.optionsService.request(repositorypath, filepath, req, res);
         } else if (req.method == 'MOVE') {
           await new MOVE(this).request(repositorypath, filepath, req, res);
         }
@@ -475,59 +477,10 @@ export class Server {
     // }
   }
 
-  static async invalidateOptionsFile(repositorypath, filepath, req) {
-    if (filepath.match(this.Config.optionsDir)) return  // don't do it on yourself
-    if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
-
-    logRequest(req, "invalidate options files" + this.Config.bundleName + " in " + repositorypath)
-    var hashedpath = filepath.replace(/\//g, "_")
-    await run(`cd ${repositorypath}; 
-        if [[ -e ${this.Config.optionsDir}/${hashedpath} ]]; then
-          rm ${this.Config.optionsDir}/${hashedpath}
-        fi`)
-  }
 
 
 
-
-  
-  static async ensureCachedOptions(repositorypath, filepath) {
-    console.log("ensureCachedOptions " + repositorypath + ", " + filepath)
-    let options = await this.readOptions(repositorypath, filepath)
-    if (options.error) {
-      return { options: null, body: null, error: options.error }
-    } else {
-      console.log("options: " + options)
-      var optionsBody = JSON.stringify(options, null, 2)
-      let optionsPath = this.optionsPath(repositorypath, filepath)
-      return { options, body: optionsBody, written: fs_writeFile(optionsPath, optionsBody) }
-    }
-  }
-
-  static optionsPath(repositorypath, filepath) {
-    return repositorypath + "/" + this.Config.optionsDir + "/" + filepath.replace(/\//g, "_")
-  }
-
-
-  static async readOptions(repositorypath, filepath, stats) {
-    var fullpath = Path.join(repositorypath, filepath)
-    if (!stats) {
-      try {
-        stats = await fs_stat(fullpath);
-      } catch (e) {
-        console.error("STATS error " + filepath, e)
-        return JSON.stringify({ error: e }, null, 2)
-      }
-    }
-    var result = { type: 'file' }
-    result.name = filepath
-    result.size = stats.size
-    result.version = await this.versionsService.getVersion(repositorypath, filepath)  // PERFORMANCE WARNING
-    result.modified = await this.filesService.getLastModified(repositorypath, filepath) // PERFORMANCE WARNING
-    return result
-  }
 }
-
 
 Server.setup();
 

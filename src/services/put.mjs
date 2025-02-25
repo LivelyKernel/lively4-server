@@ -31,7 +31,7 @@ export default class PUT extends Service {
         // after transmission, write file to disk
 
         // only block at the end...
-        await this.server.invalidateOptionsFile(repositorypath, filepath, req)
+        await this.server.optionsService.invalidateOptionsFile(repositorypath, filepath, req)
         await this.server.transpileService.invalidateTranspiledFile(repositorypath, filepath, req,)
         await this.server.invalidateBundleFile(repositorypath, filepath, req)
         await this.server.ensureSpecialParentDirectories(repositorypath, filepath, req)
@@ -116,7 +116,7 @@ export default class PUT extends Service {
         } finally {
             RepositoryGitInUse[repositorypath] = undefined;
         }
-        var { options, body, error } = await this.server.ensureCachedOptions(repositorypath, filepath)
+        var { options, body, error } = await this.ensureCachedOptions(repositorypath, filepath)
         if (!options) {
             res.writeHead(500);
             res.end('could not retrieve new version... somthing went wrong: ' + error);
@@ -129,5 +129,16 @@ export default class PUT extends Service {
         }
     }
 
-
+    async ensureCachedOptions(repositorypath, filepath) {
+        console.log("ensureCachedOptions " + repositorypath + ", " + filepath)
+        let options = await this.server.optionsService.readOptions(repositorypath, filepath)
+        if (options.error) {
+            return { options: null, body: null, error: options.error }
+        } else {
+            console.log("options: " + options)
+            var optionsBody = JSON.stringify(options, null, 2)
+            let optionsPath = this.server.optionsService.optionsPath(repositorypath, filepath)
+            return { options, body: optionsBody, written: fs_writeFile(optionsPath, optionsBody) }
+        }
+    }
 }
