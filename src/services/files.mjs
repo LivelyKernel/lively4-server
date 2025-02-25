@@ -37,7 +37,7 @@ export default class FilesService extends Service {
             return res.end('File not found!\n');
         }
         if (stats.isDirectory()) {
-            this.server.readDirectory(fullpath, req, res, 'text/html');
+            this.server.directoryService.readDirectory(fullpath, req, res, 'text/html');
         } else {
             res.writeHead(200, {
                 'content-type': mime.lookup(fullpath),

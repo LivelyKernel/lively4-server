@@ -34,7 +34,7 @@ export default class OPTIONS extends Service {
       if (req.headers['filelist'] == 'true') {
         this.readFilelist(repositorypath, filepath, res);
       } else {
-        this.server.readDirectory(fullpath, req, res);
+        this.server.directoryService.readDirectory(fullpath, req, res);
       }
     } else if (stats.isFile()) {
       if (req.headers['showversions'] == 'true') {

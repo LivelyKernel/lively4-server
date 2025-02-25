@@ -67,12 +67,16 @@ import OPTIONS from './services/options.mjs';
 import MOVE from './services/move.mjs';
 import DELETE from './services/delete.mjs';
 import GET from './services/get.mjs';
+import PUT from './services/put.mjs';
+
 
 import WebHookService from './services/webhook.mjs';
 import GraphVizService from './services/graphviz.mjs';
 import BundleService from './services/bundle.mjs';
 import VersionsService from './services/versions.mjs';
 import FilesService from './services/files.mjs';
+import DirectoryService from './services/directory.mjs';
+
 import MakeService from './services/make.mjs';
 import CurlService from './services/curl.mjs';
 import TMPService from './services/tmp.mjs';
@@ -83,12 +87,8 @@ import TranspileService from './services/transpile.mjs';
 // Cache objects
 const GithubOriganizationMemberCache = {};
 
-const RepositoryGitInUse = {}; // cheap semaphore
-
 // Regex constants
 const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
-const isTextRegEx = /\.((txt)|(md)|(js)|(html)|(svg))$/;
-
 import optionsSpec from './options-spec.mjs';
 
 
@@ -117,6 +117,7 @@ export class Server {
     this.bundleService = new BundleService(this);
     this.versionsService = new VersionsService(this);
     this.filesService = new FilesService(this);
+    this.directoryService = new DirectoryService(this);
     this.transpileService = new TranspileService(this);
   }
 
@@ -395,7 +396,7 @@ export class Server {
         if (req.method == 'GET') {
           await new GET(this).request(repositorypath, filepath, fileversion, req, res);
         } else if (req.method == 'PUT') {
-          await this.PUT(repositorypath, filepath, req, res);
+          await new PUT(this).request(repositorypath, filepath, req, res);
         } else if (req.method == 'DELETE') {
           await new DELETE(this).request(repositorypath, filepath, res);
         } else if (req.method == 'MKCOL') {
@@ -434,9 +435,6 @@ export class Server {
       fi`)).stdout
     return result.match(filepath)
   }
-
-
-
 
   static async invalidateBundleFile(repositorypath, filepath) {
     if (filepath.match(this.Config.transpileDir) // all compiled files are bundled?
@@ -492,218 +490,7 @@ export class Server {
 
 
 
-  static readDirectory(aPath, req, res, contentType) {
-    fs.readdir(aPath, function (err, files) {
-      var dir = {
-        type: 'directory',
-        contents: []
-      };
-
-      var checkEnd = () => {
-        // is there a better way for synchronization???
-        if (dir.contents.length === files.length) {
-          var data;
-          if (contentType == 'text/html') {
-            // prefix the directory itself as needed if it does not end in "/"
-            var match = req.url.match(/\/([^/]+)$/); // aPath stripped the / already
-            var prefix = match ? match[1] + '/' : '';
-
-
-            data =
-              `<html><style>
-  body { 
-    font-family: arial;
-  }
- </style><body><h1>` +
-              req.url +
-              '</h1>\n<ul>' +
-              // '<!-- prefix=' +
-              // `PATH: ${aPath} PREFIX: ${prefix} URL: ${req.url} URL2: ${JSON.stringify(req.headers)}}` +
-              // ' -->' +
-
-
-              dir.contents.sort()
-                .map(ea => ea.name)
-                .sort()
-                .map(function (ea) {
-                  return (
-                    "<li><a href='" +
-                    prefix +
-                    ea +
-                    "'>" +
-                    ea +
-                    '</a></li>'
-                  );
-                })
-                .join('\n') +
-              '</ul></body></html>';
-
-            // github return text/plain, therefore we need to do the same
-            res.writeHead(200, {
-              'content-type': 'text/html'
-            });
-            res.end(data);
-          } else {
-            data = JSON.stringify(dir, null, 2);
-            // github return text/plain, therefore we need to do the same
-            res.writeHead(200, {
-              'content-type': 'text/plain'
-            });
-            res.end(data);
-          }
-        }
-      };
-      checkEnd();
-      files.forEach(function (filename) {
-        var filePath = Path.join(aPath, filename);
-        fs.stat(filePath, function (err, statObj) {
-          if (!statObj) {
-            dir.contents.push({
-              type: 'file',
-              name: filename,
-              size: 0
-            });
-          } else if (statObj.isDirectory()) {
-            dir.contents.push({
-              type: 'directory',
-              name: filename,
-              size: 0
-            });
-          } else {
-            dir.contents.push({
-              type: 'file',
-              name: filename,
-              size: statObj.size
-            });
-          }
-          checkEnd();
-        });
-      });
-    });
-  }
-
-  /*
-   * write file to disk
-   */
-  static async PUT(repositorypath, filepath, req, res) {
-    var fullpath = Path.join(repositorypath, filepath);
-    var fullBody = '';
-    // if (filepath.match(/png$/)) {
-    if (filepath.match(isTextRegEx)) {
-      // #TODO how do we better decide if we need this...
-    } else {
-      logRequest(req, 'set binary encoding');
-      req.setEncoding('binary');
-    }
-
-    //read chunks of data and store it in buffer
-    req.on('data', function (chunk) {
-      fullBody += chunk.toString();
-    });
-
-    await new Promise(resolve => req.on('end', resolve))
-
-    //after transmission, write file to disk
-
-    // only block at the end...
-    await this.invalidateOptionsFile(repositorypath, filepath, req)
-    await this.transpileService.invalidateTranspiledFile(repositorypath, filepath, req,)
-    await this.invalidateBundleFile(repositorypath, filepath, req)
-    await this.ensureSpecialParentDirectories(repositorypath, filepath, req)
-
-    if (fullpath.match(/\/$/)) {
-      return await mkdir(fullpath, err => {
-        if (err) {
-          logRequest(req, 'Error creating dir: ' + err);
-        }
-        logRequest(req, 'mkdir ' + fullpath);
-        res.writeHead(200, 'OK');
-        res.end();
-      });
-    }
-    var lastVersion = req.headers['lastversion'];
-    var currentVersion = await this.versionsService.getVersion(repositorypath, filepath);
-
-    // we have version information and there is a conflict
-    if (lastVersion && currentVersion && lastVersion !== currentVersion) {
-      logRequest(req, '[writeFile] CONFLICT DETECTED');
-      res.writeHead(409, {
-        // HTTP CONFLICT
-        'content-type': 'text/plain',
-        conflictversion: currentVersion
-      });
-      res.end('Writing conflict detected: ' + currentVersion);
-      return;
-    }
-
-    try {
-      await fs_writeFile(fullpath, fullBody, fullpath.match(isTextRegEx) ? undefined : 'binary');
-    } catch (err) {
-      logRequest(req, err);
-      throw new Error("Error in writeFile " + fullpath + ": " + err);
-    }
-
-    if (!this.autoCommit || req.headers['nocommit']) {
-      // logRequest(req, 'saved ' + fullpath);
-      res.writeHead(200, 'OK');
-      res.end();
-      return
-    }
-
-    if (RepositoryGitInUse[repositorypath]) {
-      logRequest(req, '[writeFile] Autocommit failed');
-      res.writeHead(300, 'Autocommit failed');
-      return res.end('Autocommit failed, repository in use: ' + repositorypath);
-    }
-    RepositoryGitInUse[repositorypath] = true;
-
-    var username = req.headers.gitusername;
-    var email = req.headers.gitemail;
-    // var password = req.headers.gitpassword; // not used yet
-
-    var authCmd = '';
-    if (username) authCmd += `git config user.name '${username}'; `;
-    if (email) authCmd += `git config user.email '${email}'; `;
-    // logRequest(req, 'EMAIL ' + email + ' USER ' + username);
-
-    // #TODO maybe we should ask for github credetials here too?
-    let cmd = `
-      cd "${repositorypath}"; 
-      if [ -e .git ]; then
-        ${authCmd} git add "${filepath}"; 
-        git commit -m "AUTO-COMMIT ${filepath}"
-      else
-        echo "no git repository" 
-      fi
-    `;
-    try {
-      let { error, stdout, stderr } = await run(cmd)
-      // logRequest(req, 'git stdout: ' + stdout);
-      // logRequest(req, 'git stderr: ' + stderr);
-      if (error) {
-        // file did not change....
-        if (!stdout.match("no changes added to commit")) {
-          logRequest(req, 'ERROR ' + JSON.stringify(stderr));
-          res.writeHead(500, 'Error:' + JSON.stringify(stderr));
-          return res.end('ERROR stdout: ' + stdout + "\nstderr:" + stderr);
-        }
-      }
-    } finally {
-      RepositoryGitInUse[repositorypath] = undefined;
-    }
-    var { options, body, error } = await this.ensureCachedOptions(repositorypath, filepath)
-    if (!options) {
-      res.writeHead(500);
-      res.end('could not retrieve new version... somthing went wrong: ' + error);
-    } else {
-      res.writeHead(200, {
-        'content-type': 'text/plain',
-        fileversion: options.version,
-      });
-      res.end(body);
-    }
-  }
-
+  
   static async ensureCachedOptions(repositorypath, filepath) {
     console.log("ensureCachedOptions " + repositorypath + ", " + filepath)
     let options = await this.readOptions(repositorypath, filepath)
