@@ -57,7 +57,7 @@ import slash from 'slash'; // Convert Windows backslash paths to slash paths: fo
 import 'log-timestamp'; // this adds a timestamp to all log messages
 import fetch from 'node-fetch';
 
-import {config, cleanString, run, respondWithCMD, fs_exists, fs_readFile, fs_readdir, fs_stat, fs_writeFile, log, logRequest, try_fs_stat } from './utils.js';
+import { config, cleanString, run, respondWithCMD, fs_exists, fs_readFile, fs_readdir, fs_stat, fs_writeFile, log, logRequest, try_fs_stat } from './utils.js';
 
 import MKCOL from './services/mkcol.mjs';
 import BIBTEX from './services/bibtex.mjs';
@@ -490,7 +490,7 @@ export class Server {
   }
 
 
-  
+
 
   static readDirectory(aPath, req, res, contentType) {
     fs.readdir(aPath, function (err, files) {
