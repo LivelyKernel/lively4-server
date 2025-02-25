@@ -14,10 +14,28 @@ export default class FilesService extends Service {
     )).stdout;
   }
 
+  validatePath(path) {
+    // First check for special characters
+    if (path.match(/['";&#?:|]/)) {
+      return false;
+    }
+
+    // Check for directory traversal attempts
+    // Normalize the path first to resolve any ../ sequences
+    const normalizedPath = Path.normalize(path);
+
+    // Check if the normalized path tries to go above root with ../
+    if (normalizedPath.startsWith('..') || normalizedPath.includes('/../')) {
+      return false;
+    }
+
+    return true;
+  }
+
 
   async readFile(repositorypath, filepath, req, res) {
     // First validate the path before attempting to read
-    if (!this.server.validatePath(filepath)) {
+    if (!this.validatePath(filepath)) {
       res.writeHead(500);
       res.end('Invalid path: directory traversal not allowed');
       return;

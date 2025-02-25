@@ -90,8 +90,6 @@ const GithubOriganizationMemberCache = {};
 // Regex constants
 const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 import optionsSpec from './options-spec.mjs';
-import { runInThisContext } from 'vm';
-
 
 export class Server {
   static Config = {
@@ -212,23 +210,6 @@ export class Server {
     res.setHeader('Access-Control-Allow-Headers', '*');
   }
 
-  static validatePath(path) {
-    // First check for special characters
-    if (path.match(/['";&#?:|]/)) {
-      return false;
-    }
-
-    // Check for directory traversal attempts
-    // Normalize the path first to resolve any ../ sequences
-    const normalizedPath = Path.normalize(path);
-
-    // Check if the normalized path tries to go above root with ../
-    if (normalizedPath.startsWith('..') || normalizedPath.includes('/../')) {
-      return false;
-    }
-
-    return true;
-  }
 
   static async onRequest(req, res, proxy) {
     req._logId = this.requestCounter++
@@ -257,7 +238,6 @@ export class Server {
 
       var startRequestTime = Date.now()
 
-
       try {
         this.setCORSHeaders(res);
 
@@ -265,7 +245,7 @@ export class Server {
         var pathname = url.pathname;
 
         // Validate path before any processing
-        if (!this.validatePath(pathname)) {
+        if (!this.filesService.validatePath(pathname)) {
           res.writeHead(500);
           res.end('Invalid path: directory traversal not allowed');
           return;
@@ -367,7 +347,6 @@ export class Server {
         if (pathname.match(/\/_tmp\//)) {
           return this.tmpService.request(pathname, req, res);
         }
-
         if (pathname.match(/\/_meta\//)) {
           return this.metaService.request(pathname, req, res);
         }
@@ -417,12 +396,9 @@ export class Server {
       logRequest(req, "FINISHED " + req.method + " (" + Math.round(Date.now() - startRequestTime) + "ms) " + req.url + " ")
     }
   }
-
-
 }
 
 Server.setup();
-
 
 // Only start the server if this file is being run directly
 if (import.meta.url.startsWith('file:')) {
