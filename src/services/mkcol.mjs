@@ -7,7 +7,7 @@ import { run } from "../utils.js";
  * @extends Service
  */
 export default class MKCOL extends Service {
-  
+
   /**
    * Handles MKCOL request to create a new directory
    * @param {string} repositorypath - Base path of the repository

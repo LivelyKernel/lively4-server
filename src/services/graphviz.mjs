@@ -13,7 +13,7 @@ export default class GraphVizService extends Service {
 
     let fullBody = '';
     req.setEncoding('binary');
-    
+
     await new Promise(resolve => {
       req.on('data', chunk => {
         fullBody += chunk.toString();

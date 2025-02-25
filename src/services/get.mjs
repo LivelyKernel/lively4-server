@@ -7,16 +7,16 @@ import fs from 'fs';
 
 export default class GET extends Service {
 
-    async request(repositorypath, filepath, fileversion, req, res) {
-        if (filepath.match(this.Config.bundleName)) {
-            return this.server.bundleService.ensureBundleFile(repositorypath, filepath, req, res);
-        } else if (fileversion && fileversion != 'undefined') {
-            return this.server.filesService.readFileVersion(repositorypath, filepath, fileversion, req, res);
-        } else {
-            return this.server.filesService.readFile(repositorypath, filepath, req, res);
-        }
+  async request(repositorypath, filepath, fileversion, req, res) {
+    if (filepath.match(this.Config.bundleName)) {
+      return this.server.bundleService.ensureBundleFile(repositorypath, filepath, req, res);
+    } else if (fileversion && fileversion != 'undefined') {
+      return this.server.filesService.readFileVersion(repositorypath, filepath, fileversion, req, res);
+    } else {
+      return this.server.filesService.readFile(repositorypath, filepath, req, res);
     }
+  }
 
-    
+
 
 }

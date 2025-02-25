@@ -119,7 +119,6 @@ export default class OPTIONS extends Service {
     return result
   }
 
-
   async invalidateOptionsFile(repositorypath, filepath, req) {
     if (filepath.match(this.Config.optionsDir)) return  // don't do it on yourself
     if (!filepath.match(/\.js/)) return  // only javascript files are transpiled...
@@ -131,7 +130,6 @@ export default class OPTIONS extends Service {
           rm ${this.Config.optionsDir}/${hashedpath}
         fi`)
   }
-
 
   optionsPath(repositorypath, filepath) {
     return repositorypath + "/" + this.Config.optionsDir + "/" + filepath.replace(/\//g, "_")

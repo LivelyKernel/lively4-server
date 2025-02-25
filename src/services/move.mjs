@@ -1,5 +1,5 @@
 import Service from "./service.mjs";
-import { run,  logRequest} from '../utils.js';
+import { run, logRequest } from '../utils.js';
 
 
 /*
@@ -15,7 +15,7 @@ export default class MOVE extends Service {
        mv -v "$SOURCE" "$DESTINATION";       
        `)
   }
-  
+
   async request(repositorypath, filepath, req, res) {
     var source = req.url
 

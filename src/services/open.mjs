@@ -6,7 +6,7 @@ import { respondWithCMD } from "../utils.js";
  * @extends {Service}
  */
 export default class OPEN extends Service {
- 
+
   /**
    * Handles the OPEN request by using the system's 'open' command
    * @param {string} path - The full request path

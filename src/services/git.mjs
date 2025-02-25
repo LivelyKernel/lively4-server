@@ -5,7 +5,7 @@ import Path from 'path';
 const RepositoryInSync = {}; // cheap semaphore
 
 export default class GITService extends Service {
-  
+
   async request(pathname, req, res) {
     logRequest(req, 'git control: ' + pathname);
 

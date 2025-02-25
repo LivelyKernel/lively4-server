@@ -11,7 +11,7 @@ export default class TMPService extends Service {
 
   request(pathname, req, res) {
     const file = pathname.replace(/^\/_tmp\//, '');
-    
+
     if (req.method === 'GET') {
       return this.handleGet(file, res);
     }
@@ -34,7 +34,7 @@ export default class TMPService extends Service {
   handlePut(file, req, res) {
     let fullBody = '';
     req.setEncoding('binary');
-    
+
     req.on('data', chunk => {
       fullBody += chunk.toString();
     });
