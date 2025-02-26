@@ -322,14 +322,22 @@ export class Server {
       logRequest(req, "FINISHED " + req.method + " (" + Math.round(Date.now() - startRequestTime) + "ms) " + req.url + " ")
     }
   }
-}
 
-// Only start the server if this file is being run directly
-if (import.meta.url.startsWith('file:')) {
-  const modulePath = URL.fileURLToPath(import.meta.url);
-  if (process.argv[1] === modulePath) {
+  static main() {
+    // Only start the server if this file is being run directly
+    if (import.meta.url.startsWith('file:')) {
+      const modulePath = URL.fileURLToPath(import.meta.url);
+      if (process.argv[1] === modulePath) {
+        this.start()
+      }
+    }
+  }
+
+  static start() {
     var server = new Server();
     server.setup();
     server.start();
   }
 }
+
+Server.main();
