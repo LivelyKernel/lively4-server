@@ -28,6 +28,7 @@ describe("Lively4 Server", () => {
   var tmp = "tmp/";
   var testrepo = "lively4-dummy";
   var url = "http://localhost:" + port + "/";
+  var server
 
   async function expectResultMatch(cmd, regexString) {
     var result = await run(`cd ${tmp}${testrepo};` + cmd);
@@ -35,12 +36,15 @@ describe("Lively4 Server", () => {
   }
 
   before(async function () {
-    Server.lively4dir = tmp;
-    Server.port = port;
-    Server.autoCommit = true;
-    Server.options['tmp-cleanup-timeout'] = 1000; // Set cleanup timeout to 1s for testing
-    Server.options['myurl'] = url;
-    Server.options['directory'] = Server.lively4dir;
+    server = new Server();
+    server.setup()
+
+    server.lively4dir = tmp;
+    server.port = port;
+    server.autoCommit = true;
+    server.options['tmp-cleanup-timeout'] = 1000; // Set cleanup timeout to 1s for testing
+    server.options['myurl'] = url;
+    server.options['directory'] = server.lively4dir;
     this.timeout(35000);
     var result = await run(`rm -rv "${tmp}"; mkdir -p "${tmp}"; cd "${tmp}";` +
       `git clone https://github.com/LivelyKernel/${testrepo};` +
@@ -49,14 +53,16 @@ describe("Lively4 Server", () => {
     console.log("stdout: " + result.stdout);
 
     console.log("start server")
-    Promise.resolve().then(() => Server.start());
+    Promise.resolve().then(() => {
+      server.start()
+    });
     await new Promise(resolve => setTimeout(resolve, 100));
     console.log("server started")
   });
 
   after(async () => {
     console.log("stop server")
-    Server.stop();
+    server.stop();
     console.log("server stopped")
   })
 
@@ -473,8 +479,8 @@ describe("Lively4 Server", () => {
     describe("Authorization", function () {
       it("should reject requests without credentials when auth required", async function () {
         // Temporarily enable auth requirement
-        var originalAuth = Server.options["authorize-requests"]
-        Server.options["authorize-requests"] = true
+        var originalAuth = server.options["authorize-requests"]
+        server.options["authorize-requests"] = true
 
         var response = await fetch(url + "lively4-dummy/README.md", {
           method: "GET"
@@ -482,7 +488,7 @@ describe("Lively4 Server", () => {
         expect(response.status).to.equal(403)
 
         // Restore original setting
-        Server.options["authorize-requests"] = originalAuth
+        server.options["authorize-requests"] = originalAuth
       })
     });
 

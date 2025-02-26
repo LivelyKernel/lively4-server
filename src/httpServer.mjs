@@ -92,14 +92,14 @@ const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 import optionsSpec from './options-spec.mjs';
 
 export class Server {
-  static Config = {
+  Config = {
     bootfilelistName: ".lively4bootfilelist",
     bundleName: ".lively4bundle.zip",
     transpileDir: ".transpiled",
     optionsDir: ".options"
   }
 
-  static setup() {
+  setup() {
     var args = argv.option(optionsSpec()).run();
     this.options = args.options
     this.sourceDir = args.options.directory || '../';
@@ -121,11 +121,11 @@ export class Server {
     this.optionsService = new OPTIONS(this);
   }
 
-  static get lively4dir() {
+  get lively4dir() {
     return this._lively4dir;
   }
 
-  static set lively4dir(path) {
+  set lively4dir(path) {
     log('set lively4dir to:' + path);
     this.sourceDir = path;
     this._lively4dir = path;
@@ -133,13 +133,13 @@ export class Server {
     return this._lively4dir;
   }
 
-  static start() {
+  start() {
     log('Welcome to Lively4!');
     log('Server: ' + this.serverDir);
     log('Lively4: ' + this.lively4dir);
     log('Port: ' + this.port);
     log('Auto-commit: ' + this.autoCommit);
-    log('Myurl: ' + Server.options.myurl);
+    log('Myurl: ' + this.options.myurl);
 
     this.tmpStorage = {};
     this.tmpStorageTimeouts = new Map(); // Track timeouts
@@ -167,7 +167,7 @@ export class Server {
     });
   }
 
-  static async stop() {
+  async stop() {
     this.isRunning = false;
     this.tmpService.cleanup();
 
@@ -203,7 +203,7 @@ export class Server {
       });
     });
   }
-  static setCORSHeaders(res) {
+  setCORSHeaders(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Request-Method', '*');
     res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, DELETE, PUT, MOVE');
@@ -211,7 +211,7 @@ export class Server {
   }
 
 
-  static async onRequest(req, res, proxy) {
+  async onRequest(req, res, proxy) {
     req._logId = this.requestCounter++
     req._startTime = Date.now()
     logRequest(req, "START " + req.method + "\t" + req.url)
@@ -332,9 +332,7 @@ export class Server {
             }
           }
         }
-
         logRequest(req, `${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
-        // logRequest(req, `repositorypath: ${repositorypath} filepath: ${filepath}`);
 
         if (breakOutRegex.test(path) === true) {
           res.writeHead(500);
@@ -343,7 +341,6 @@ export class Server {
           );
           return;
         }
-
         if (pathname.match(/\/_tmp\//)) {
           return this.tmpService.request(pathname, req, res);
         }
@@ -375,17 +372,22 @@ export class Server {
           return new BIBTEX(this).request(req, res);
         }
         if (req.method == 'GET') {
-          await new GET(this).request(repositorypath, filepath, fileversion, req, res);
-        } else if (req.method == 'PUT') {
-          await new PUT(this).request(repositorypath, filepath, req, res);
-        } else if (req.method == 'DELETE') {
-          await new DELETE(this).request(repositorypath, filepath, res);
-        } else if (req.method == 'MKCOL') {
-          await new MKCOL(this).request(repositorypath, filepath, res);
-        } else if (req.method == 'OPTIONS') {
+          return await new GET(this).request(repositorypath, filepath, fileversion, req, res);
+        }
+        if (req.method == 'PUT') {
+          return await new PUT(this).request(repositorypath, filepath, req, res);
+        }
+        if (req.method == 'DELETE') {
+          return await new DELETE(this).request(repositorypath, filepath, res);
+        }
+        if (req.method == 'MKCOL') {
+          return await new MKCOL(this).request(repositorypath, filepath, res);
+        }
+        if (req.method == 'OPTIONS') {
           await this.optionsService.request(repositorypath, filepath, req, res);
-        } else if (req.method == 'MOVE') {
-          await new MOVE(this).request(repositorypath, filepath, req, res);
+        }
+        if (req.method == 'MOVE') {
+          return await new MOVE(this).request(repositorypath, filepath, req, res);
         }
       } catch (e) {
         console.error('ERROR on request ' + req.url, e);
@@ -398,12 +400,12 @@ export class Server {
   }
 }
 
-Server.setup();
-
 // Only start the server if this file is being run directly
 if (import.meta.url.startsWith('file:')) {
   const modulePath = URL.fileURLToPath(import.meta.url);
   if (process.argv[1] === modulePath) {
-    Server.start();
+    var server = new Server();
+    server.setup();
+    server.start();
   }
 }
