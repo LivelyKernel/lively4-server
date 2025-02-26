@@ -59,6 +59,8 @@ import fetch from 'node-fetch';
 
 import { config, cleanString, run, respondWithCMD, fs_exists, fs_readFile, fs_readdir, fs_stat, fs_writeFile, log, logRequest, try_fs_stat } from './utils.js';
 
+import { logDebugRequest } from './debug.mjs';
+
 import MKCOL from './services/mkcol.mjs';
 import BIBTEX from './services/bibtex.mjs';
 import SEARCH from './services/search.mjs';
@@ -214,28 +216,11 @@ export class Server {
   async onRequest(req, res, proxy) {
     req._logId = this.requestCounter++
     req._startTime = Date.now()
+
+
     logRequest(req, "START " + req.method + "\t" + req.url)
     try {
-      var debugInitiator = req.headers['debug-initiator'];
-      if (debugInitiator) {
-        logRequest(req, "INITIATOR " + debugInitiator)
-      }
-      var debugSession = req.headers['debug-session'];
-      if (debugSession) {
-        logRequest(req, "SESSION " + debugSession)
-      }
-
-      var debugSystem = req.headers['debug-system'];
-      if (debugSystem) {
-        logRequest(req, "SYSTEM " + debugSystem)
-      }
-
-      var debugEventid = req.headers['debug-eventid'];
-      if (debugEventid) {
-        logRequest(req, "EVENTID " + debugEventid)
-      }
-
-
+      logDebugRequest(req);
       var startRequestTime = Date.now()
 
       try {
