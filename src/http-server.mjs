@@ -71,6 +71,7 @@ import DELETE from './services/delete.mjs';
 import GET from './services/get.mjs';
 import PUT from './services/put.mjs';
 
+import AuthService from './services/auth.mjs';
 
 import WebHookService from './services/webhook.mjs';
 import GraphVizService from './services/graphviz.mjs';
@@ -86,8 +87,6 @@ import METAService from './services/meta.mjs';
 import GITService from './services/git.mjs';
 import TranspileService from './services/transpile.mjs';
 
-// Cache objects
-const GithubOriganizationMemberCache = {};
 
 // Regex constants
 const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
@@ -112,6 +111,8 @@ export class Server {
     this.lively4DirUnix = args.options['lively4dir-unix'] || this.lively4dir;
     this.autoCommit = args.options['auto-commit'] || false;
     this.port = args.options.port || 8080;
+
+    this.authService = new AuthService(this);
     this.tmpService = new TMPService(this);
     this.metaService = new METAService(this);
     this.gitService = new GITService(this);
@@ -121,6 +122,8 @@ export class Server {
     this.directoryService = new DirectoryService(this);
     this.transpileService = new TranspileService(this);
     this.optionsService = new OPTIONS(this);
+
+
   }
 
   get lively4dir() {
@@ -250,72 +253,8 @@ export class Server {
           filepath = path
         }
 
-        // log("authorize-requests: " + this.options["authorize-requests"])
-        if (this.options["authorize-requests"]) {
-          // log("AUTH REQUIRED")
-
-          var org = this.options["github-organization"]
-          if (!org) {
-            logRequest(req, "CONFIG ERROR: github-organization is missing")
-          }
-          var teamName = this.options["github-team"]
-          if (!teamName) {
-            logRequest(req, "CONFIG ERROR: github-team is missing")
-          }
-
-          var username = req.headers['gitusername'];
-          var password = req.headers['gitpassword'];
-
-          // log("user " + username)
-          // log("password " + (password + "").slice(0,3))
-
-          if (!username || !password) {
-            res.writeHead(403);
-            res.end('Please authenticate yourself\n');
-            return;
-          }
-
-          // cache the authorization to go light on the github API and answer faster ourselves
-          var authorizationKey = org + "/" + org + "/" + username + "/" + password
-          var lastAuthorization = GithubOriganizationMemberCache[authorizationKey]
-          if (lastAuthorization && lastAuthorization.success) {
-            logRequest(req, "AUTHORIZED BY CACHE")
-            // do nothing
-          } else {
-            logRequest(req, "AUTHORIZATION required org: " + org + " team: " + teamName)
-            let teamInfo = await fetch(`https://api.github.com/orgs/${org}/teams/${teamName}`, {
-              method: "GET",
-              headers: {
-                Authorization: "token " + password
-              }
-            }).then(r => r.json());
-
-            if (teamInfo.members_url) {
-              var members = await fetch(teamInfo.members_url.replace(/\{.*/, ""), {
-                method: "GET",
-                headers: {
-                  Authorization: "token " + password
-                }
-              }).then(r => r.json());
-              var userInTeam = members.map(ea => ea.login).includes(username)
-            }
-
-            if (!userInTeam) {
-              GithubOriganizationMemberCache[authorizationKey] = {
-                success: false,
-                time: Date.now(),
-                previous: lastAuthorization // for preventing... DoS attacks? #TODO
-              }
-              res.writeHead(403);
-              res.end('Authentification/Authorization failed\n');
-              return;
-            }
-
-            GithubOriganizationMemberCache[authorizationKey] = {
-              success: true,
-              time: Date.now()
-            }
-          }
+        if (!this.authService.checkAuth(req, res)) {
+          return;
         }
         logRequest(req, `${req.method} ${path}  ${fileversion ? '[version= ' + fileversion + ']' : ''}`);
 
