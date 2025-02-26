@@ -2,10 +2,10 @@
   "name": "lively4-server",
   "version": "2.0.0",
   "description": "Lively4 Server",
-  "main": "httpServer.js",
+  "main": "http-server.js",
   "scripts": {
     "test": "mocha",
-    "start": "node src/httpServer.mjs"
+    "start": "node src/http-server.mjs"
   },
   "repository": {
     "type": "git",

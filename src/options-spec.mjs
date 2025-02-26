@@ -20,7 +20,7 @@ export default function optionsSpec() {
       type: 'int',
       description: 'port on which the server will listen for connections',
       example:
-        "'node httpServer.js -p 8001' or 'node httpServer.js --port=8001'"
+        "'node http-server.js -p 8001' or 'node http-server.js --port=8001'"
     },
     {
       name: 'directory',
@@ -28,13 +28,13 @@ export default function optionsSpec() {
       type: 'path',
       description: 'root directory from which the server will serve files',
       example:
-        "'node httpServer.js -d ../foo/bar' or node httpServer.js --directory=../foo/bar'"
+        "'node http-server.js -d ../foo/bar' or node http-server.js --directory=../foo/bar'"
     },
     {
       name: 'server',
       type: 'path',
       description: 'directory where the server looks for its scripts',
-      example: "'node httpServer.js --server ~/lively4-server'"
+      example: "'node http-server.js --server ~/lively4-server'"
     },
     {
       name: 'auto-commit',
@@ -77,7 +77,7 @@ export default function optionsSpec() {
       name: 'tmp-cleanup-timeout',
       type: 'int',
       description: 'timeout in milliseconds after which temporary files are cleaned up',
-      example: "'node httpServer.js --tmp-cleanup-timeout=300000'"
+      example: "'node http-server.js --tmp-cleanup-timeout=300000'"
     }
   ];
 }

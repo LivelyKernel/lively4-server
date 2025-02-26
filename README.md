@@ -26,11 +26,11 @@ npm start
 
 You can configure the server port and served directory using environment variables or command line arguments:
 ```
-node src/httpServer.js --port=8080
+node src/http-server.js --port=8080
 ```
 or
 ```
-node src/httpServer.js --port 8080 --directory=../foo/bar
+node src/http-server.js --port 8080 --directory=../foo/bar
 ```
 
 # Development Workflow
