@@ -3,7 +3,7 @@ import { expect } from "chai"
 import { exec } from "child_process"
 
 // TODO: start server in a separate process
-import { Server } from '../src/http-server.mjs'
+import { Server } from '../src/http-server.js'
 
 import JSZip from "jszip"
 import fs from 'node:fs'
