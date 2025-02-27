@@ -1,25 +1,19 @@
 {
-  "plugins": [],
-  "recurseDepth": 10,
+  "sourceType": "module",
+  "plugins": ["plugins/markdown"],
   "source": {
     "include": ["src"],
-    "includePattern": ".+\\.js(doc|x)?$",
-    "excludePattern": "(^|\\/|\\\\)_|node_modules"
-  },
-  "sourceType": "module",
-  "tags": {
-    "allowUnknownTags": true,
-    "dictionaries": ["jsdoc", "closure"]
-  },
-  "templates": {
-    "cleverLinks": false,
-    "monospaceLinks": false,
-    "default": {
-      "outputSourceFiles": true
-    }
+    "includePattern": ".+\\.js(doc|x)?$"
   },
   "opts": {
     "destination": "./docs/api",
+    "template": "node_modules/better-docs",
     "recurse": true
+  },
+  "templates": {
+    "default": {
+      "includeDate": false,
+      "useLongnameInNav": true
+    }
   }
 }

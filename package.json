@@ -30,11 +30,12 @@
     "slash": "^5.1.0"
   },
   "devDependencies": {
+    "better-docs": "^2.7.3",
     "chai": "^5.2.0",
     "esm": "^3.2.25",
+    "jsdoc": "^4.0.2",
     "jszip": "^3.10.1",
-    "mocha": "^11.1.0",
-    "jsdoc": "^4.0.2"
+    "mocha": "^11.1.0"
   },
   "jshintConfig": {
     "esversion": 6

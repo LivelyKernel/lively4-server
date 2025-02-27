@@ -1,19 +1,36 @@
+/** 
+ * @module FilesService
+ */
+
 import Service from "./service.js";
 import Path from 'path';
 import { run, respondWithCMD, fs_stat, logRequest, try_fs_stat, fs_exists, fs_readFile, fs_writeFile } from '../utils.js';
 import mime from 'mime-types';
 import fs from 'fs';
 
-
+/**
+ * Service for handling file operations in the server
+ * @extends Service
+ */
 export default class FilesService extends Service {
 
-
+  /**
+   * Gets the last modification timestamp for a file
+   * @param {string} repositorypath - Path to the repository
+   * @param {string} filepath - Path to the file within the repository
+   * @returns {Promise<string>} - A promise resolving to the last modification timestamp
+   */
   async getLastModified(repositorypath, filepath) {
     return (await run(
       `cd "${repositorypath}"; find "${filepath}" -not -path '*/.git/*' -printf "%TY-%Tm-%Td %TH:%TM:%.2TS"`
     )).stdout;
   }
 
+  /**
+   * Validates a file path to prevent directory traversal and other security issues
+   * @param {string} path - The path to validate
+   * @returns {boolean} - True if the path is valid, false otherwise
+   */
   validatePath(path) {
     // First check for special characters
     if (path.match(/['";&#?:|]/)) {
@@ -32,7 +49,14 @@ export default class FilesService extends Service {
     return true;
   }
 
-
+  /**
+   * Reads a file and sends it as an HTTP response
+   * @param {string} repositorypath - Path to the repository
+   * @param {string} filepath - Path to the file within the repository
+   * @param {Object} req - HTTP request object
+   * @param {Object} res - HTTP response object
+   * @returns {Promise<void>}
+   */
   async readFile(repositorypath, filepath, req, res) {
     // First validate the path before attempting to read
     if (!this.validatePath(filepath)) {
@@ -73,8 +97,15 @@ export default class FilesService extends Service {
     }
   }
 
-
-  /* load a specific version of a file through git */
+  /**
+   * Reads a specific version of a file through git and sends it as an HTTP response
+   * @param {string} repositorypath - Path to the repository
+   * @param {string} filepath - Path to the file within the repository
+   * @param {string} fileversion - Git version/commit hash of the file to retrieve
+   * @param {Object} req - HTTP request object
+   * @param {Object} res - HTTP response object
+   * @returns {Promise<void>}
+   */
   async readFileVersion(repositorypath, filepath, fileversion, req, res) {
     var { stdout, stderr, error } = await run(
       'cd ' + repositorypath + ';' + 'git show ' + fileversion + ':"' + filepath + '"',
