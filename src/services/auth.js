@@ -1,13 +1,24 @@
 import Service from "./service.js";
-
 import { logRequest } from '../utils.js';
 
 // Cache objects
 const GithubOriganizationMemberCache = {};
 
-
+/**
+ * Authentication service that handles GitHub organization-based authorization
+ * This service verifies if users are members of specified GitHub organizations and teams
+ * @extends Service
+ */
 export default class AuthService extends Service {
 
+  /**
+   * Checks if the request is authorized based on GitHub credentials and team membership
+   * @param {Object} req - Express request object containing GitHub credentials in headers
+   * @param {Object} res - Express response object
+   * @param {string} req.headers.gitusername - GitHub username
+   * @param {string} req.headers.gitpassword - GitHub personal access token
+   * @returns {Promise<boolean>} Returns true if authorized, false otherwise
+   */
   async checkAuth(req, res) {
 
     // log("authorize-requests: " + this.server.options["authorize-requests"])
@@ -26,8 +37,6 @@ export default class AuthService extends Service {
       var username = req.headers['gitusername'];
       var password = req.headers['gitpassword'];
 
-      // log("user " + username)
-      // log("password " + (password + "").slice(0,3))
 
       if (!username || !password) {
         res.writeHead(403);

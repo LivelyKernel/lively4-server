@@ -2,12 +2,29 @@ import Service from "./service.js";
 import Path from 'path';
 import { log, run, respondWithCMD, fs_stat, logRequest, try_fs_stat, fs_exists, fs_readFile, fs_writeFile } from '../utils.js';
 
+/**
+ * Service for managing bundled files in the server
+ * @extends Service
+ */
 export default class BundleService extends Service {
 
+  /**
+   * Generates a hash for a filepath by replacing forward slashes with underscores
+   * @param {string} filepath - The path to generate a hash for
+   * @returns {string} The hashed filepath
+   */
   generateFilepathHash(filepath) {
     return filepath.replace(/\//g, "_")
   }
 
+  /**
+   * Ensures the bundle file exists and is up to date
+   * @param {string} repositorypath - Path to the repository
+   * @param {string} bundleFilepath - Path to the bundle file
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Promise} Promise that resolves when the bundle file is ensured
+   */
   async ensureBundleFile(repositorypath, bundleFilepath, req, res) {
     var bundleFile = Path.join(repositorypath, bundleFilepath)
     if (!await fs_exists(bundleFile)) {
@@ -93,7 +110,12 @@ export default class BundleService extends Service {
     return this.server.filesService.readFile(repositorypath, bundleFilepath, undefined, res)
   }
 
-
+  /**
+   * Checks if a file is listed in the bootfile
+   * @param {string} repositorypath - Path to the repository
+   * @param {string} filepath - Path to check
+   * @returns {Promise<boolean>} Promise that resolves to true if the file is in bootfile
+   */
   async isInBootfile(repositorypath, filepath) {
     console.log("isInBootfile " + this.Config.bootfilelistName + " in " + repositorypath + " " + filepath)
     if (filepath.match(this.Config.bootfilelistName)) {
@@ -109,6 +131,12 @@ export default class BundleService extends Service {
     return result.match(filepath)
   }
 
+  /**
+   * Invalidates the bundle file if necessary when files are changed
+   * @param {string} repositorypath - Path to the repository
+   * @param {string} filepath - Path of the changed file
+   * @returns {Promise} Promise that resolves when invalidation is complete
+   */
   async invalidateBundleFile(repositorypath, filepath) {
     if (filepath.match(this.Config.transpileDir) // all compiled files are bundled?
       || await this.isInBootfile(repositorypath, filepath)) {
@@ -120,6 +148,11 @@ export default class BundleService extends Service {
     }
   }
 
+  /**
+   * Deletes the bundle file from the repository
+   * @param {string} repositorypath - Path to the repository
+   * @returns {Promise} Promise that resolves when deletion is complete
+   */
   async deleteBundleFile(repositorypath) {
     return await run(`cd ${repositorypath}; 
         if [ -e ${this.Config.bundleName} ]; then
