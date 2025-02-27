@@ -12,7 +12,9 @@ export class MockResponse {
 
   setHeader() { }
 
-  writeHead() { }
+  writeHead(status) {
+    this.status = status;
+  }
 
   write(data) {
     this.output = (this.output || '') + data.toString();
@@ -20,5 +22,11 @@ export class MockResponse {
 
   end() {
     this.ended = true;
+  }
+}
+
+
+export class MockRequest {
+  constructor() {
   }
 }
