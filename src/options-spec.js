@@ -49,11 +49,6 @@ export default function optionsSpec() {
       example: "'node --bash-bin=\\cygwin64\\bin\\bash.exe'"
     },
     {
-      name: 'lively4dir-unix',
-      type: 'string',
-      description: 'the directory in cygwin.'
-    },
-    {
       name: 'authorize-requests',
       type: 'boolean',
       description: 'authorize every request by authenticating a user and checking if in github team'

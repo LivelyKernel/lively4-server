@@ -57,7 +57,7 @@ export default class GITService extends Service {
       }
       RepositoryInSync[repository] = true;
       try {
-        cmd = `${this.server.serverDir}/bin/lively4sync.sh '${this.server.lively4DirUnix +
+        cmd = `${this.server.serverDir}/bin/lively4sync.sh '${this.server.lively4dir +
           '/' +
           repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
         const result = await run(cmd);
@@ -88,23 +88,23 @@ export default class GITService extends Service {
     } else if (pathname.match(/\/_git\/resolve/)) {
       cmd =
         `${this.server.serverDir}/bin/lively4resolve.sh '` +
-        this.server.lively4DirUnix +
+        this.server.lively4dir +
         '/' +
         repository +
         "'";
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/status/)) {
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};
+      cmd = `cd ${this.server.lively4dir}/${repository};
         git -c color.status=always  status ; git log --color=always HEAD...origin/${branch} --pretty="format:%h\t%aN\t%cD\t%f"`;
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/log/)) {
       cmd =
-        'cd ' + this.server.lively4DirUnix + '/' + repository + '; git log --color=always';
+        'cd ' + this.server.lively4dir + '/' + repository + '; git log --color=always';
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/graph/)) {
       cmd =
         'cd ' +
-        this.server.lively4DirUnix +
+        this.server.lively4dir +
         '/' +
         repository +
         '; git log --graph -100 --color=always';
@@ -115,7 +115,7 @@ export default class GITService extends Service {
       }
       cmd =
         "cd '" +
-        this.server.lively4DirUnix +
+        this.server.lively4dir +
         '/' +
         repository +
         "';\n" +
@@ -139,17 +139,17 @@ export default class GITService extends Service {
       if (gitcommit) {
         commit = gitcommit + '~1 ' + gitcommit;
       }
-      cmd = `cd ${this.server.lively4DirUnix}/${repository}; git diff --word-diff --color=always ${commit}`;
+      cmd = `cd ${this.server.lively4dir}/${repository}; git diff --word-diff --color=always ${commit}`;
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/clone/)) {
       let url = repositoryurl.replace("https://", `https://${username}:${password}@`)
       cmd =
-        `cd ${this.server.lively4DirUnix}; \n` +
+        `cd ${this.server.lively4dir}; \n` +
         'git clone --recursive ' +
         url +
         ' ' +
         repository + `;\n` + // this will leave the password in the config
-        `cd ${this.server.lively4DirUnix}/${repository}; \n` +
+        `cd ${this.server.lively4dir}/${repository}; \n` +
         // #TODO can we avoid the and prevent the storing of username and password in the first place, e.g. is there is method of handing git the usename and password without encoding them in the url?
         // remove the username password from the config       
         `git remote set-url origin ${repositoryurl}`
@@ -172,7 +172,7 @@ export default class GITService extends Service {
       // WARNING: the changes will appear as local changes but should be resolved by the merge later
       // from git's standpoint it will appeach as two changes with the same content
       let url = repositoryurl.replace("https://", `https://${username}:${password}@`)
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};\n` +
+      cmd = `cd ${this.server.lively4dir}/${repository};\n` +
         `git remote set-url origin ${url};\n` +
         `git fetch; \n` +
         `git checkout origin/${branch} -- ${filepath}; \n` +
@@ -181,18 +181,18 @@ export default class GITService extends Service {
       await respondWithCMD(cmd, res, dryrun);
       RepositoryInSync[repository] = undefined;
     } else if (pathname.match(/\/_git\/npminstall/)) {
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};\n` + 'npm install';
+      cmd = `cd ${this.server.lively4dir}/${repository};\n` + 'npm install';
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/npmtest/)) {
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};\n` + 'npm test';
+      cmd = `cd ${this.server.lively4dir}/${repository};\n` + 'npm test';
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/remoteurl/)) {
       cmd =
-        `cd ${this.server.lively4DirUnix}/${repository};\n` +
+        `cd ${this.server.lively4dir}/${repository};\n` +
         'git config --get remote.origin.url';
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/branches$/)) {
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};\n` + 'git branch -a ';
+      cmd = `cd ${this.server.lively4dir}/${repository};\n` + 'git branch -a ';
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/branch$/)) {
       cmd =
@@ -201,28 +201,28 @@ export default class GITService extends Service {
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/merge$/)) {
       cmd =
-        `${this.server.serverDir}/bin/lively4merge.sh '${this.server.lively4DirUnix}/${repository}' ` +
+        `${this.server.serverDir}/bin/lively4merge.sh '${this.server.lively4dir}/${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/squash$/)) {
       cmd =
-        `${this.server.serverDir}/bin/lively4squash.sh '${this.server.lively4DirUnix}/${repository}' ` +
+        `${this.server.serverDir}/bin/lively4squash.sh '${this.server.lively4dir}/${repository}' ` +
         `'${username}' '${password}' '${email}' '${branch}' '${msg}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/delete$/)) {
-      cmd = `${this.server.serverDir}/bin/lively4deleterepository.sh '${this.server.lively4DirUnix}/${repository}'`;
+      cmd = `${this.server.serverDir}/bin/lively4deleterepository.sh '${this.server.lively4dir}/${repository}'`;
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/show$/)) {
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};\n` + `git show ${usecolor ? " --color=always " : ""}` + gitcommit;
+      cmd = `cd ${this.server.lively4dir}/${repository};\n` + `git show ${usecolor ? " --color=always " : ""}` + gitcommit;
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/reset$/)) {
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
+      cmd = `cd ${this.server.lively4dir}/${repository};\n` + `git reset --hard origin/${branch}`;
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/mergebase$/)) {
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};\n` + `git merge-base ${versionA} ${versionB} `;
+      cmd = `cd ${this.server.lively4dir}/${repository};\n` + `git merge-base ${versionA} ${versionB} `;
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/reset-hard/)) {
-      cmd = `cd ${this.server.lively4DirUnix}/${repository};\n` + `git reset --hard origin/${branch}`;
+      cmd = `cd ${this.server.lively4dir}/${repository};\n` + `git reset --hard origin/${branch}`;
       respondWithCMD(cmd, res, dryrun);
     } else {
       res.writeHead(200);

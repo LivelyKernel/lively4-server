@@ -9,7 +9,7 @@ describe('OPEN', () => {
 
   beforeEach(() => {
     mockServer = {
-      lively4DirUnix: 'test',
+      lively4dir: 'test',
     }
 
     mockResponse = {

@@ -20,6 +20,6 @@ export default class OPEN extends Service {
     var dir = relativePath.replace(/[^/]*$/, "")
     var file = relativePath.replace(/.*\//, "")
 
-    return respondWithCMD("cd \"" + this.server.lively4DirUnix + dir + "\"; open \"" + file + "\"", res)
+    return respondWithCMD("cd \"" + this.server.lively4dir + dir + "\"; open \"" + file + "\"", res)
   }
 }

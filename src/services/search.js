@@ -19,7 +19,7 @@ export default class SEARCH extends Service {
     const rootdirs = req.headers['rootdirs'];
     const excludes = '.git,' + req.headers['excludes'];
 
-    let cmd = 'cd ' + this.server.lively4DirUnix + '; ';
+    let cmd = 'cd ' + this.server.lively4dir + '; ';
     cmd += 'find ' + rootdirs.replace(/,/g, ' ') + ' -type f ';
     cmd += excludes
       .split(',')

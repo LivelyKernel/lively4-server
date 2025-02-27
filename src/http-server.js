@@ -108,7 +108,6 @@ export class Server {
     this.serverDir = args.options.server || '.';
     this.bashBin = args.options['bash-bin'] || 'bash';
     config.bashBin = this.bashBin;
-    this.lively4DirUnix = args.options['lively4dir-unix'] || this.lively4dir;
     this.autoCommit = args.options['auto-commit'] || false;
     this.port = args.options.port || 8080;
 
@@ -134,7 +133,6 @@ export class Server {
     log('set lively4dir to:' + path);
     this.sourceDir = path;
     this._lively4dir = path;
-    this.lively4DirUnix = path;
     return this._lively4dir;
   }
 
@@ -243,8 +241,7 @@ export class Server {
         var path = decodeURI(slash(Path.normalize(pathname)));  // windows compat.....
         var fileversion = req.headers['fileversion'];
 
-        var m = path.match(/^\/([^/]*)\/(.*)/)
-
+        var m = path.match(/^\/([^/]*)\/(.*)/) // match /repository/path
         if (m) {
           var repositorypath = Path.join(this.sourceDir, m[1]);
           var filepath = m[2]

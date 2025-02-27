@@ -7,7 +7,7 @@ export default class MakeService extends Service {
     const params = URL.parse(req.url, true).query;
     const dir = path.replace(/.*_make\//, "");
     return respondWithCMD(
-      "cd " + this.server.lively4DirUnix + dir + "; make " + (params.target || ""),
+      "cd " + this.server.lively4dir + dir + "; make " + (params.target || ""),
       res
     );
   }
