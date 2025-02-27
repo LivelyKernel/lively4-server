@@ -31,19 +31,7 @@ export PATH=$SERVER/bin:$PATH
 $SERVER/bin/watch.sh $SERVER/src/http-server.js 'kill -USR1 '$$ &
 WATCHERPID=$!
 
-
 OPTIONS=" --server="$SERVER" --myurl="$MYURL" "
-
-
-if [ "$OS" == "Windows_NT" ]; then
-    OPTIONS=$OPTIONS"  --lively4dir-unix="$LIVELY" --cygwin --bash-bin="`cygpath -wa /usr/bin/bash`
-    SERVER=`cygpath -wa $SERVER`
-    LIVELY=`cygpath -wa $LIVELY`
-
-    echo "WIN SERVER "$SERVER
-    echo "WIN LIVELY "$LIVELY
-    echo "WIN OPTIONS "$OPTIONS
-fi
 
 if [ $AUTHORIZE ]; then
   OPTIONS=$OPTIONS" --authorize-requests=true --github-organization=$ORGANIZATION --github-team=$TEAM "
