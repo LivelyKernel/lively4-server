@@ -1,4 +1,4 @@
-import Service from './service.mjs';
+import Service from './service.js';
 import { cleanString, run, respondWithCMD, logRequest } from '../utils.js';
 import Path from 'path';
 

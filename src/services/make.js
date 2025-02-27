@@ -1,4 +1,4 @@
-import Service from './service.mjs';
+import Service from './service.js';
 import URL from 'url';
 import { respondWithCMD } from '../utils.js';
 export default class MakeService extends Service {

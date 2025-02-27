@@ -1,6 +1,6 @@
 import { log } from '../utils.js';
 
-import Service from "./service.mjs";
+import Service from "./service.js";
 
 
 /**

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { config } from '../../src/utils.js';
-import OPEN from '../../src/services/open.mjs';
+import OPEN from '../../src/services/open.js';
 
 describe('OPEN', () => {
   let mockRequest;

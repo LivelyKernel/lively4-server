@@ -1,5 +1,5 @@
 
-import Service from './service.mjs';
+import Service from './service.js';
 import { log } from '../utils.js';
 
 export default class TMPService extends Service {

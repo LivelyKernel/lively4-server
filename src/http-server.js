@@ -59,38 +59,38 @@ import fetch from 'node-fetch';
 
 import { config, cleanString, run, respondWithCMD, fs_exists, fs_readFile, fs_readdir, fs_stat, fs_writeFile, log, logRequest, try_fs_stat } from './utils.js';
 
-import { logDebugRequest } from './debug.mjs';
+import { logDebugRequest } from './debug.js';
 
-import MKCOL from './services/mkcol.mjs';
-import BIBTEX from './services/bibtex.mjs';
-import SEARCH from './services/search.mjs';
-import OPEN from './services/open.mjs';
-import OPTIONS from './services/options.mjs';
-import MOVE from './services/move.mjs';
-import DELETE from './services/delete.mjs';
-import GET from './services/get.mjs';
-import PUT from './services/put.mjs';
+import MKCOL from './services/mkcol.js';
+import BIBTEX from './services/bibtex.js';
+import SEARCH from './services/search.js';
+import OPEN from './services/open.js';
+import OPTIONS from './services/options.js';
+import MOVE from './services/move.js';
+import DELETE from './services/delete.js';
+import GET from './services/get.js';
+import PUT from './services/put.js';
 
-import AuthService from './services/auth.mjs';
+import AuthService from './services/auth.js';
 
-import WebHookService from './services/webhook.mjs';
-import GraphVizService from './services/graphviz.mjs';
-import BundleService from './services/bundle.mjs';
-import VersionsService from './services/versions.mjs';
-import FilesService from './services/files.mjs';
-import DirectoryService from './services/directory.mjs';
+import WebHookService from './services/webhook.js';
+import GraphVizService from './services/graphviz.js';
+import BundleService from './services/bundle.js';
+import VersionsService from './services/versions.js';
+import FilesService from './services/files.js';
+import DirectoryService from './services/directory.js';
 
-import MakeService from './services/make.mjs';
-import CurlService from './services/curl.mjs';
-import TMPService from './services/tmp.mjs';
-import METAService from './services/meta.mjs';
-import GITService from './services/git.mjs';
-import TranspileService from './services/transpile.mjs';
+import MakeService from './services/make.js';
+import CurlService from './services/curl.js';
+import TMPService from './services/tmp.js';
+import METAService from './services/meta.js';
+import GITService from './services/git.js';
+import TranspileService from './services/transpile.js';
 
 
 // Regex constants
 const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
-import optionsSpec from './options-spec.mjs';
+import optionsSpec from './options-spec.js';
 
 export class Server {
   Config = {

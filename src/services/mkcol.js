@@ -1,4 +1,4 @@
-import Service from "./service.mjs";
+import Service from "./service.js";
 import Path from 'path';
 import { run } from "../utils.js";
 
