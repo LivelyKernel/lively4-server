@@ -2,7 +2,6 @@ import { log } from '../utils.js';
 
 import Service from "./service.js";
 
-
 /**
  * WebHookService handles GitHub webhook registrations and notifications
  * Implements a long-polling mechanism for webhook subscribers

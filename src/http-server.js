@@ -2,6 +2,10 @@
 /*
  * # Lively4 Server -- a file server that serves and manages git repositories as REST
  *
+ * ## Server Class
+ * The Server class provides the main functionality of the Lively4 server. It handles HTTP requests, 
+ * manages services, and processes file operations.
+ * 
  * ## Supported HTTP Methods:
  * - GET - Read files and directories
  * - PUT - Write files
@@ -92,7 +96,18 @@ import TranspileService from './services/transpile.js';
 const breakOutRegex = new RegExp('/*\\/\\.\\.\\/*/');
 import optionsSpec from './options-spec.js';
 
+/**
+ * The main server class that handles all HTTP requests and manages services
+ */
 export class Server {
+  /**
+   * Server configuration constants
+   * @type {Object}
+   * @property {string} bootfilelistName - Name of the boot file list
+   * @property {string} bundleName - Name of the bundle file
+   * @property {string} transpileDir - Directory for transpiled files
+   * @property {string} optionsDir - Directory for options
+   */
   Config = {
     bootfilelistName: ".lively4bootfilelist",
     bundleName: ".lively4bundle.zip",
@@ -100,6 +115,9 @@ export class Server {
     optionsDir: ".options"
   }
 
+  /**
+   * Initialize server configuration and services
+   */
   setup() {
     var args = argv.option(optionsSpec()).run();
     this.options = args.options
@@ -125,10 +143,19 @@ export class Server {
 
   }
 
+  /**
+   * Get the Lively4 directory path
+   * @return {string} The Lively4 directory path
+   */
   get lively4dir() {
     return this._lively4dir;
   }
 
+  /**
+   * Set the Lively4 directory path
+   * @param {string} path - The new Lively4 directory path
+   * @return {string} The updated Lively4 directory path
+   */
   set lively4dir(path) {
     log('set lively4dir to:' + path);
     this.sourceDir = path;
@@ -136,6 +163,9 @@ export class Server {
     return this._lively4dir;
   }
 
+  /**
+   * Start the HTTP server
+   */
   start() {
     log('Welcome to Lively4!');
     log('Server: ' + this.serverDir);
@@ -170,6 +200,10 @@ export class Server {
     });
   }
 
+  /**
+   * Stop the HTTP server and clean up resources
+   * @return {Promise} A promise that resolves when the server has stopped
+   */
   async stop() {
     this.isRunning = false;
     this.tmpService.cleanup();
@@ -206,6 +240,11 @@ export class Server {
       });
     });
   }
+
+  /**
+   * Set Cross-Origin Resource Sharing headers
+   * @param {http.ServerResponse} res - HTTP response object
+   */
   setCORSHeaders(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Request-Method', '*');
@@ -214,6 +253,12 @@ export class Server {
   }
 
 
+  /**
+   * Handle incoming HTTP requests
+   * @param {http.IncomingMessage} req - HTTP request object
+   * @param {http.ServerResponse} res - HTTP response object
+   * @param {httpProxy} proxy - HTTP proxy instance
+   */
   async onRequest(req, res, proxy) {
     req._logId = this.requestCounter++
     req._startTime = Date.now()
@@ -320,6 +365,9 @@ export class Server {
     }
   }
 
+  /**
+   * Main entry point when script is run directly
+   */
   static main() {
     // Only start the server if this file is being run directly
     if (import.meta.url.startsWith('file:')) {
@@ -330,6 +378,9 @@ export class Server {
     }
   }
 
+  /**
+   * Create and start a new server instance
+   */
   static start() {
     var server = new Server();
     server.setup();
