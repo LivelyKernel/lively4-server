@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { config } from '../../src/utils.js';
 import OPEN from '../../src/services/open.js';
+import { MockServer, MockResponse } from '../test-utils.js';
 
 describe('OPEN', () => {
   let mockRequest;
@@ -8,20 +9,8 @@ describe('OPEN', () => {
   let mockServer;
 
   beforeEach(() => {
-    mockServer = {
-      lively4dir: 'test',
-    }
-
-    mockResponse = {
-      setHeader: () => { },
-      writeHead: () => { },
-      write: function (data) {
-        this.output = (this.output || '') + data.toString();
-      },
-      end: function () { this.ended = true; },
-      output: '',
-      ended: false
-    };
+    mockServer = new MockServer();
+    mockResponse = new MockResponse();
   });
 
   afterEach(() => {
