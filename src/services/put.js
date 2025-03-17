@@ -131,6 +131,9 @@ export default class PUT extends Service {
 
   async ensureCachedOptions(repositorypath, filepath) {
     console.log("ensureCachedOptions " + repositorypath + ", " + filepath)
+
+    await this.server.directoryService.ensureDirectory(repositorypath, this.server.Config.optionsDir)
+
     let options = await this.server.optionsService.readOptions(repositorypath, filepath)
     if (options.error) {
       return { options: null, body: null, error: options.error }
