@@ -10,7 +10,8 @@ export var config = {
 
 export async function run(cmd) {
   return new Promise((resolve) => {
-    exec(cmd, { maxBuffer: 1024 * 2000 }, (error, stdout, stderr) => {
+    // our file lists can get really long, so we need to increase the buffer size
+    exec(cmd, { maxBuffer: 1024 * 2000 * 100 }, (error, stdout, stderr) => {
       resolve({ stdout, stderr, error });
     });
   })
