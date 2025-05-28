@@ -5,7 +5,8 @@ import { exec } from 'child_process';
 export default class CurlService extends Service {
 
   async request(pathname, req, res) {
-    const target = URL.parse(req.url, true).query["target"];
+    const url = URL.parse(req.url, true);
+    const target = url.query["target"];
 
     if (!target || target.length == 0) {
       res.writeHead(300);
