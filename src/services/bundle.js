@@ -1,6 +1,7 @@
 import Service from "./service.js";
 import Path from 'path';
 import { log, run, respondWithCMD, fs_stat, logRequest, try_fs_stat, fs_exists, fs_readFile, fs_writeFile } from '../utils.js';
+import DELETE from './delete.js';
 
 /**
  * Service for managing bundled files in the server
