@@ -200,6 +200,12 @@ export class Server {
       res.json(this.fileWatchService.getStatus());
     });
 
+    // REST endpoint for system limits
+    this.app.get('/_filewatch/limits', async (req, res) => {
+      const limits = await this.fileWatchService.getSystemLimits();
+      res.json(limits);
+    });
+
     // Handle all other HTTP requests
     this.app.use((req, res) => {
       this.onRequest(req, res, proxy);
@@ -212,10 +218,7 @@ export class Server {
       this.isRunning = true;
       log('Server running on port ' + this.port + ' in directory ' + this.sourceDir);
       log('[FileWatch] WebSocket endpoint available at /_filewatch');
-      
-      // Automatically start watching the Lively4 directory
-      this.fileWatchService.watchPath(this.sourceDir);
-      log('[FileWatch] Automatically watching directory: ' + this.sourceDir);
+      log('[FileWatch] File watching will start on-demand when clients request specific paths');
     });
 
     // Track new connections

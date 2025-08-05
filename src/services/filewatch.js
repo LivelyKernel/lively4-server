@@ -7,9 +7,9 @@ import { log } from '../utils.js';
  */
 class FileWatchService {
   constructor(lively4Directory = null) {
-    this.watchers = new Map(); // path -> fs.FSWatcher
+    this.watchers = new Map(); // path -> { watcher: fs.FSWatcher, clients: Set, recursive: boolean }
     this.clients = new Set(); // WebSocket connections
-    this.watchedPaths = new Set(); // tracked directories/files
+    this.clientInterests = new Map(); // client -> Set of paths they're interested in
     this.lively4Directory = lively4Directory; // Base directory for relative paths
     this.fileExistenceCache = new Map(); // Track file existence for CREATE/DELETE detection
   }
@@ -20,11 +20,11 @@ class FileWatchService {
    */
   addClient(ws) {
     this.clients.add(ws);
+    this.clientInterests.set(ws, new Set());
     log(`[FileWatch] Client connected. Total clients: ${this.clients.size}`);
 
     ws.on('close', () => {
-      this.clients.delete(ws);
-      log(`[FileWatch] Client disconnected. Total clients: ${this.clients.size}`);
+      this.removeClient(ws);
     });
 
     ws.on('message', (data) => {
@@ -38,6 +38,26 @@ class FileWatchService {
   }
 
   /**
+   * Remove a client and clean up their interests
+   * @param {WebSocket} ws - WebSocket connection to remove
+   */
+  removeClient(ws) {
+    // Get all paths this client was interested in
+    const clientPaths = this.clientInterests.get(ws) || new Set();
+    
+    // Remove client from all watchers and potentially stop watchers
+    for (const path of clientPaths) {
+      this.removeClientInterest(ws, path);
+    }
+    
+    // Clean up client tracking
+    this.clients.delete(ws);
+    this.clientInterests.delete(ws);
+    
+    log(`[FileWatch] Client disconnected. Total clients: ${this.clients.size}`);
+  }
+
+  /**
    * Handle messages from WebSocket clients
    * @param {WebSocket} ws - WebSocket connection
    * @param {Object} message - Parsed message object
@@ -45,12 +65,12 @@ class FileWatchService {
   handleClientMessage(ws, message) {
     switch (message.type) {
       case 'watch':
-        this.watchPath(message.path);
-        ws.send(JSON.stringify({ type: 'ack', path: message.path }));
+        this.addClientInterest(ws, message.path);
+        ws.send(JSON.stringify({ type: 'ack', path: message.path, watching: true }));
         break;
       case 'unwatch':
-        this.unwatchPath(message.path);
-        ws.send(JSON.stringify({ type: 'ack', path: message.path }));
+        this.removeClientInterest(ws, message.path);
+        ws.send(JSON.stringify({ type: 'ack', path: message.path, watching: false }));
         break;
       default:
         log(`[FileWatch] Unknown message type: ${message.type}`);
@@ -58,39 +78,137 @@ class FileWatchService {
   }
 
   /**
-   * Start watching a file or directory
-   * @param {string} filePath - Path to watch
+   * Add a client's interest in a path and start watching if needed
+   * @param {WebSocket} ws - WebSocket connection
+   * @param {string} path - Path to watch
    */
-  watchPath(filePath) {
-    if (this.watchers.has(filePath)) {
-      return; // Already watching
+  addClientInterest(ws, path) {
+    // Convert to absolute path if relative
+    const absolutePath = Path.isAbsolute(path) ? path : Path.resolve(this.lively4Directory || '.', path);
+    
+    // Add to client's interests
+    const clientPaths = this.clientInterests.get(ws);
+    if (clientPaths) {
+      clientPaths.add(absolutePath);
     }
-
-    try {
-      const watcher = fs.watch(filePath, { recursive: true }, (eventType, filename) => {
-        this.handleFileChange(eventType, filePath, filename);
-      });
-
-      this.watchers.set(filePath, watcher);
-      this.watchedPaths.add(filePath);
-      log(`[FileWatch] Started watching: ${filePath}`);
-    } catch (error) {
-      log(`[FileWatch] Error watching ${filePath}: ${error.message}`);
+    
+    // Check if we already have a watcher for this path
+    if (this.watchers.has(absolutePath)) {
+      // Add client to existing watcher
+      const watcherInfo = this.watchers.get(absolutePath);
+      watcherInfo.clients.add(ws);
+      log(`[FileWatch] Added client interest to existing watcher: ${absolutePath} (${watcherInfo.clients.size} clients)`);
+    } else {
+      // Create new watcher
+      this.startWatchingPath(absolutePath, ws);
     }
   }
 
   /**
-   * Stop watching a file or directory
+   * Remove a client's interest in a path and stop watching if no one else is interested
+   * @param {WebSocket} ws - WebSocket connection
+   * @param {string} path - Path to unwatch
+   */
+  removeClientInterest(ws, path) {
+    // Convert to absolute path if relative
+    const absolutePath = Path.isAbsolute(path) ? path : Path.resolve(this.lively4Directory || '.', path);
+    
+    // Remove from client's interests
+    const clientPaths = this.clientInterests.get(ws);
+    if (clientPaths) {
+      clientPaths.delete(absolutePath);
+    }
+    
+    const watcherInfo = this.watchers.get(absolutePath);
+    if (watcherInfo) {
+      // Remove client from watcher
+      watcherInfo.clients.delete(ws);
+      
+      if (watcherInfo.clients.size === 0) {
+        // No more clients interested, stop watching
+        this.stopWatchingPath(absolutePath);
+        log(`[FileWatch] Stopped watching (no clients): ${absolutePath}`);
+      } else {
+        log(`[FileWatch] Removed client interest: ${absolutePath} (${watcherInfo.clients.size} clients remaining)`);
+      }
+    }
+  }
+
+  /**
+   * Start watching a file or directory (internal method)
+   * @param {string} filePath - Path to watch
+   * @param {WebSocket} initialClient - The client that requested this watch
+   */
+  startWatchingPath(filePath, initialClient) {
+    try {
+      // Determine if we should watch recursively based on path type
+      const recursive = this.shouldWatchRecursively(filePath);
+      
+      const watcher = fs.watch(filePath, { recursive }, (eventType, filename) => {
+        this.handleFileChange(eventType, filePath, filename);
+      });
+
+      // Handle watcher errors (like ENOSPC - too many watchers)
+      watcher.on('error', (error) => {
+        log(`[FileWatch] Watcher error for ${filePath}: ${error.message}`);
+        
+        if (error.code === 'ENOSPC') {
+          log(`[FileWatch] System limit for file watchers reached. Consider increasing fs.inotify.max_user_watches`);
+          log(`[FileWatch] Run: echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p`);
+        }
+        
+        // Clean up the failed watcher and notify clients
+        this.stopWatchingPath(filePath);
+      });
+
+      // Store watcher info with client set
+      const watcherInfo = {
+        watcher,
+        clients: new Set([initialClient]),
+        recursive
+      };
+      
+      this.watchers.set(filePath, watcherInfo);
+      log(`[FileWatch] Started watching ${recursive ? 'recursively' : 'non-recursively'}: ${filePath}`);
+    } catch (error) {
+      log(`[FileWatch] Error watching ${filePath}: ${error.message}`);
+      
+      if (error.code === 'ENOSPC') {
+        log(`[FileWatch] System limit for file watchers reached. Consider increasing fs.inotify.max_user_watches`);
+      }
+    }
+  }
+
+  /**
+   * Stop watching a file or directory (internal method)
    * @param {string} filePath - Path to stop watching
    */
-  unwatchPath(filePath) {
-    const watcher = this.watchers.get(filePath);
-    if (watcher) {
-      watcher.close();
+  stopWatchingPath(filePath) {
+    const watcherInfo = this.watchers.get(filePath);
+    if (watcherInfo) {
+      try {
+        watcherInfo.watcher.close();
+      } catch (error) {
+        // Ignore close errors
+      }
       this.watchers.delete(filePath);
-      this.watchedPaths.delete(filePath);
       log(`[FileWatch] Stopped watching: ${filePath}`);
     }
+  }
+
+  /**
+   * Determine if a path should be watched recursively
+   * @param {string} filePath - Path to evaluate
+   * @return {boolean} Whether to watch recursively
+   */
+  shouldWatchRecursively(filePath) {
+    // If it's the root Lively4 directory itself, don't watch recursively to avoid large subdirs
+    if (filePath === this.lively4Directory) {
+      return false;
+    }
+    
+    // For subdirectories, watch recursively by default
+    return true;
   }
 
   /**
@@ -183,6 +301,21 @@ class FileWatchService {
     )) {
       return true;
     }
+    
+    // Essential directories that should always be ignored
+    const essentialIgnorePatterns = [
+      'node_modules',
+      '.cache',
+      '.tmp'
+    ];
+    
+    if (essentialIgnorePatterns.some(pattern => 
+        filename.includes(`/${pattern}/`) || 
+        filename.includes(`\\${pattern}\\`) ||
+        basename === pattern
+    )) {
+      return true;
+    }
 
     // Temporary files and common editor files
     if (basename.startsWith('.') && (
@@ -265,19 +398,26 @@ class FileWatchService {
 
     log(`[FileWatch] File ${operationType}: ${livelyRelativePath}`);
 
-    // Broadcast to all connected clients
-    this.broadcastToClients(changeEvent);
+    // Broadcast to interested clients
+    this.broadcastToClients(changeEvent, watchedPath);
   }
 
   /**
-   * Broadcast a message to all connected WebSocket clients
+   * Broadcast a message to interested WebSocket clients
    * @param {Object} message - Message to broadcast
+   * @param {string} watchedPath - The path that triggered the change
    */
-  broadcastToClients(message) {
+  broadcastToClients(message, watchedPath) {
     const messageStr = JSON.stringify(message);
     const clientsToRemove = [];
+    const watcherInfo = this.watchers.get(watchedPath);
+    
+    if (!watcherInfo) {
+      return; // No watcher info, no clients to notify
+    }
 
-    for (const client of this.clients) {
+    // Only send to clients interested in this path
+    for (const client of watcherInfo.clients) {
       try {
         if (client.readyState === client.OPEN) {
           client.send(messageStr);
@@ -292,7 +432,40 @@ class FileWatchService {
 
     // Clean up disconnected clients
     for (const client of clientsToRemove) {
-      this.clients.delete(client);
+      this.removeClient(client);
+    }
+  }
+
+  /**
+   * Check system file watcher limits
+   * @return {Object} System limit information
+   */
+  async getSystemLimits() {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      
+      try {
+        const { stdout: maxWatches } = await execAsync('cat /proc/sys/fs/inotify/max_user_watches');
+        const { stdout: maxInstances } = await execAsync('cat /proc/sys/fs/inotify/max_user_instances');
+        
+        return {
+          maxUserWatches: parseInt(maxWatches.trim()),
+          maxUserInstances: parseInt(maxInstances.trim()),
+          currentWatchers: this.watchers.size
+        };
+      } catch (error) {
+        return {
+          error: 'Could not read system limits',
+          currentWatchers: this.watchers.size
+        };
+      }
+    } catch (error) {
+      return {
+        error: 'System limit check not available',
+        currentWatchers: this.watchers.size
+      };
     }
   }
 
@@ -301,10 +474,21 @@ class FileWatchService {
    * @return {Object} Status information
    */
   getStatus() {
+    const watchedPaths = Array.from(this.watchers.keys());
+    const pathDetails = {};
+    
+    for (const [path, watcherInfo] of this.watchers) {
+      pathDetails[path] = {
+        clientCount: watcherInfo.clients.size,
+        recursive: watcherInfo.recursive
+      };
+    }
+    
     return {
       clientCount: this.clients.size,
-      watchedPaths: Array.from(this.watchedPaths),
-      watcherCount: this.watchers.size
+      watchedPaths,
+      watcherCount: this.watchers.size,
+      pathDetails
     };
   }
 
@@ -313,12 +497,15 @@ class FileWatchService {
    */
   cleanup() {
     // Close all watchers
-    for (const [path, watcher] of this.watchers) {
-      watcher.close();
+    for (const [path, watcherInfo] of this.watchers) {
+      try {
+        watcherInfo.watcher.close();
+      } catch (error) {
+        // Ignore close errors
+      }
       log(`[FileWatch] Closed watcher for: ${path}`);
     }
     this.watchers.clear();
-    this.watchedPaths.clear();
     this.fileExistenceCache.clear();
 
     // Close all client connections
@@ -330,6 +517,7 @@ class FileWatchService {
       }
     }
     this.clients.clear();
+    this.clientInterests.clear();
   }
 }
 

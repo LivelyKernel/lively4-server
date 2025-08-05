@@ -52,7 +52,7 @@ describe('FileWatchService', function() {
     it('should initialize with correct properties', function() {
       expect(fileWatchService.watchers).to.be.instanceOf(Map);
       expect(fileWatchService.clients).to.be.instanceOf(Set);
-      expect(fileWatchService.watchedPaths).to.be.instanceOf(Set);
+      expect(fileWatchService.clientInterests).to.be.instanceOf(Map);
       expect(fileWatchService.fileExistenceCache).to.be.instanceOf(Map);
       expect(fileWatchService.lively4Directory).to.equal(tempDir);
     });
@@ -95,13 +95,23 @@ describe('FileWatchService', function() {
       expect(fileWatchService.shouldIgnoreFile('.test~', '/path/.test~')).to.be.true;
     });
 
-    it('should ignore node_modules', function() {
+    it('should ignore essential directories', function() {
       expect(fileWatchService.shouldIgnoreFile('node_modules', '/path/node_modules')).to.be.true;
+      expect(fileWatchService.shouldIgnoreFile('.cache', '/path/.cache')).to.be.true;
+      expect(fileWatchService.shouldIgnoreFile('.tmp', '/path/.tmp')).to.be.true;
     });
 
     it('should ignore OS-specific files', function() {
       expect(fileWatchService.shouldIgnoreFile('.DS_Store', '/path/.DS_Store')).to.be.true;
       expect(fileWatchService.shouldIgnoreFile('Thumbs.db', '/path/Thumbs.db')).to.be.true;
+    });
+
+    it('should NOT ignore data directories (client controls scope)', function() {
+      // These are no longer filtered since clients control what they watch
+      expect(fileWatchService.shouldIgnoreFile('media', '/path/media')).to.be.false;
+      expect(fileWatchService.shouldIgnoreFile('images', '/path/images')).to.be.false;
+      expect(fileWatchService.shouldIgnoreFile('data', '/path/data')).to.be.false;
+      expect(fileWatchService.shouldIgnoreFile('build', '/path/build')).to.be.false;
     });
 
     it('should not ignore regular files', function() {
@@ -144,29 +154,114 @@ describe('FileWatchService', function() {
     });
   });
 
-  describe('Watching Operations', function() {
-    it('should start watching a directory', function() {
-      fileWatchService.watchPath(tempDir);
-      
-      expect(fileWatchService.watchers.has(tempDir)).to.be.true;
-      expect(fileWatchService.watchedPaths.has(tempDir)).to.be.true;
+  describe('On-Demand Watching Operations', function() {
+    let mockClient;
+
+    beforeEach(function() {
+      mockClient = {
+        readyState: 1, // WebSocket.OPEN
+        OPEN: 1,
+        send: function(data) { this.lastSent = data; },
+        on: function(event, callback) { 
+          this.handlers = this.handlers || {};
+          this.handlers[event] = callback; 
+        },
+        close: function() { this.readyState = 3; }, // WebSocket.CLOSED
+        lastSent: null,
+        handlers: {}
+      };
     });
 
-    it('should not duplicate watchers for same path', function() {
-      fileWatchService.watchPath(tempDir);
-      fileWatchService.watchPath(tempDir);
+    it('should handle relative paths correctly', function() {
+      fileWatchService.addClient(mockClient);
+      
+      // Create a test directory first
+      const relativePath = 'src';
+      const expectedAbsolutePath = path.resolve(tempDir, relativePath);
+      fs.mkdirSync(expectedAbsolutePath, { recursive: true });
+      
+      fileWatchService.addClientInterest(mockClient, relativePath);
+      
+      // Should create watcher with absolute path
+      expect(fileWatchService.watchers.has(expectedAbsolutePath)).to.be.true;
+      
+      const watcherInfo = fileWatchService.watchers.get(expectedAbsolutePath);
+      expect(watcherInfo.clients.has(mockClient)).to.be.true;
+    });
+
+    it('should handle absolute paths correctly', function() {
+      fileWatchService.addClient(mockClient);
+      
+      // Use an absolute path
+      const absolutePath = path.join(tempDir, 'absolute-test');
+      fs.mkdirSync(absolutePath, { recursive: true });
+      
+      fileWatchService.addClientInterest(mockClient, absolutePath);
+      
+      // Should create watcher with the same absolute path
+      expect(fileWatchService.watchers.has(absolutePath)).to.be.true;
+      
+      const watcherInfo = fileWatchService.watchers.get(absolutePath);
+      expect(watcherInfo.clients.has(mockClient)).to.be.true;
+    });
+
+    it('should handle dot notation paths', function() {
+      fileWatchService.addClient(mockClient);
+      
+      // Use dot notation for current directory
+      fileWatchService.addClientInterest(mockClient, '.');
+      
+      // Should resolve to the tempDir (lively4Directory)
+      expect(fileWatchService.watchers.has(tempDir)).to.be.true;
+    });
+
+    it('should start watching when client shows interest', function() {
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+      
+      expect(fileWatchService.watchers.has(tempDir)).to.be.true;
+      const watcherInfo = fileWatchService.watchers.get(tempDir);
+      expect(watcherInfo.clients.has(mockClient)).to.be.true;
+    });
+
+    it('should share watchers between multiple clients', function() {
+      const mockClient2 = { ...mockClient };
+      
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClient(mockClient2);
+      
+      fileWatchService.addClientInterest(mockClient, tempDir);
+      fileWatchService.addClientInterest(mockClient2, tempDir);
       
       expect(fileWatchService.watchers.size).to.equal(1);
-      expect(fileWatchService.watchedPaths.size).to.equal(1);
+      const watcherInfo = fileWatchService.watchers.get(tempDir);
+      expect(watcherInfo.clients.size).to.equal(2);
     });
 
-    it('should stop watching a directory', function() {
-      fileWatchService.watchPath(tempDir);
+    it('should stop watching when no clients are interested', function() {
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
       expect(fileWatchService.watchers.has(tempDir)).to.be.true;
       
-      fileWatchService.unwatchPath(tempDir);
+      fileWatchService.removeClientInterest(mockClient, tempDir);
       expect(fileWatchService.watchers.has(tempDir)).to.be.false;
-      expect(fileWatchService.watchedPaths.has(tempDir)).to.be.false;
+    });
+
+    it('should keep watching when some clients remain interested', function() {
+      const mockClient2 = { ...mockClient };
+      
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClient(mockClient2);
+      
+      fileWatchService.addClientInterest(mockClient, tempDir);
+      fileWatchService.addClientInterest(mockClient2, tempDir);
+      
+      fileWatchService.removeClientInterest(mockClient, tempDir);
+      
+      expect(fileWatchService.watchers.has(tempDir)).to.be.true;
+      const watcherInfo = fileWatchService.watchers.get(tempDir);
+      expect(watcherInfo.clients.size).to.equal(1);
+      expect(watcherInfo.clients.has(mockClient2)).to.be.true;
     });
   });
 
@@ -191,42 +286,69 @@ describe('FileWatchService', function() {
     it('should add client to the set', function() {
       fileWatchService.addClient(mockWebSocket);
       expect(fileWatchService.clients.has(mockWebSocket)).to.be.true;
+      expect(fileWatchService.clientInterests.has(mockWebSocket)).to.be.true;
       expect(fileWatchService.clients.size).to.equal(1);
     });
 
-    it('should handle client watch messages', function() {
+    it('should handle client watch messages with absolute paths', function() {
       fileWatchService.addClient(mockWebSocket);
       
       const watchMessage = { type: 'watch', path: tempDir };
       fileWatchService.handleClientMessage(mockWebSocket, watchMessage);
       
-      expect(fileWatchService.watchedPaths.has(tempDir)).to.be.true;
+      expect(fileWatchService.watchers.has(tempDir)).to.be.true;
+      expect(mockWebSocket.lastSent).to.include('"watching":true');
+      expect(mockWebSocket.lastSent).to.include('"type":"ack"');
+    });
+
+    it('should handle client watch messages with relative paths', function() {
+      fileWatchService.addClient(mockWebSocket);
+      
+      // Create a subdirectory for testing
+      const subDir = path.join(tempDir, 'test-subdir');
+      fs.mkdirSync(subDir, { recursive: true });
+      
+      const watchMessage = { type: 'watch', path: 'test-subdir' };
+      fileWatchService.handleClientMessage(mockWebSocket, watchMessage);
+      
+      // Should resolve to absolute path and create watcher
+      const expectedAbsolutePath = path.resolve(tempDir, 'test-subdir');
+      expect(fileWatchService.watchers.has(expectedAbsolutePath)).to.be.true;
+      expect(mockWebSocket.lastSent).to.include('"watching":true');
       expect(mockWebSocket.lastSent).to.include('"type":"ack"');
     });
 
     it('should handle client unwatch messages', function() {
-      fileWatchService.watchPath(tempDir);
       fileWatchService.addClient(mockWebSocket);
+      
+      // First watch, then unwatch
+      const watchMessage = { type: 'watch', path: tempDir };
+      fileWatchService.handleClientMessage(mockWebSocket, watchMessage);
+      expect(fileWatchService.watchers.has(tempDir)).to.be.true;
       
       const unwatchMessage = { type: 'unwatch', path: tempDir };
       fileWatchService.handleClientMessage(mockWebSocket, unwatchMessage);
       
-      expect(fileWatchService.watchedPaths.has(tempDir)).to.be.false;
+      expect(fileWatchService.watchers.has(tempDir)).to.be.false;
+      expect(mockWebSocket.lastSent).to.include('"watching":false');
     });
 
-    it('should broadcast messages to all clients', function() {
+    it('should broadcast messages only to interested clients', function() {
       const mockClient1 = { ...mockWebSocket };
       const mockClient2 = { ...mockWebSocket };
       
       fileWatchService.addClient(mockClient1);
       fileWatchService.addClient(mockClient2);
       
+      // Only mockClient1 is interested in tempDir
+      fileWatchService.addClientInterest(mockClient1, tempDir);
+      
       const testMessage = { type: 'test', data: 'broadcast' };
-      fileWatchService.broadcastToClients(testMessage);
+      fileWatchService.broadcastToClients(testMessage, tempDir);
       
       const expectedMessage = JSON.stringify(testMessage);
       expect(mockClient1.lastSent).to.equal(expectedMessage);
-      expect(mockClient2.lastSent).to.equal(expectedMessage);
+      expect(mockClient2.lastSent).to.not.equal(expectedMessage);
     });
   });
 
@@ -240,13 +362,15 @@ describe('FileWatchService', function() {
       };
       
       fileWatchService.addClient(mockClient);
-      fileWatchService.watchPath(tempDir);
+      fileWatchService.addClientInterest(mockClient, tempDir);
       
       const status = fileWatchService.getStatus();
       
       expect(status.clientCount).to.equal(1);
       expect(status.watchedPaths).to.include(tempDir);
       expect(status.watcherCount).to.equal(1);
+      expect(status.pathDetails).to.have.property(tempDir);
+      expect(status.pathDetails[tempDir].clientCount).to.equal(1);
     });
   });
 
@@ -260,14 +384,14 @@ describe('FileWatchService', function() {
       };
       
       fileWatchService.addClient(mockClient);
-      fileWatchService.watchPath(tempDir);
+      fileWatchService.addClientInterest(mockClient, tempDir);
       fileWatchService.fileExistenceCache.set('/test', true);
       
       fileWatchService.cleanup();
       
       expect(fileWatchService.watchers.size).to.equal(0);
-      expect(fileWatchService.watchedPaths.size).to.equal(0);
       expect(fileWatchService.clients.size).to.equal(0);
+      expect(fileWatchService.clientInterests.size).to.equal(0);
       expect(fileWatchService.fileExistenceCache.size).to.equal(0);
     });
   });
@@ -295,7 +419,7 @@ describe('FileWatchService', function() {
       };
       
       fileWatchService.addClient(mockClient);
-      fileWatchService.watchPath(tempDir);
+      fileWatchService.addClientInterest(mockClient, tempDir);
       
       // Create a file after a short delay
       setTimeout(() => {
@@ -342,7 +466,7 @@ describe('FileWatchService', function() {
       };
       
       fileWatchService.addClient(mockClient);
-      fileWatchService.watchPath(tempDir);
+      fileWatchService.addClientInterest(mockClient, tempDir);
       
       // Modify file after a short delay
       setTimeout(() => {

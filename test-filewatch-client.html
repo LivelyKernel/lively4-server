@@ -24,12 +24,21 @@
         <button onclick="disconnect()">Disconnect</button>
         <button onclick="clearLog()">Clear Log</button>
         <button onclick="getStatus()">Get Status</button>
+        <button onclick="getLimits()">Get Limits</button>
     </div>
     
     <div class="controls">
-        <input type="text" id="watchPath" placeholder="Path to watch (e.g., /home/user/project)" value="">
+        <input type="text" id="watchPath" placeholder="Path to watch (e.g., src, ., /absolute/path)" value="">
         <button onclick="watchPath()">Watch Path</button>
         <button onclick="unwatchPath()">Unwatch Path</button>
+    </div>
+    
+    <div class="controls">
+        <strong>Quick Examples:</strong>
+        <button onclick="quickWatch('src')">Watch src/</button>
+        <button onclick="quickWatch('.')">Watch root</button>
+        <button onclick="quickWatch('docs')">Watch docs/</button>
+        <button onclick="quickWatch('test')">Watch test/</button>
     </div>
     
     <div id="log" class="log"></div>
@@ -173,11 +182,41 @@
                 });
         }
         
+        function getLimits() {
+            fetch('/_filewatch/limits')
+                .then(response => response.json())
+                .then(data => {
+                    log(`⚙️ System Limits: ${JSON.stringify(data, null, 2)}`);
+                })
+                .catch(error => {
+                    log(`❌ Error getting limits: ${error}`);
+                });
+        }
+        
+        function quickWatch(path) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('Not connected to WebSocket');
+                return;
+            }
+            
+            const message = {
+                type: 'watch',
+                path: path
+            };
+            
+            ws.send(JSON.stringify(message));
+            log(`👁️ Quick watch: ${path}`);
+            
+            // Update the input field for reference
+            document.getElementById('watchPath').value = path;
+        }
+        
         // Auto-connect on page load
         window.onload = function() {
             log('File watch test client loaded');
-            // Set default path to current directory hint
-            document.getElementById('watchPath').value = '/home/jens/lively4';
+            log('💡 Tip: Use relative paths like "src", ".", "docs" or absolute paths like "/home/user/project"');
+            // Set default path to be relative
+            document.getElementById('watchPath').value = 'src';
         };
     </script>
 </body>
