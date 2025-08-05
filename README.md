@@ -1,5 +1,7 @@
 # lively4-server
-Alternative to accessing GitHub directly
+The way to serve Lively4. Reads and writes files, makes commits, caches transpiled modules, and serves them back as bundles if needed.
+
+For development notes and project structure, see [CLAUDE.md](CLAUDE.md).
 
 ## Public Example Instances
 
@@ -17,20 +19,26 @@ npm install
 
 ## Running the Server
 
-To start the server with default settings:
-```
-npm start
+The recommended way to start the server is using the configuration scripts in the `bin/` directory:
+
+```bash
+# Example configurations with different setups:
+bin/lively4S1.sh   # Stable server (port 9005, auto-pull from git)
+bin/lively4S2.sh   # Development server (port 9006, no auto-pull)
 ```
 
-### Configuration Options
+These scripts contain sample configurations that set up:
+- Server and Lively4 directory paths
+- Port numbers
+- Git pull behavior
+- Auto-commit settings
+- URL configuration
 
-You can configure the server port and served directory using environment variables or command line arguments:
+### Manual Configuration
+
+You can also start the server directly with custom options:
 ```
-node src/http-server.js --port=8080
-```
-or
-```
-node src/http-server.js --port 8080 --directory=../foo/bar
+node src/http-server.js --port=8080 --directory=../foo/bar
 ```
 
 # Development Workflow
