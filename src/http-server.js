@@ -60,6 +60,8 @@ import argv from 'argv';
 import slash from 'slash'; // Convert Windows backslash paths to slash paths: foo\\bar ➔ foo/bar
 import 'log-timestamp'; // this adds a timestamp to all log messages
 import fetch from 'node-fetch';
+import express from 'express';
+import expressWs from 'express-ws';
 
 import { config, cleanString, run, respondWithCMD, fs_exists, fs_readFile, fs_readdir, fs_stat, fs_writeFile, log, logRequest, try_fs_stat } from './utils.js';
 
@@ -90,6 +92,7 @@ import TMPService from './services/tmp.js';
 import METAService from './services/meta.js';
 import GITService from './services/git.js';
 import TranspileService from './services/transpile.js';
+import FileWatchService from './services/filewatch.js';
 
 
 // Regex constants
@@ -139,6 +142,7 @@ export class Server {
     this.directoryService = new DirectoryService(this);
     this.transpileService = new TranspileService(this);
     this.optionsService = new OPTIONS(this);
+    this.fileWatchService = new FileWatchService(this.sourceDir);
 
 
   }
@@ -181,15 +185,38 @@ export class Server {
 
     var proxy = httpProxy.createProxyServer({});
 
-    this.httpServer = http
-      .createServer((req, res) => this.onRequest(req, res, proxy))
-      .listen(this.port, (err) => {
-        if (err) {
-          throw err;
-        }
-        this.isRunning = true;
-        log('Server running on port ' + this.port + ' in directory ' + this.sourceDir);
-      });
+    // Create Express app with WebSocket support
+    this.app = express();
+    const wsInstance = expressWs(this.app);
+
+    // WebSocket endpoint for file watching
+    this.app.ws('/_filewatch', (ws, req) => {
+      log('[FileWatch] WebSocket connection established');
+      this.fileWatchService.addClient(ws);
+    });
+
+    // REST endpoint for file watch status
+    this.app.get('/_filewatch/status', (req, res) => {
+      res.json(this.fileWatchService.getStatus());
+    });
+
+    // Handle all other HTTP requests
+    this.app.use((req, res) => {
+      this.onRequest(req, res, proxy);
+    });
+
+    this.httpServer = this.app.listen(this.port, (err) => {
+      if (err) {
+        throw err;
+      }
+      this.isRunning = true;
+      log('Server running on port ' + this.port + ' in directory ' + this.sourceDir);
+      log('[FileWatch] WebSocket endpoint available at /_filewatch');
+      
+      // Automatically start watching the Lively4 directory
+      this.fileWatchService.watchPath(this.sourceDir);
+      log('[FileWatch] Automatically watching directory: ' + this.sourceDir);
+    });
 
     // Track new connections
     this.httpServer.on('connection', socket => {
@@ -207,6 +234,7 @@ export class Server {
   async stop() {
     this.isRunning = false;
     this.tmpService.cleanup();
+    this.fileWatchService.cleanup();
 
     // Clear all timeouts
     if (this.tmpStorageTimeouts) {
