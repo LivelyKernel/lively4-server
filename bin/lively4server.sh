@@ -28,7 +28,7 @@ pushd $LIVELY
 
 export PATH=$SERVER/bin:$PATH
 
-$SERVER/bin/watch.sh $SERVER/src/http-server.js 'kill -USR1 '$$ &
+$SERVER/bin/watch.sh $SERVER/src 'kill -USR1 '$$ &
 WATCHERPID=$!
 
 OPTIONS=" --server="$SERVER" --myurl="$MYURL" "
