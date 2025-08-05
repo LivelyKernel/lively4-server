@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lively4 File Watch Test Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .connection-status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .log { height: 400px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; background: #f8f9fa; }
+        .controls { margin: 20px 0; }
+        button { padding: 8px 16px; margin: 5px; }
+        input { padding: 8px; margin: 5px; width: 300px; }
+        .file-change { margin: 5px 0; padding: 5px; background: #fff3cd; border-left: 4px solid #ffc107; }
+    </style>
+</head>
+<body>
+    <h1>Lively4 File Watch Test Client</h1>
+    
+    <div id="status" class="connection-status disconnected">Disconnected</div>
+    
+    <div class="controls">
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <button onclick="clearLog()">Clear Log</button>
+        <button onclick="getStatus()">Get Status</button>
+    </div>
+    
+    <div class="controls">
+        <input type="text" id="watchPath" placeholder="Path to watch (e.g., /home/user/project)" value="">
+        <button onclick="watchPath()">Watch Path</button>
+        <button onclick="unwatchPath()">Unwatch Path</button>
+    </div>
+    
+    <div id="log" class="log"></div>
+
+    <script>
+        let ws = null;
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+        
+        function log(message, isFileChange = false) {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            if (isFileChange) {
+                entry.className = 'file-change';
+            }
+            entry.innerHTML = `<strong>${timestamp}:</strong> ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(connected) {
+            statusDiv.textContent = connected ? 'Connected' : 'Disconnected';
+            statusDiv.className = `connection-status ${connected ? 'connected' : 'disconnected'}`;
+        }
+        
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Already connected');
+                return;
+            }
+            
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${location.host}/_filewatch`;
+            
+            log(`Connecting to ${wsUrl}...`);
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(event) {
+                log('WebSocket connection established');
+                updateStatus(true);
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'file-change') {
+                        const icon = {
+                            'CREATE': '➕',
+                            'DELETE': '🗑️',
+                            'CHANGE': '📝',
+                            'MOVE': '🔄',
+                            'RENAME': '📝'
+                        }[data.eventType] || '📁';
+                        
+                        const status = data.exists ? '(exists)' : '(deleted)';
+                        log(`${icon} ${data.eventType}: ${data.path} ${status}`, true);
+                        
+                        if (data.rawEventType && data.rawEventType !== data.eventType.toLowerCase()) {
+                            log(`   └─ Raw event: ${data.rawEventType}`, true);
+                        }
+                    } else {
+                        log(`📨 Message: ${JSON.stringify(data)}`);
+                    }
+                } catch (e) {
+                    log(`📨 Raw message: ${event.data}`);
+                }
+            };
+            
+            ws.onclose = function(event) {
+                log(`WebSocket connection closed (code: ${event.code})`);
+                updateStatus(false);
+            };
+            
+            ws.onerror = function(error) {
+                log(`WebSocket error: ${error}`);
+                updateStatus(false);
+            };
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+        
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+        
+        function watchPath() {
+            const path = document.getElementById('watchPath').value.trim();
+            if (!path) {
+                alert('Please enter a path to watch');
+                return;
+            }
+            
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('Not connected to WebSocket');
+                return;
+            }
+            
+            const message = {
+                type: 'watch',
+                path: path
+            };
+            
+            ws.send(JSON.stringify(message));
+            log(`👁️ Requested to watch: ${path}`);
+        }
+        
+        function unwatchPath() {
+            const path = document.getElementById('watchPath').value.trim();
+            if (!path) {
+                alert('Please enter a path to unwatch');
+                return;
+            }
+            
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('Not connected to WebSocket');
+                return;
+            }
+            
+            const message = {
+                type: 'unwatch',
+                path: path
+            };
+            
+            ws.send(JSON.stringify(message));
+            log(`🚫 Requested to unwatch: ${path}`);
+        }
+        
+        function getStatus() {
+            fetch('/_filewatch/status')
+                .then(response => response.json())
+                .then(data => {
+                    log(`📊 Status: ${JSON.stringify(data, null, 2)}`);
+                })
+                .catch(error => {
+                    log(`❌ Error getting status: ${error}`);
+                });
+        }
+        
+        // Auto-connect on page load
+        window.onload = function() {
+            log('File watch test client loaded');
+            // Set default path to current directory hint
+            document.getElementById('watchPath').value = '/home/jens/lively4';
+        };
+    </script>
+</body>
+</html>
