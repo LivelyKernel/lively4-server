@@ -284,6 +284,11 @@ class FileWatchService {
   shouldIgnoreFile(filename, fullPath) {
     const basename = Path.basename(filename);
 
+    // Ignore all files starting with "." (dotfiles)
+    if (basename.startsWith('.')) {
+      return true;
+    }
+
     // Server log files (check both basename and full path)
     if (basename === 'server.log' ||
       basename === 'server.log.last' ||
@@ -317,18 +322,13 @@ class FileWatchService {
       return true;
     }
 
-    // Temporary files and common editor files
-    if (basename.startsWith('.') && (
-      basename.endsWith('.tmp') ||
-      basename.endsWith('.swp') ||
-      basename.endsWith('.swo') ||
-      basename.includes('~')
-    )) {
+    // Git repository files (including files inside .git directories)
+    if (fullPath.includes('/.git/')) {
       return true;
     }
 
-    // Git repository files
-    if (fullPath.includes('/.git/') || basename === '.git') {
+    // Temporary files and common editor files (non-dotfiles)
+    if (basename.includes('~') || basename.endsWith('.tmp')) {
       return true;
     }
     
@@ -340,9 +340,8 @@ class FileWatchService {
       return true;
     }
 
-    // OS-specific files
-    if (basename === '.DS_Store' ||
-      basename === 'Thumbs.db' ||
+    // OS-specific files (non-dotfiles)
+    if (basename === 'Thumbs.db' ||
       basename === 'desktop.ini') {
       return true;
     }
