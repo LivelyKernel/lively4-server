@@ -98,6 +98,8 @@ describe('FileWatchService', function () {
       expect(fileWatchService.shouldIgnoreFile('.tmp', '/path/.tmp')).to.be.true;
       expect(fileWatchService.shouldIgnoreFile('.swp', '/path/.swp')).to.be.true;
       expect(fileWatchService.shouldIgnoreFile('.test~', '/path/.test~')).to.be.true;
+      expect(fileWatchService.shouldIgnoreFile('lively-container.js.tmp.771756.1754491341898', '/path/lively-container.js.tmp.771756.1754491341898')).to.be.true;
+      expect(fileWatchService.shouldIgnoreFile('file.tmp.12345', '/path/file.tmp.12345')).to.be.true;
     });
 
     it('should ignore essential directories', function () {

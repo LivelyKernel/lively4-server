@@ -328,7 +328,9 @@ class FileWatchService {
     }
 
     // Temporary files and common editor files (non-dotfiles)
-    if (basename.includes('~') || basename.endsWith('.tmp')) {
+    if (basename.includes('~') || 
+        basename.endsWith('.tmp') || 
+        basename.includes('.tmp.')) {
       return true;
     }
 
