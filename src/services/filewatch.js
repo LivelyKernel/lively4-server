@@ -44,16 +44,16 @@ class FileWatchService {
   removeClient(ws) {
     // Get all paths this client was interested in
     const clientPaths = this.clientInterests.get(ws) || new Set();
-    
+
     // Remove client from all watchers and potentially stop watchers
     for (const path of clientPaths) {
       this.removeClientInterest(ws, path);
     }
-    
+
     // Clean up client tracking
     this.clients.delete(ws);
     this.clientInterests.delete(ws);
-    
+
     log(`[FileWatch] Client disconnected. Total clients: ${this.clients.size}`);
   }
 
@@ -85,13 +85,13 @@ class FileWatchService {
   addClientInterest(ws, path) {
     // Convert to absolute path if relative
     const absolutePath = Path.isAbsolute(path) ? path : Path.resolve(this.lively4Directory || '.', path);
-    
+
     // Add to client's interests
     const clientPaths = this.clientInterests.get(ws);
     if (clientPaths) {
       clientPaths.add(absolutePath);
     }
-    
+
     // Check if we already have a watcher for this path
     if (this.watchers.has(absolutePath)) {
       // Add client to existing watcher
@@ -112,18 +112,18 @@ class FileWatchService {
   removeClientInterest(ws, path) {
     // Convert to absolute path if relative
     const absolutePath = Path.isAbsolute(path) ? path : Path.resolve(this.lively4Directory || '.', path);
-    
+
     // Remove from client's interests
     const clientPaths = this.clientInterests.get(ws);
     if (clientPaths) {
       clientPaths.delete(absolutePath);
     }
-    
+
     const watcherInfo = this.watchers.get(absolutePath);
     if (watcherInfo) {
       // Remove client from watcher
       watcherInfo.clients.delete(ws);
-      
+
       if (watcherInfo.clients.size === 0) {
         // No more clients interested, stop watching
         this.stopWatchingPath(absolutePath);
@@ -143,7 +143,7 @@ class FileWatchService {
     try {
       // Determine if we should watch recursively based on path type
       const recursive = this.shouldWatchRecursively(filePath);
-      
+
       const watcher = fs.watch(filePath, { recursive }, (eventType, filename) => {
         this.handleFileChange(eventType, filePath, filename);
       });
@@ -151,12 +151,12 @@ class FileWatchService {
       // Handle watcher errors (like ENOSPC - too many watchers)
       watcher.on('error', (error) => {
         log(`[FileWatch] Watcher error for ${filePath}: ${error.message}`);
-        
+
         if (error.code === 'ENOSPC') {
           log(`[FileWatch] System limit for file watchers reached. Consider increasing fs.inotify.max_user_watches`);
           log(`[FileWatch] Run: echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p`);
         }
-        
+
         // Clean up the failed watcher and notify clients
         this.stopWatchingPath(filePath);
       });
@@ -167,12 +167,12 @@ class FileWatchService {
         clients: new Set([initialClient]),
         recursive
       };
-      
+
       this.watchers.set(filePath, watcherInfo);
       log(`[FileWatch] Started watching ${recursive ? 'recursively' : 'non-recursively'}: ${filePath}`);
     } catch (error) {
       log(`[FileWatch] Error watching ${filePath}: ${error.message}`);
-      
+
       if (error.code === 'ENOSPC') {
         log(`[FileWatch] System limit for file watchers reached. Consider increasing fs.inotify.max_user_watches`);
       }
@@ -206,7 +206,7 @@ class FileWatchService {
     if (filePath === this.lively4Directory) {
       return false;
     }
-    
+
     // For subdirectories, watch recursively by default
     return true;
   }
@@ -246,7 +246,7 @@ class FileWatchService {
 
     // Update cache for future comparisons
     this.fileExistenceCache.set(fullPath, exists);
-    
+
     // Fallback to generic eventType
     return eventType.toUpperCase();
   }
@@ -260,17 +260,17 @@ class FileWatchService {
     if (!this.lively4Directory) {
       return absolutePath;
     }
-    
+
     // Normalize paths to handle different separators
     const normalizedBase = Path.resolve(this.lively4Directory);
     const normalizedPath = Path.resolve(absolutePath);
-    
+
     // Check if path is within the Lively4 directory
     if (normalizedPath.startsWith(normalizedBase)) {
       const relativePath = Path.relative(normalizedBase, normalizedPath);
       return relativePath || '.'; // Return '.' for the root directory itself
     }
-    
+
     // If not within Lively4 directory, return the absolute path
     return absolutePath;
   }
@@ -306,18 +306,18 @@ class FileWatchService {
     )) {
       return true;
     }
-    
+
     // Essential directories that should always be ignored
     const essentialIgnorePatterns = [
       'node_modules',
       '.cache',
       '.tmp'
     ];
-    
-    if (essentialIgnorePatterns.some(pattern => 
-        filename.includes(`/${pattern}/`) || 
-        filename.includes(`\\${pattern}\\`) ||
-        basename === pattern
+
+    if (essentialIgnorePatterns.some(pattern =>
+      filename.includes(`/${pattern}/`) ||
+      filename.includes(`\\${pattern}\\`) ||
+      basename === pattern
     )) {
       return true;
     }
@@ -327,11 +327,16 @@ class FileWatchService {
       return true;
     }
 
+    // Ignore options directory and its contents
+    if (fullPath.includes('/.options/')) {
+      return true;
+    }
+
     // Temporary files and common editor files (non-dotfiles)
     if (basename.includes('~') || basename.endsWith('.tmp')) {
       return true;
     }
-    
+
     // Node.js and build artifacts
     if (basename === 'node_modules' ||
       basename === 'package-lock.json' ||
@@ -410,7 +415,7 @@ class FileWatchService {
     const messageStr = JSON.stringify(message);
     const clientsToRemove = [];
     const watcherInfo = this.watchers.get(watchedPath);
-    
+
     if (!watcherInfo) {
       return; // No watcher info, no clients to notify
     }
@@ -444,11 +449,11 @@ class FileWatchService {
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
-      
+
       try {
         const { stdout: maxWatches } = await execAsync('cat /proc/sys/fs/inotify/max_user_watches');
         const { stdout: maxInstances } = await execAsync('cat /proc/sys/fs/inotify/max_user_instances');
-        
+
         return {
           maxUserWatches: parseInt(maxWatches.trim()),
           maxUserInstances: parseInt(maxInstances.trim()),
@@ -475,14 +480,14 @@ class FileWatchService {
   getStatus() {
     const watchedPaths = Array.from(this.watchers.keys());
     const pathDetails = {};
-    
+
     for (const [path, watcherInfo] of this.watchers) {
       pathDetails[path] = {
         clientCount: watcherInfo.clients.size,
         recursive: watcherInfo.recursive
       };
     }
-    
+
     return {
       clientCount: this.clients.size,
       watchedPaths,
