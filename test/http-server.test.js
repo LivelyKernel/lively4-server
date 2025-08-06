@@ -622,10 +622,10 @@ describe("Lively4 Server", () => {
 
     describe("CURL", function () {
       it("should fetch external resources", async () => {
-        const response = await fetch(url + "_curl/?target=https://example.com");
+        const response = await fetch(url + "_curl/?target=https://lively-kernel.org");
         expect(response.status).to.equal(200);
         const body = await response.text();
-        expect(body).to.include('<!doctype html>');
+        expect(body).to.include('<?xml version="1.0"');
       });
 
       it("should handle missing target parameter", async () => {
