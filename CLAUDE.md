@@ -39,3 +39,9 @@ This is the Node.js server that serves Lively4. It reads and writes files, makes
 - `lively4S1.sh` - Stable server (auto-pull from git)
 - `lively4S2.sh` - Development server (no auto-pull)
 - Manual configuration: `--port=8080 --directory=../path`
+
+## Documentation & Changes
+
+- **Changelog**: See `CHANGELOG.md` for recent changes and improvements
+- **API Documentation**: Generated docs available in `docs/` directory
+- When making significant changes, update the changelog with date-based entries

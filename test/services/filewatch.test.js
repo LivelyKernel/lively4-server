@@ -484,5 +484,371 @@ describe('FileWatchService', function () {
         }
       }, 3000);
     });
+
+    it('should not send duplicate change notifications', function (done) {
+      this.timeout(5000);
+
+      const testFile = path.join(tempDir, 'test-duplicates.js');
+      testFiles.push(testFile);
+
+      // Create initial file
+      fs.writeFileSync(testFile, 'initial content');
+
+      const receivedNotifications = [];
+      let notificationCount = 0;
+
+      const mockClient = {
+        readyState: 1,
+        OPEN: 1,
+        send: function (data) {
+          const change = JSON.parse(data);
+          if (change.type === 'file-change' && change.path === 'test-duplicates.js') {
+            notificationCount++;
+            receivedNotifications.push({
+              eventType: change.eventType,
+              timestamp: change.timestamp,
+              exists: change.exists,
+              rawEventType: change.rawEventType
+            });
+            console.log(`Notification ${notificationCount}: ${change.eventType} (raw: ${change.rawEventType}) at ${change.timestamp}`);
+          }
+        },
+        on: function () { }
+      };
+
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+
+      // Modify file multiple times rapidly to potentially trigger duplicates
+      setTimeout(() => {
+        fs.writeFileSync(testFile, 'modified content 1');
+        fs.writeFileSync(testFile, 'modified content 2');
+        fs.writeFileSync(testFile, 'modified content 3');
+      }, 100);
+
+      // Wait and then check for duplicates
+      setTimeout(() => {
+        console.log(`Total notifications received: ${receivedNotifications.length}`);
+        
+        if (receivedNotifications.length > 3) {
+          // If we get more notifications than modifications, check for true duplicates
+          const duplicates = [];
+          for (let i = 0; i < receivedNotifications.length - 1; i++) {
+            for (let j = i + 1; j < receivedNotifications.length; j++) {
+              const timeDiff = Math.abs(receivedNotifications[i].timestamp - receivedNotifications[j].timestamp);
+              if (timeDiff < 50 && 
+                  receivedNotifications[i].eventType === receivedNotifications[j].eventType &&
+                  receivedNotifications[i].exists === receivedNotifications[j].exists) {
+                duplicates.push({ 
+                  first: receivedNotifications[i], 
+                  second: receivedNotifications[j],
+                  timeDiff 
+                });
+              }
+            }
+          }
+          
+          if (duplicates.length > 0) {
+            done(new Error(`Duplicate change notifications detected: ${JSON.stringify(duplicates, null, 2)}`));
+          } else {
+            done(); // Multiple notifications with different timestamps/types are OK
+          }
+        } else {
+          done(); // Reasonable number of notifications
+        }
+      }, 1500);
+    });
+
+    it('should handle mixed file operations without duplicates', function (done) {
+      this.timeout(7000);
+
+      const testFile = path.join(tempDir, 'test-mixed-ops.js');
+      testFiles.push(testFile);
+
+      const receivedNotifications = [];
+      let notificationCount = 0;
+
+      const mockClient = {
+        readyState: 1,
+        OPEN: 1,
+        send: function (data) {
+          const change = JSON.parse(data);
+          if (change.type === 'file-change' && change.path.includes('test-mixed-ops')) {
+            notificationCount++;
+            receivedNotifications.push({
+              eventType: change.eventType,
+              timestamp: change.timestamp,
+              exists: change.exists,
+              rawEventType: change.rawEventType,
+              path: change.path
+            });
+            console.log(`Notification ${notificationCount}: ${change.eventType} (raw: ${change.rawEventType}) for ${change.path} at ${change.timestamp}`);
+          }
+        },
+        on: function () { }
+      };
+
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+
+      // Perform a sequence of operations that might trigger duplicates
+      setTimeout(() => {
+        // Create the file
+        fs.writeFileSync(testFile, 'initial content');
+      }, 100);
+
+      setTimeout(() => {
+        // Modify the file
+        fs.writeFileSync(testFile, 'modified content');
+      }, 300);
+
+      setTimeout(() => {
+        // Move the file (which might generate rename events)
+        const newFile = path.join(tempDir, 'test-mixed-ops-renamed.js');
+        testFiles.push(newFile);
+        fs.renameSync(testFile, newFile);
+      }, 500);
+
+      // Wait and analyze all notifications
+      setTimeout(() => {
+        console.log(`Total notifications received: ${receivedNotifications.length}`);
+        console.log('All notifications:', receivedNotifications);
+        
+        // Look for potential duplicates (same event type for same path within short time)
+        const duplicates = [];
+        for (let i = 0; i < receivedNotifications.length - 1; i++) {
+          for (let j = i + 1; j < receivedNotifications.length; j++) {
+            const n1 = receivedNotifications[i];
+            const n2 = receivedNotifications[j];
+            const timeDiff = Math.abs(n1.timestamp - n2.timestamp);
+            
+            // Check for duplicates: same event type, same path, within 100ms
+            if (timeDiff < 100 && 
+                n1.eventType === n2.eventType && 
+                n1.path === n2.path &&
+                n1.exists === n2.exists) {
+              duplicates.push({ 
+                first: n1, 
+                second: n2,
+                timeDiff 
+              });
+            }
+          }
+        }
+        
+        if (duplicates.length > 0) {
+          done(new Error(`Duplicate notifications found: ${JSON.stringify(duplicates, null, 2)}`));
+        } else {
+          console.log('No duplicate notifications found');
+          done();
+        }
+      }, 2000);
+    });
+
+    it('should handle shell redirections without duplicate CHANGE events', function (done) {
+      this.timeout(5000);
+
+      const testFile = path.join(tempDir, 'shell-redirect-test.txt');
+      testFiles.push(testFile);
+
+      const receivedNotifications = [];
+      let notificationCount = 0;
+
+      const mockClient = {
+        readyState: 1,
+        OPEN: 1,
+        send: function (data) {
+          const change = JSON.parse(data);
+          if (change.type === 'file-change' && change.path === 'shell-redirect-test.txt') {
+            notificationCount++;
+            receivedNotifications.push({
+              eventType: change.eventType,
+              timestamp: change.timestamp,
+              exists: change.exists,
+              rawEventType: change.rawEventType
+            });
+            console.log(`Notification ${notificationCount}: ${change.eventType} (raw: ${change.rawEventType}) at ${new Date(change.timestamp).toISOString()}`);
+          }
+        },
+        on: function () { }
+      };
+
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+
+      // First create the file (like touch)
+      setTimeout(() => {
+        fs.writeFileSync(testFile, '');
+        console.log('Created empty file');
+      }, 100);
+
+      // Then write content to it (like echo > file) after a delay
+      setTimeout(() => {
+        fs.writeFileSync(testFile, 'hello world\n');
+        console.log('Wrote content to file');
+      }, 500);
+
+      // Check for duplicates after sufficient time
+      setTimeout(() => {
+        console.log(`Total notifications: ${receivedNotifications.length}`);
+        
+        // Count CHANGE events specifically
+        const changeEvents = receivedNotifications.filter(n => n.eventType === 'CHANGE');
+        console.log(`CHANGE events: ${changeEvents.length}`);
+        
+        if (changeEvents.length > 1) {
+          // Check if any are duplicates (within 100ms)
+          const duplicates = [];
+          for (let i = 0; i < changeEvents.length - 1; i++) {
+            for (let j = i + 1; j < changeEvents.length; j++) {
+              const timeDiff = Math.abs(changeEvents[i].timestamp - changeEvents[j].timestamp);
+              if (timeDiff < 100) {
+                duplicates.push({
+                  first: changeEvents[i],
+                  second: changeEvents[j],
+                  timeDiff
+                });
+              }
+            }
+          }
+          
+          if (duplicates.length > 0) {
+            done(new Error(`Duplicate CHANGE events found: ${JSON.stringify(duplicates, null, 2)}`));
+          } else {
+            console.log('Multiple CHANGE events found but with sufficient time gap');
+            done();
+          }
+        } else {
+          console.log('Single or no CHANGE event - good');
+          done();
+        }
+      }, 2000);
+    });
+
+    it('should deduplicate identical notifications within deduplication window', function (done) {
+      this.timeout(3000);
+
+      const testFile = path.join(tempDir, 'dedup-test.txt');
+      testFiles.push(testFile);
+
+      // Create initial file
+      fs.writeFileSync(testFile, 'initial');
+
+      const receivedNotifications = [];
+
+      const mockClient = {
+        readyState: 1,
+        OPEN: 1,
+        send: function (data) {
+          const change = JSON.parse(data);
+          if (change.type === 'file-change' && change.path === 'dedup-test.txt') {
+            receivedNotifications.push({
+              eventType: change.eventType,
+              timestamp: change.timestamp,
+              rawEventType: change.rawEventType
+            });
+            console.log(`Received: ${change.eventType} (raw: ${change.rawEventType}) at ${new Date(change.timestamp).toISOString()}`);
+          }
+        },
+        on: function () { }
+      };
+
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+
+      // Simulate duplicate events by directly calling handleFileChange multiple times rapidly
+      setTimeout(() => {
+        const filename = 'dedup-test.txt';
+        const watchedPath = tempDir;
+        
+        // Simulate multiple rapid change events (like what might happen with shell redirection)
+        fileWatchService.handleFileChange('change', watchedPath, filename);
+        fileWatchService.handleFileChange('change', watchedPath, filename);
+        fileWatchService.handleFileChange('change', watchedPath, filename);
+      }, 100);
+
+      // Check results
+      setTimeout(() => {
+        console.log(`Total notifications received: ${receivedNotifications.length}`);
+        
+        const changeEvents = receivedNotifications.filter(n => n.eventType === 'CHANGE');
+        console.log(`CHANGE notifications: ${changeEvents.length}`);
+        
+        if (changeEvents.length > 1) {
+          done(new Error(`Expected only 1 CHANGE notification but got ${changeEvents.length}. Deduplication failed.`));
+        } else if (changeEvents.length === 1) {
+          console.log('Deduplication working correctly - only 1 CHANGE event sent');
+          done();
+        } else {
+          done(new Error('No CHANGE events received at all'));
+        }
+      }, 500);
+    });
+
+    it('should send correct eventType for DELETE operations (not RENAME)', function (done) {
+      this.timeout(3000);
+
+      const testFile = path.join(tempDir, 'delete-event-test.txt');
+      testFiles.push(testFile);
+
+      // Create initial file
+      fs.writeFileSync(testFile, 'test content');
+
+      const receivedNotifications = [];
+
+      const mockClient = {
+        readyState: 1,
+        OPEN: 1,
+        send: function (data) {
+          const change = JSON.parse(data);
+          if (change.type === 'file-change' && change.path === 'delete-event-test.txt') {
+            receivedNotifications.push(change);
+            console.log(`Event: ${change.eventType} (raw: ${change.rawEventType}) - exists: ${change.exists}`);
+          }
+        },
+        on: function () { }
+      };
+
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+
+      // Wait for initial CREATE event, then delete the file
+      setTimeout(() => {
+        fs.unlinkSync(testFile);
+        console.log('File deleted');
+      }, 200);
+
+      // Check the results
+      setTimeout(() => {
+        console.log(`Total notifications: ${receivedNotifications.length}`);
+        
+        const deleteEvents = receivedNotifications.filter(n => n.eventType === 'DELETE');
+        const renameEvents = receivedNotifications.filter(n => n.eventType === 'RENAME');
+        
+        console.log(`DELETE events: ${deleteEvents.length}`);
+        console.log(`RENAME events: ${renameEvents.length}`);
+        
+        if (deleteEvents.length === 0) {
+          done(new Error('No DELETE events received for file deletion'));
+        } else if (renameEvents.length > 0) {
+          done(new Error(`Received ${renameEvents.length} RENAME events, but file deletion should show as DELETE`));
+        } else {
+          const deleteEvent = deleteEvents[0];
+          console.log(`DELETE event details:`, deleteEvent);
+          
+          // Verify the DELETE event has correct properties
+          if (deleteEvent.eventType !== 'DELETE') {
+            done(new Error(`Expected eventType to be DELETE, got ${deleteEvent.eventType}`));
+          } else if (deleteEvent.exists !== false) {
+            done(new Error(`Expected exists to be false for DELETE event, got ${deleteEvent.exists}`));
+          } else if (deleteEvent.rawEventType !== 'rename') {
+            done(new Error(`Expected rawEventType to be rename for DELETE, got ${deleteEvent.rawEventType}`));
+          } else {
+            console.log('DELETE event is correctly formatted');
+            done();
+          }
+        }
+      }, 1000);
+    });
   });
 });

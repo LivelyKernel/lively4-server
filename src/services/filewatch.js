@@ -12,6 +12,8 @@ class FileWatchService {
     this.clientInterests = new Map(); // client -> Set of paths they're interested in
     this.lively4Directory = lively4Directory; // Base directory for relative paths
     this.fileExistenceCache = new Map(); // Track file existence for CREATE/DELETE detection
+    this.recentNotifications = new Map(); // path -> { eventType, timestamp } for deduplication
+    this.deduplicationWindow = 50; // milliseconds - ignore duplicate events within this window
   }
 
   /**
@@ -219,22 +221,15 @@ class FileWatchService {
    * @return {string} The specific operation type
    */
   determineOperationType(eventType, fullPath, exists) {
-    const wasTracked = this.fileExistenceCache.has(fullPath);
-    const previouslyExisted = this.fileExistenceCache.get(fullPath);
-
     if (eventType === 'rename') {
-      if (!wasTracked && exists) {
-        // New file appeared
+      if (exists) {
+        // File exists after rename event - this is a CREATE
         this.fileExistenceCache.set(fullPath, true);
         return 'CREATE';
-      } else if (wasTracked && previouslyExisted && !exists) {
-        // File disappeared
+      } else {
+        // File doesn't exist after rename event - this is a DELETE
         this.fileExistenceCache.set(fullPath, false);
         return 'DELETE';
-      } else if (wasTracked && !previouslyExisted && exists) {
-        // File reappeared (could be MOVE destination)
-        this.fileExistenceCache.set(fullPath, true);
-        return 'CREATE'; // We can't easily detect MOVE without tracking source
       }
     } else if (eventType === 'change') {
       if (exists) {
@@ -355,6 +350,37 @@ class FileWatchService {
   }
 
   /**
+   * Check if a notification is a duplicate within the deduplication window
+   * @param {string} fullPath - The full path to the file
+   * @param {string} operationType - The operation type (CREATE, CHANGE, DELETE)
+   * @param {number} timestamp - Current timestamp
+   * @return {boolean} True if this is a duplicate notification
+   */
+  isDuplicateNotification(fullPath, operationType, timestamp) {
+    const key = `${fullPath}:${operationType}`;
+    const recent = this.recentNotifications.get(key);
+    
+    if (recent && (timestamp - recent.timestamp) < this.deduplicationWindow) {
+      return true; // This is a duplicate
+    }
+    
+    // Update the recent notification
+    this.recentNotifications.set(key, { timestamp });
+    
+    // Clean up old entries to prevent memory leak
+    if (this.recentNotifications.size > 1000) {
+      const cutoff = timestamp - this.deduplicationWindow * 10;
+      for (const [k, v] of this.recentNotifications.entries()) {
+        if (v.timestamp < cutoff) {
+          this.recentNotifications.delete(k);
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  /**
    * Handle file system change events
    * @param {string} eventType - Type of change (rename, change)
    * @param {string} watchedPath - The path being watched
@@ -383,6 +409,13 @@ class FileWatchService {
 
     // Determine the specific operation type
     const operationType = this.determineOperationType(eventType, fullPath, exists);
+    const timestamp = Date.now();
+
+    // Check for duplicate notifications
+    if (this.isDuplicateNotification(fullPath, operationType, timestamp)) {
+      log(`[FileWatch] Skipping duplicate ${operationType} event for: ${fullPath}`);
+      return;
+    }
 
     // Convert paths to be relative to Lively4 directory
     const livelyRelativePath = this.makeRelativePath(fullPath);
@@ -397,7 +430,7 @@ class FileWatchService {
       watchedPath: watchedRelativePath,
       isDirectory,
       exists,
-      timestamp: Date.now()
+      timestamp
     };
 
     log(`[FileWatch] File ${operationType}: ${livelyRelativePath}`);
@@ -511,6 +544,7 @@ class FileWatchService {
     }
     this.watchers.clear();
     this.fileExistenceCache.clear();
+    this.recentNotifications.clear();
 
     // Close all client connections
     for (const client of this.clients) {
