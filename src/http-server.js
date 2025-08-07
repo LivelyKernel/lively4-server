@@ -206,6 +206,12 @@ export class Server {
       res.json(limits);
     });
 
+    // REST endpoint for watcher validation
+    this.app.get('/_filewatch/validate', (req, res) => {
+      const validation = this.fileWatchService.validateWatchers();
+      res.json(validation);
+    });
+
     // Handle all other HTTP requests
     this.app.use((req, res) => {
       this.onRequest(req, res, proxy);

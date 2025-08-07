@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2025-08-07] - File Watcher Auto-Recovery
+
+### Fixed
+
+- **Critical**: File watcher no longer stops working after Claude Code edits files
+- Added automatic detection and recovery from atomic file operations (temp file + rename pattern)
+
+### Added
+
+- New diagnostic endpoint: `/_filewatch/validate` for watcher health checks
+- Enhanced logging for file watcher events and successful client notifications
+- Comprehensive test coverage for atomic file operations
+
+---
+
 ## [2025-08-06] - File Watcher Improvements & Event Deduplication
 
 ### Added

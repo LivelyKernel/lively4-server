@@ -152,11 +152,31 @@ class FileWatchService {
 
       // Handle watcher errors (like ENOSPC - too many watchers)
       watcher.on('error', (error) => {
-        log(`[FileWatch] Watcher error for ${filePath}: ${error.message}`);
+        log(`[FileWatch] Watcher error for ${filePath}: ${error.message}, code: ${error.code}`);
+        log(`[FileWatch] Error stack: ${error.stack}`);
 
         if (error.code === 'ENOSPC') {
           log(`[FileWatch] System limit for file watchers reached. Consider increasing fs.inotify.max_user_watches`);
           log(`[FileWatch] Run: echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p`);
+        }
+
+        // Notify all clients about the watcher failure
+        const watcherInfo = this.watchers.get(filePath);
+        if (watcherInfo) {
+          for (const client of watcherInfo.clients) {
+            try {
+              if (client.readyState === client.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'watcher-error',
+                  path: this.makeRelativePath(filePath),
+                  error: error.message,
+                  code: error.code
+                }));
+              }
+            } catch (sendError) {
+              log(`[FileWatch] Failed to notify client of watcher error: ${sendError.message}`);
+            }
+          }
         }
 
         // Clean up the failed watcher and notify clients
@@ -389,12 +409,48 @@ class FileWatchService {
    * @param {string} filename - The filename that changed
    */
   handleFileChange(eventType, watchedPath, filename) {
-    if (!filename) return; // Skip events without filename
+    if (!filename) {
+      log(`[FileWatch] Received event without filename for path: ${watchedPath}, eventType: ${eventType}`);
+      return; // Skip events without filename
+    }
 
     const fullPath = Path.join(watchedPath, filename);
+    log(`[FileWatch] Raw event received - Type: ${eventType}, Path: ${fullPath}`);
+
+    // Check if this is a temp file from an editor (like Claude Code's atomic operations)
+    const isAtomicTempFile = filename.includes('.tmp.') && filename.match(/\.tmp\.\d+\.\d+$/);
+    if (isAtomicTempFile) {
+      log(`[FileWatch] Detected atomic temp file operation: ${fullPath}`);
+      
+      // Try to determine what the target file might be
+      const targetFile = filename.replace(/\.tmp\.\d+\.\d+$/, '');
+      const targetPath = Path.join(watchedPath, targetFile);
+      
+      // If we're watching the target file and this is a rename, we might need to restart the watcher
+      const watchingTarget = this.watchers.has(targetPath);
+      const watchingParent = this.watchers.has(watchedPath);
+      
+      if (eventType === 'rename' && (watchingTarget || watchingParent)) {
+        log(`[FileWatch] Atomic operation may affect watched file: ${targetPath} (watching target: ${watchingTarget}, watching parent: ${watchingParent})`);
+        
+        // Schedule a check after a brief delay to see if the watcher is still working
+        if (watchingTarget) {
+          setTimeout(() => {
+            this.checkAndRestartWatcher(targetPath);
+          }, 100);
+        } else if (watchingParent) {
+          // For directory watchers, trigger a test to see if they're still working
+          setTimeout(() => {
+            this.checkAndRestartWatcher(watchedPath);
+          }, 100);
+        }
+      }
+      return; // Don't process temp files further
+    }
 
     // Filter out server-related files to prevent infinite loops
     if (this.shouldIgnoreFile(filename, fullPath)) {
+      log(`[FileWatch] Ignoring file: ${fullPath}`);
       return;
     }
 
@@ -455,11 +511,14 @@ class FileWatchService {
       return; // No watcher info, no clients to notify
     }
 
+    let sentCount = 0;
+
     // Only send to clients interested in this path
     for (const client of watcherInfo.clients) {
       try {
         if (client.readyState === client.OPEN) {
           client.send(messageStr);
+          sentCount++;
         } else {
           clientsToRemove.push(client);
         }
@@ -467,6 +526,11 @@ class FileWatchService {
         log(`[FileWatch] Error sending to client: ${error.message}`);
         clientsToRemove.push(client);
       }
+    }
+
+    // Log successful sends to active listeners
+    if (sentCount > 0) {
+      log(`[FileWatch] Sent ${message.eventType} event for ${message.path} to ${sentCount} active listener${sentCount > 1 ? 's' : ''}`);
     }
 
     // Clean up disconnected clients
@@ -506,6 +570,129 @@ class FileWatchService {
         currentWatchers: this.watchers.size
       };
     }
+  }
+
+  /**
+   * Check if a specific watcher is still working and restart it if needed
+   * @param {string} filePath - Path to check and potentially restart
+   */
+  async checkAndRestartWatcher(filePath) {
+    const watcherInfo = this.watchers.get(filePath);
+    if (!watcherInfo) {
+      log(`[FileWatch] No watcher found for ${filePath}, skipping restart check`);
+      return;
+    }
+
+    log(`[FileWatch] Checking if watcher for ${filePath} needs restart...`);
+
+    // Test if the file still exists
+    try {
+      await fs.promises.access(filePath);
+    } catch (error) {
+      log(`[FileWatch] File no longer exists: ${filePath}`);
+      // File was deleted, the watcher should handle this normally
+      return;
+    }
+
+    // If file exists, create a test change to see if watcher responds
+    let watcherResponded = false;
+    const testTimeout = 200; // milliseconds to wait for watcher response
+    
+    // Set up a temporary handler to detect if the watcher is working
+    const testHandler = () => {
+      watcherResponded = true;
+    };
+    
+    try {
+      // Add temporary test handler
+      watcherInfo.watcher.on('change', testHandler);
+      
+      // Create a small test change (update access time)
+      const now = new Date();
+      await fs.promises.utimes(filePath, now, now);
+      
+      // Wait to see if watcher responds
+      await new Promise(resolve => setTimeout(resolve, testTimeout));
+      
+      // Remove test handler
+      watcherInfo.watcher.removeListener('change', testHandler);
+      
+      if (watcherResponded) {
+        log(`[FileWatch] Watcher for ${filePath} is working correctly`);
+        return;
+      }
+      
+      log(`[FileWatch] Watcher for ${filePath} is not responding - restarting...`);
+      
+      // Store client list before stopping watcher
+      const clients = new Set(watcherInfo.clients);
+      
+      // Stop the broken watcher
+      this.stopWatchingPath(filePath);
+      
+      // Restart watcher for each client
+      for (const client of clients) {
+        if (client.readyState === client.OPEN) {
+          this.addClientInterest(client, filePath);
+        }
+      }
+      
+      log(`[FileWatch] Successfully restarted watcher for ${filePath} with ${clients.size} clients`);
+      
+    } catch (error) {
+      // Clean up test handler if there was an error
+      try {
+        watcherInfo.watcher.removeListener('change', testHandler);
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
+      
+      log(`[FileWatch] Error testing watcher for ${filePath}: ${error.message}`);
+      // Don't restart on test errors - might be a permission issue
+    }
+  }
+
+  /**
+   * Check if watchers are still active and functional
+   */
+  validateWatchers() {
+    log(`[FileWatch] Validating ${this.watchers.size} watchers...`);
+    const deadWatchers = [];
+    
+    for (const [path, watcherInfo] of this.watchers) {
+      try {
+        // Check if the path still exists
+        if (!fs.existsSync(path)) {
+          log(`[FileWatch] Path no longer exists: ${path}`);
+          deadWatchers.push(path);
+          continue;
+        }
+        
+        // Check if watcher is still active (this might throw if it's dead)
+        if (!watcherInfo.watcher) {
+          log(`[FileWatch] Watcher is null for path: ${path}`);
+          deadWatchers.push(path);
+          continue;
+        }
+        
+        log(`[FileWatch] Watcher OK for ${path} (${watcherInfo.clients.size} clients)`);
+      } catch (error) {
+        log(`[FileWatch] Watcher validation failed for ${path}: ${error.message}`);
+        deadWatchers.push(path);
+      }
+    }
+    
+    // Clean up dead watchers
+    for (const path of deadWatchers) {
+      log(`[FileWatch] Removing dead watcher for: ${path}`);
+      this.stopWatchingPath(path);
+    }
+    
+    return {
+      totalWatchers: this.watchers.size,
+      deadWatchersRemoved: deadWatchers.length,
+      deadPaths: deadWatchers
+    };
   }
 
   /**

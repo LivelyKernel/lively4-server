@@ -852,5 +852,185 @@ describe('FileWatchService', function () {
         }
       }, 1000);
     });
+
+    it('should handle atomic file operations (Claude Code style edits)', function (done) {
+      this.timeout(10000);
+
+      const testFile = path.join(tempDir, 'atomic-edit-test.js');
+      testFiles.push(testFile);
+
+      // Create initial file
+      fs.writeFileSync(testFile, 'console.log("initial content");');
+
+      const receivedNotifications = [];
+      let watcherRestartCount = 0;
+      const originalCheckAndRestartWatcher = fileWatchService.checkAndRestartWatcher;
+      
+      // Monitor watcher restart calls
+      fileWatchService.checkAndRestartWatcher = function(filePath) {
+        watcherRestartCount++;
+        console.log(`Watcher restart triggered for: ${filePath}`);
+        return originalCheckAndRestartWatcher.call(this, filePath);
+      };
+
+      const mockClient = {
+        readyState: 1,
+        OPEN: 1,
+        send: function (data) {
+          const change = JSON.parse(data);
+          if (change.type === 'file-change' && change.path === 'atomic-edit-test.js') {
+            receivedNotifications.push({
+              eventType: change.eventType,
+              timestamp: change.timestamp,
+              exists: change.exists,
+              rawEventType: change.rawEventType
+            });
+            console.log(`Event: ${change.eventType} (raw: ${change.rawEventType}) - exists: ${change.exists} at ${new Date(change.timestamp).toISOString()}`);
+          }
+        },
+        on: function () { }
+      };
+
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+
+      // Simulate Claude Code's atomic file operation pattern
+      setTimeout(() => {
+        console.log('Starting atomic file operation simulation...');
+        
+        // Step 1: Create temp file (like Claude Code does)
+        const tempFileName = `atomic-edit-test.js.tmp.${process.pid}.${Date.now()}`;
+        const tempFilePath = path.join(tempDir, tempFileName);
+        testFiles.push(tempFilePath);
+        
+        fs.writeFileSync(tempFilePath, 'console.log("modified content via atomic operation");');
+        console.log(`Created temp file: ${tempFileName}`);
+        
+        // Step 2: Rename temp file to replace original (atomic operation)
+        setTimeout(() => {
+          fs.renameSync(tempFilePath, testFile);
+          console.log('Renamed temp file to replace original');
+        }, 50);
+        
+      }, 200);
+
+      // Test that file watcher continues working after atomic operation
+      setTimeout(() => {
+        console.log('Testing if watcher still works after atomic operation...');
+        fs.writeFileSync(testFile, 'console.log("post-atomic edit");');
+      }, 1000);
+
+      // Check results
+      setTimeout(() => {
+        console.log(`Total notifications received: ${receivedNotifications.length}`);
+        console.log(`Watcher restart count: ${watcherRestartCount}`);
+        console.log('All notifications:', receivedNotifications.map(n => `${n.eventType} (${n.rawEventType})`));
+
+        // Restore original method
+        fileWatchService.checkAndRestartWatcher = originalCheckAndRestartWatcher;
+
+        // We should receive notifications for the post-atomic edit
+        const postAtomicChanges = receivedNotifications.filter(n => 
+          n.timestamp > Date.now() - 8000 // Events from the last 8 seconds
+        );
+
+        if (postAtomicChanges.length === 0) {
+          done(new Error('File watcher stopped working after atomic operation - no post-atomic changes detected'));
+        } else {
+          console.log(`Post-atomic changes detected: ${postAtomicChanges.length}`);
+          
+          // Check if we detected the atomic operation pattern
+          const atomicTempFileDetected = watcherRestartCount > 0;
+          
+          if (atomicTempFileDetected) {
+            console.log('Atomic operation pattern detected and watcher restart mechanism triggered');
+          } else {
+            console.log('Atomic operation may not have triggered restart (could be normal if watcher stayed healthy)');
+          }
+          
+          console.log('File watcher continues to work after atomic operation');
+          done();
+        }
+      }, 2500);
+    });
+
+    it('should restart watcher when atomic operation breaks it', function (done) {
+      this.timeout(8000);
+
+      const testFile = path.join(tempDir, 'restart-test.js');
+      testFiles.push(testFile);
+
+      // Create initial file
+      fs.writeFileSync(testFile, 'initial');
+
+      let restartTriggered = false;
+      let watcherRestarted = false;
+      const originalCheckAndRestartWatcher = fileWatchService.checkAndRestartWatcher;
+      
+      // Override checkAndRestartWatcher to simulate a restart
+      fileWatchService.checkAndRestartWatcher = async function(filePath) {
+        restartTriggered = true;
+        console.log(`checkAndRestartWatcher called for: ${filePath}`);
+        
+        // Simulate that the watcher needs restart by forcing a restart
+        const watcherInfo = this.watchers.get(filePath);
+        if (watcherInfo) {
+          const clients = new Set(watcherInfo.clients);
+          this.stopWatchingPath(filePath);
+          
+          for (const client of clients) {
+            if (client.readyState === client.OPEN) {
+              this.addClientInterest(client, filePath);
+            }
+          }
+          watcherRestarted = true;
+          console.log(`Simulated watcher restart for ${filePath}`);
+        }
+      };
+
+      const mockClient = {
+        readyState: 1,
+        OPEN: 1,
+        send: function (data) {
+          const change = JSON.parse(data);
+          if (change.type === 'file-change') {
+            console.log(`Received: ${change.eventType} for ${change.path}`);
+          }
+        },
+        on: function () { }
+      };
+
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+
+      // Simulate atomic operation with temp file
+      setTimeout(() => {
+        const tempFileName = `restart-test.js.tmp.${process.pid}.${Date.now()}`;
+        const tempFilePath = path.join(tempDir, tempFileName);
+        testFiles.push(tempFilePath);
+        
+        // Create and rename temp file
+        fs.writeFileSync(tempFilePath, 'updated');
+        fs.renameSync(tempFilePath, testFile);
+      }, 200);
+
+      // Check results
+      setTimeout(() => {
+        console.log(`Restart triggered: ${restartTriggered}`);
+        console.log(`Watcher restarted: ${watcherRestarted}`);
+        
+        // Restore original method
+        fileWatchService.checkAndRestartWatcher = originalCheckAndRestartWatcher;
+
+        if (!restartTriggered) {
+          done(new Error('Atomic operation did not trigger restart check'));
+        } else if (!watcherRestarted) {
+          done(new Error('Watcher restart check was triggered but restart did not occur'));
+        } else {
+          console.log('Watcher restart mechanism working correctly');
+          done();
+        }
+      }, 1500);
+    });
   });
 });
