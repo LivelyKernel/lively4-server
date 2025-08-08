@@ -27,6 +27,7 @@
     "mime": "^4.0.6",
     "mkdirp": "^3.0.1",
     "node-fetch": "^3.3.2",
+    "node-pty": "^1.0.0",
     "slash": "^5.1.0"
   },
   "devDependencies": {
@@ -35,7 +36,8 @@
     "esm": "^3.2.25",
     "jsdoc": "^4.0.2",
     "jszip": "^3.10.1",
-    "mocha": "^11.1.0"
+    "mocha": "^11.1.0",
+    "ws": "^8.18.3"
   },
   "jshintConfig": {
     "esversion": 6

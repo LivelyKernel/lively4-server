@@ -93,6 +93,7 @@ import METAService from './services/meta.js';
 import GITService from './services/git.js';
 import TranspileService from './services/transpile.js';
 import FileWatchService from './services/filewatch.js';
+import TerminalService from './services/terminal.js';
 
 
 // Regex constants
@@ -143,6 +144,7 @@ export class Server {
     this.transpileService = new TranspileService(this);
     this.optionsService = new OPTIONS(this);
     this.fileWatchService = new FileWatchService(this.sourceDir);
+    this.terminalService = new TerminalService(this);
 
 
   }
@@ -195,6 +197,22 @@ export class Server {
       this.fileWatchService.addClient(ws);
     });
 
+    // WebSocket endpoint for terminals
+    this.app.ws('/_terminal/ws/:pid', async (ws, req) => {
+      // Check authentication for WebSocket connections (session or headers)
+      const dummyRes = { 
+        writeHead: () => {}, 
+        end: () => {} 
+      };
+      
+      if (!await this.authService.checkAuth(req, dummyRes)) {
+        ws.close(1008, 'Authentication required');
+        return;
+      }
+      
+      this.terminalService.handleWebSocket(ws, req);
+    });
+
     // REST endpoint for file watch status
     this.app.get('/_filewatch/status', (req, res) => {
       res.json(this.fileWatchService.getStatus());
@@ -244,6 +262,9 @@ export class Server {
     this.isRunning = false;
     this.tmpService.cleanup();
     this.fileWatchService.cleanup();
+    if (this.terminalService) {
+      this.terminalService.cleanup();
+    }
 
     // Clear all timeouts
     if (this.tmpStorageTimeouts) {
@@ -373,6 +394,12 @@ export class Server {
         }
         if (pathname.match(/\/_bibtex/)) {
           return new BIBTEX(this).request(req, res);
+        }
+        if (pathname.match(/\/_auth\//)) {
+          return this.authService.handleSessionRequest(pathname, req, res);
+        }
+        if (pathname.match(/\/_terminal\//)) {
+          return this.terminalService.request(pathname, req, res);
         }
         if (req.method == 'GET') {
           return await new GET(this).request(repositorypath, filepath, fileversion, req, res);
