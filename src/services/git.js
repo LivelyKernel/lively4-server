@@ -57,6 +57,9 @@ export default class GITService extends Service {
       }
       RepositoryInSync[repository] = true;
       try {
+        // Get git status before sync to track which files will change
+        const preSync = await this.getGitStatusFiles(repository);
+        
         cmd = `${this.server.serverDir}/bin/lively4sync.sh '${this.server.lively4dir +
           '/' +
           repository}' '${username}' '${password}' '${email}' '${branch}' '${msg}'`;
@@ -71,6 +74,17 @@ export default class GITService extends Service {
           res.writeHead(401); // Unauthorized
           res.end('Git authentication failed. Please check your credentials.');
           return;
+        }
+
+        // Get git status after sync to see what changed
+        const postSync = await this.getGitStatusFiles(repository);
+        
+        // Find files whose git status changed (were dirty, now clean)
+        const syncedFiles = this.findSyncedFiles(preSync, postSync, repository);
+        
+        // Broadcast SYNC events for files that changed git status
+        if (syncedFiles.length > 0 && this.server.fileWatchService) {
+          this.server.fileWatchService.broadcastGitSyncEvent(syncedFiles);
         }
 
         // If we get here, send the normal response
@@ -228,5 +242,91 @@ export default class GITService extends Service {
       res.writeHead(200);
       res.end('Lively4 git Control! ' + pathname + ' not implemented!');
     }
+  }
+
+  /**
+   * Get git status files that are uncommitted or unpushed
+   * @param {string} repository - Repository name
+   * @returns {Object} Object with uncommitted and unpushed file lists
+   */
+  async getGitStatusFiles(repository) {
+    const repositoryPath = Path.join(this.server.lively4dir, repository);
+    
+    try {
+      // Get uncommitted files (modified, added, deleted but not committed)
+      const statusCmd = `cd ${repositoryPath} && git status --porcelain`;
+      const statusResult = await run(statusCmd);
+      const uncommittedFiles = this.parseGitStatus(statusResult.stdout, repositoryPath);
+      
+      // Get unpushed commits (check if there are commits ahead of origin)
+      const unpushedCmd = `cd ${repositoryPath} && git log --oneline @{u}..HEAD 2>/dev/null || true`;
+      const unpushedResult = await run(unpushedCmd);
+      const hasUnpushedCommits = unpushedResult.stdout.trim().length > 0;
+      
+      // If there are unpushed commits, get the files from those commits
+      let unpushedFiles = [];
+      if (hasUnpushedCommits) {
+        const unpushedFilesCmd = `cd ${repositoryPath} && git diff --name-only @{u}..HEAD 2>/dev/null || true`;
+        const unpushedFilesResult = await run(unpushedFilesCmd);
+        unpushedFiles = unpushedFilesResult.stdout
+          .trim()
+          .split('\n')
+          .filter(file => file.length > 0)
+          .map(file => Path.join(repositoryPath, file));
+      }
+      
+      return {
+        uncommitted: uncommittedFiles,
+        unpushed: unpushedFiles
+      };
+    } catch (error) {
+      // Return empty arrays if git status fails
+      return { uncommitted: [], unpushed: [] };
+    }
+  }
+
+  /**
+   * Parse git status --porcelain output into file paths
+   * @param {string} statusOutput - Output from git status --porcelain
+   * @param {string} repositoryPath - Full path to repository
+   * @returns {string[]} Array of full file paths
+   */
+  parseGitStatus(statusOutput, repositoryPath) {
+    if (!statusOutput || !statusOutput.trim()) return [];
+    
+    return statusOutput
+      .split('\n')
+      .filter(line => line.trim().length > 0) // Filter empty lines but don't trim the lines themselves
+      .map(line => {
+        // Git status format: XY filename
+        // Extract filename (everything after the first 3 characters)
+        const filename = line.substring(3);
+        return Path.join(repositoryPath, filename);
+      })
+      .filter(file => file.length > repositoryPath.length);
+  }
+
+  /**
+   * Find files that were synced (changed from dirty to clean)
+   * @param {Object} preSync - Git status before sync
+   * @param {Object} postSync - Git status after sync  
+   * @param {string} repository - Repository name
+   * @returns {string[]} Array of file paths that were synced
+   */
+  findSyncedFiles(preSync, postSync, repository) {
+    const syncedFiles = [];
+    
+    // Files that were uncommitted before but are clean now
+    const preDirty = new Set([...preSync.uncommitted, ...preSync.unpushed]);
+    const postDirty = new Set([...postSync.uncommitted, ...postSync.unpushed]);
+    
+    // Find files that were dirty before but clean after
+    for (const filePath of preDirty) {
+      if (!postDirty.has(filePath)) {
+        syncedFiles.push(filePath);
+      }
+    }
+    
+    return syncedFiles;
   }
 }

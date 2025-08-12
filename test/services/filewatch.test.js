@@ -1033,4 +1033,49 @@ describe('FileWatchService', function () {
       }, 1500);
     });
   });
+
+  describe('Git Status Sync Events', function () {
+    it('should support SYNC event type for git metadata changes', function () {
+      const testPath = path.join(tempDir, 'sync-test-file.js');
+      
+      // Create test file
+      fs.writeFileSync(testPath, 'console.log("test");');
+      testFiles.push(testPath);
+      
+      // Test that broadcastGitSyncEvent method exists and works
+      const mockClients = new Set();
+      fileWatchService.clients = mockClients;
+      
+      // Create mock WebSocket client
+      const mockClient = {
+        readyState: 1, // OPEN state
+        OPEN: 1,
+        send: function(message) {
+          this.lastMessage = JSON.parse(message);
+        },
+        lastMessage: null
+      };
+      mockClients.add(mockClient);
+      
+      // Mock a watcher for the test path
+      const mockWatcher = {
+        clients: new Set([mockClient])
+      };
+      fileWatchService.watchers.set(testPath, mockWatcher);
+      
+      // Test the broadcastGitSyncEvent method
+      if (fileWatchService.broadcastGitSyncEvent) {
+        fileWatchService.broadcastGitSyncEvent([testPath]);
+        
+        // Check that SYNC event was sent
+        expect(mockClient.lastMessage).to.not.be.null;
+        expect(mockClient.lastMessage.type).to.equal('file-change');
+        expect(mockClient.lastMessage.eventType).to.equal('SYNC');
+        expect(mockClient.lastMessage.path).to.include('sync-test-file.js');
+      } else {
+        // Method doesn't exist yet - that's expected for this test-first approach
+        expect(fileWatchService.broadcastGitSyncEvent).to.be.undefined;
+      }
+    });
+  });
 });

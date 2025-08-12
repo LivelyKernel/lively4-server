@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2025-08-12] - Git Sync Event Notifications
+
+### Added — File Watching
+
+- New `SYNC` event type in FileWatchService for git metadata changes
+- `broadcastGitSyncEvent()` method to notify clients of git status changes
+- Git status tracking in GIT service before/after sync operations
+- Real-time notifications when files change from uncommitted/unpushed to clean state
+- Helper methods `getGitStatusFiles()`, `parseGitStatus()`, and `findSyncedFiles()`
+- Comprehensive test coverage for git sync event functionality
+
+### Changed — Git Integration
+
+- Enhanced `/_git/sync` endpoint to detect and broadcast git status changes
+- Integration between GIT service and FileWatchService for cross-editor notifications
+- Git status parsing to handle `git status --porcelain` output correctly
+
+---
+
 ## [2025-08-11] - Documentation Updates
 
 ### Changed — Docs

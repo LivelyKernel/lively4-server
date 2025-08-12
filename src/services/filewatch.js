@@ -719,6 +719,53 @@ class FileWatchService {
   }
 
   /**
+   * Broadcast SYNC events for files whose git status changed (but content unchanged)
+   * @param {string[]} filePaths - Array of file paths that had git status changes
+   */
+  broadcastGitSyncEvent(filePaths) {
+    if (!filePaths || filePaths.length === 0) return;
+    
+    const timestamp = Date.now();
+    
+    filePaths.forEach(filePath => {
+      const relativePath = this.makeRelativePath(filePath);
+      
+      // Create SYNC event
+      const syncEvent = {
+        type: 'file-change',
+        eventType: 'SYNC',
+        rawEventType: 'git-sync',
+        path: relativePath,
+        relativePath: relativePath.split('/').pop(), // filename only
+        watchedPath: this.makeRelativePath(filePath.substring(0, filePath.lastIndexOf('/'))),
+        isDirectory: false,
+        exists: true,
+        timestamp
+      };
+      
+      log(`[FileWatch] Git SYNC: ${relativePath}`);
+      
+      // Find all watchers that would be interested in this file
+      for (const [watchedPath, watcherInfo] of this.watchers) {
+        const watchedRelativePath = this.makeRelativePath(watchedPath);
+        
+        // Check if this watcher covers this file (either direct file watch or parent directory)
+        if (filePath === watchedPath || 
+            (watcherInfo.recursive && filePath.startsWith(watchedPath + '/'))) {
+          
+          // Update the event with the correct watched path
+          const eventForWatcher = {
+            ...syncEvent,
+            watchedPath: watchedRelativePath
+          };
+          
+          this.broadcastToClients(eventForWatcher, watchedPath);
+        }
+      }
+    });
+  }
+
+  /**
    * Clean up all watchers and connections
    */
   cleanup() {
