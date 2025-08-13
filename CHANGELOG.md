@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2025-08-13] - Terminal Working Directory Support
+
+### Added — Terminal Service
+
+- Support for custom working directory via `cwd` header in terminal creation
+- Automatic path resolution for relative paths starting with `/` to `/home/jens/lively4` base
+- Enhanced terminal session initialization with proper directory support
+
+### Changed — Terminal Integration
+
+- Modified `createTerminal()` to process `cwd` header and resolve relative paths
+- Improved terminal startup reliability with proper filesystem path handling
+- Better separation between header-provided paths and system defaults
+
+---
+
 ## [2025-08-12] - Git Sync Event Notifications
 
 ### Added — File Watching

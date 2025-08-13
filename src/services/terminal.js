@@ -54,7 +54,17 @@ export default class TerminalService extends Service {
       const args = [];
       const cols = parseInt(req.query.cols) || 80;
       const rows = parseInt(req.query.rows) || 24;
-      const cwd = req.headers.cwd || process.env.PWD || process.cwd();
+      let cwd = req.headers.cwd;
+      
+      // Handle relative paths from header - resolve them relative to /home/jens/lively4
+      if (cwd && cwd.startsWith('/') && !cwd.startsWith('/home')) {
+        cwd = `/home/jens/lively4${cwd}`;
+      }
+      
+      // Fallback to environment if no header cwd provided
+      if (!cwd) {
+        cwd = process.env.PWD || process.cwd();
+      }
 
       logRequest(req, `Creating terminal: ${cols}x${rows} in ${cwd}`);
 
