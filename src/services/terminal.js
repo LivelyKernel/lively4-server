@@ -39,6 +39,12 @@ export default class TerminalService extends Service {
       return this.resizeTerminal(pid, req, res);
     }
 
+    if (pathname.match(/\/_terminal\/exec\/(\d+)/)) {
+      const pidMatch = pathname.match(/\/_terminal\/exec\/(\d+)/);
+      const pid = parseInt(pidMatch[1]);
+      return this.executeCommand(pid, req, res);
+    }
+
     res.writeHead(404);
     res.end('Terminal endpoint not found');
   }
@@ -132,6 +138,119 @@ export default class TerminalService extends Service {
       res.writeHead(500);
       res.end(`Error resizing terminal: ${error.message}`);
     }
+  }
+
+  /**
+   * Execute a command in an existing terminal and return the result
+   * @param {number} pid - Terminal process ID
+   * @param {Object} req - Express request object with command in body
+   * @param {Object} res - Express response object
+   */
+  async executeCommand(pid, req, res) {
+    try {
+      const term = this.terminals[pid];
+      if (!term) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Terminal not found' }));
+        return;
+      }
+
+      // Parse command from request body
+      let body = '';
+      req.on('data', chunk => {
+        body += chunk.toString();
+      });
+
+      req.on('end', async () => {
+        try {
+          const { command } = JSON.parse(body);
+          if (!command) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Command is required' }));
+            return;
+          }
+
+          logRequest(req, `Executing command in terminal ${pid}: ${command}`);
+
+          // Execute command and capture output
+          const result = await this.captureCommandOutput(term, command, pid);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+
+        } catch (error) {
+          logRequest(req, `Error parsing request: ${error.message}`);
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid JSON in request body' }));
+        }
+      });
+
+    } catch (error) {
+      logRequest(req, `Error executing command: ${error.message}`);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: `Error executing command: ${error.message}` }));
+    }
+  }
+
+  /**
+   * Capture output from a command execution
+   * @param {Object} term - PTY terminal instance
+   * @param {string} command - Command to execute
+   * @param {number} pid - Terminal PID for logging
+   * @returns {Promise<Object>} Command result with output, exitCode, duration
+   */
+  async captureCommandOutput(term, command, pid) {
+    return new Promise((resolve) => {
+      const startTime = Date.now();
+      let outputBuffer = '';
+      let promptPattern = /[\$#>]\s*$/; // Basic prompt detection
+      let timeoutId;
+      
+      // Capture output
+      const onData = (data) => {
+        outputBuffer += data;
+        this.logs[pid] += data; // Keep adding to main log
+        
+        // Reset timeout on new data
+        if (timeoutId) clearTimeout(timeoutId);
+        
+        // Check for command completion (prompt pattern)
+        if (promptPattern.test(outputBuffer)) {
+          cleanup();
+          resolve({
+            output: outputBuffer,
+            exitCode: 0, // We can't easily get real exit code from PTY
+            duration: Date.now() - startTime,
+            finished: true
+          });
+          return;
+        }
+        
+        // Set timeout for command completion
+        timeoutId = setTimeout(() => {
+          cleanup();
+          resolve({
+            output: outputBuffer,
+            exitCode: -1, // Timeout indicator
+            duration: Date.now() - startTime,
+            finished: false,
+            timeout: true
+          });
+        }, 5000); // 5 second timeout
+      };
+
+      const cleanup = () => {
+        term.removeListener('data', onData);
+        if (timeoutId) clearTimeout(timeoutId);
+      };
+
+      // Start listening for output
+      term.on('data', onData);
+      
+      // Send command with newline
+      const cmd = command.endsWith('\n') ? command : command + '\n';
+      term.write(cmd);
+    });
   }
 
   /**

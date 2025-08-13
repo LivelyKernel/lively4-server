@@ -4,19 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [2025-08-13] - Terminal Working Directory Support
+## [2025-08-13] - Terminal Working Directory Support & Command Execution API
 
 ### Added — Terminal Service
 
 - Support for custom working directory via `cwd` header in terminal creation
 - Automatic path resolution for relative paths starting with `/` to `/home/jens/lively4` base
 - Enhanced terminal session initialization with proper directory support
+- **HTTP Command Execution API**: New `/_terminal/exec/{pid}` endpoint for programmatic command execution
+- Command output capture with prompt detection and timeout handling
+- Structured JSON response with output, exit status, duration, and completion status
 
 ### Changed — Terminal Integration
 
 - Modified `createTerminal()` to process `cwd` header and resolve relative paths
 - Improved terminal startup reliability with proper filesystem path handling
 - Better separation between header-provided paths and system defaults
+- **Enhanced WebSocket Integration**: Commands executed via HTTP API also appear in live terminal streams
+- Added `captureCommandOutput()` method with Promise-based command tracking
+
+### Technical Implementation
+
+- HTTP endpoint accepts JSON `{ "command": "ls -la" }` and returns structured results
+- Prompt pattern detection (`[\$#>]\s*$`) for command completion
+- 5-second timeout with graceful handling for long-running commands
+- Dual output streams: captured results + live WebSocket display
+- Proper cleanup of event listeners and timeouts
 
 ---
 
