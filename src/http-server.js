@@ -147,7 +147,7 @@ export class Server {
     this.optionsService = new OPTIONS(this);
     this.fileWatchService = new FileWatchService(this.sourceDir);
     this.terminalService = new TerminalService(this);
-    
+
     // Initialize MCP services
     this.mcpSessionService = new McpSessionService();
     this.lively4McpServer = new Lively4McpServer(this.mcpSessionService);
@@ -178,7 +178,7 @@ export class Server {
   /**
    * Start the HTTP server
    */
-  start() {
+  async start() {
     log('Welcome to Lively4!');
     log('Server: ' + this.serverDir);
     log('Lively4: ' + this.lively4dir);
@@ -195,10 +195,10 @@ export class Server {
 
     // Create Express app with WebSocket support
     this.app = express();
-    
+
     // Add JSON parsing middleware for MCP endpoints
     this.app.use(express.json());
-    
+
     const wsInstance = expressWs(this.app);
 
     // WebSocket endpoint for file watching
@@ -216,16 +216,16 @@ export class Server {
     // WebSocket endpoint for terminals
     this.app.ws('/_terminal/ws/:pid', async (ws, req) => {
       // Check authentication for WebSocket connections (session or headers)
-      const dummyRes = { 
-        writeHead: () => {}, 
-        end: () => {} 
+      const dummyRes = {
+        writeHead: () => { },
+        end: () => { }
       };
-      
+
       if (!await this.authService.checkAuth(req, dummyRes)) {
         ws.close(1008, 'Authentication required');
         return;
       }
-      
+
       this.terminalService.handleWebSocket(ws, req);
     });
 
@@ -260,33 +260,59 @@ export class Server {
       res.json({ pinged: pingCount, total: this.mcpSessionService.sessions.size });
     });
 
-    // Add test routes for both GET and POST
-    this.app.get('/_mcp/message', (req, res) => {
-      log('[MCP Test] GET route called successfully!');
+    // Initialize MCP server BEFORE adding catch-all handlers
+    try {
+      await this.lively4McpServer.start({
+        transport: 'http',
+        app: this.app
+      });
+      log('[MCP Server] Successfully started and integrated with HTTP server');
+    } catch (error) {
+      log(`[MCP Server] Failed to start: ${error.message}`);
+    }
+
+    // Handler for the root /_mcp path
+    this.app.get('/_mcp', (req, res) => {
+      log(`[MCP] Root MCP path accessed`);
       res.json({
         jsonrpc: '2.0',
         result: {
-          message: 'MCP endpoint is working',
-          note: 'Use POST for actual MCP requests',
-          available_tools: ['evaluate_code', 'list_sessions', 'ping_sessions']
-        }
+          name: 'Lively4 MCP Server',
+          version: '1.0.0',
+          description: 'MCP server for live Lively4 development environment interaction',
+          available_endpoints: [
+            'GET /_mcp/status',
+            'GET /_mcp/sessions',
+            'POST /_mcp/ping-sessions',
+            'GET /_mcp/message',
+            'POST /_mcp/message'
+          ]
+        },
+        id: null
       });
     });
-    
-    this.app.post('/_mcp/message', (req, res) => {
-      log('[MCP Test] POST route called successfully!');
-      log(`[MCP Test] Method: ${req.body?.method || 'none'}`);
-      res.json({
+
+    // Catch-all handler for any other /_mcp/ paths to prevent them from falling through to file server
+    this.app.use('/_mcp/*', (req, res) => {
+      log(`[MCP] Unhandled MCP path: ${req.method} ${req.path}`);
+      res.status(404).json({
         jsonrpc: '2.0',
-        id: req.body?.id || null,
-        result: {
-          test: 'Route is working',
-          method: req.body?.method || 'none'
-        }
+        error: {
+          code: -32601,
+          message: `Method not found: ${req.path}`,
+          data: {
+            available_endpoints: [
+              'GET /_mcp/status',
+              'GET /_mcp/sessions',
+              'POST /_mcp/ping-sessions',
+              'GET /_mcp/message',
+              'POST /_mcp/message'
+            ]
+          }
+        },
+        id: null
       });
     });
-    
-    log('[MCP Test] Routes added: GET and POST /_mcp/message');
 
     // Handle all other HTTP requests (MUST be last)
     this.app.use((req, res) => {
@@ -303,6 +329,7 @@ export class Server {
       log('[FileWatch] File watching will start on-demand when clients request specific paths');
       log('[MCP Session] WebSocket endpoint available at /_mcp-session');
       log('[MCP Session] Browser sessions can register for code evaluation');
+      log('[MCP] MCP server endpoint available at /_mcp/message');
     });
 
     // Track new connections
@@ -325,7 +352,7 @@ export class Server {
     if (this.terminalService) {
       this.terminalService.cleanup();
     }
-    
+
     // Cleanup MCP services
     this.mcpSessionService.cleanup();
     await this.lively4McpServer.stop();
@@ -509,10 +536,10 @@ export class Server {
   /**
    * Create and start a new server instance
    */
-  static start() {
+  static async start() {
     var server = new Server();
     server.setup();
-    server.start();
+    await server.start();
   }
 }
 

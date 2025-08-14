@@ -1,58 +1,41 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { z } from 'zod';
 import { log } from '../utils.js';
 
 /**
- * MCP (Model Context Protocol) Server for Lively4
+ * Manual MCP (Model Context Protocol) Server for Lively4
  * 
+ * Implements the MCP specification directly without SDK dependencies.
  * Provides a standard MCP interface for Claude Code to interact with live Lively4 environments.
- * Uses McpSessionService to route requests to specific browser sessions.
  */
 class Lively4McpServer {
   constructor(mcpSessionService) {
     this.mcpSessionService = mcpSessionService;
-    this.mcpServer = null;
-    this.transport = null;
     this.isRunning = false;
+    this.sessions = new Map(); // sessionId -> session data
+    this.tools = new Map(); // tool name -> tool handler
+    this.capabilities = {
+      tools: {},
+      logging: {
+        setLevel: true
+      }
+    };
+    
+    // Register our tools
+    this.registerTools();
   }
 
   /**
    * Initialize and start the MCP server
    * @param {Object} options - Server options
-   * @param {string} options.transport - Transport type ('stdio' or 'http')
+   * @param {string} options.transport - Transport type (only 'http' supported)
    * @param {Object} options.app - Express app instance for HTTP integration
    */
-  async start(options = { transport: 'stdio' }) {
+  async start(options = { transport: 'http' }) {
     try {
-      // Create MCP server instance
-      this.mcpServer = new McpServer(
-        {
-          name: 'lively4-mcp-server',
-          version: '1.0.0',
-          description: 'MCP server for live Lively4 development environment interaction'
-        },
-        {
-          capabilities: {
-            tools: {},
-            logging: {}
-          }
-        }
-      );
-
-      // Register tools
-      this.registerTools();
-
-      // Set up transport based on options
       if (options.transport === 'http' && options.app) {
-        await this.setupHttpTransport(options.app);
+        this.setupHttpTransport(options.app);
         log(`[MCP Server] HTTP transport integrated with main server`);
       } else {
-        this.transport = new StdioServerTransport();
-        log('[MCP Server] Starting with stdio transport');
-        // Connect server to transport
-        await this.mcpServer.connect(this.transport);
+        throw new Error('Only HTTP transport is supported');
       }
       
       this.isRunning = true;
@@ -61,7 +44,6 @@ class Lively4McpServer {
       return true;
     } catch (error) {
       log(`[MCP Server] Failed to start: ${error.message}`);
-      log(`[MCP Server] Error stack: ${error.stack}`);
       throw error;
     }
   }
@@ -70,120 +52,310 @@ class Lively4McpServer {
    * Set up HTTP transport integrated with Express app
    * @param {Object} app - Express app instance
    */
-  async setupHttpTransport(app) {
-    const transports = {}; // Session ID -> transport mapping
-    const { randomUUID } = await import('node:crypto');
-    const { isInitializeRequest } = await import('@modelcontextprotocol/sdk/types.js');
-
-    // MCP POST handler
+  setupHttpTransport(app) {
+    // MCP endpoint handler for POST requests (sending messages to server)
     const mcpPostHandler = async (req, res) => {
       try {
-        log(`[MCP Server] Received request: ${req.body.method || 'unknown'}`);
-        const sessionId = req.headers['mcp-session-id'];
-        let transport = transports[sessionId];
-
-        log(`[MCP Server] Session ID: ${sessionId}, Transport exists: ${!!transport}`);
-        log(`[MCP Server] Is initialize request: ${isInitializeRequest(req.body)}`);
-
-        if (!transport && isInitializeRequest(req.body)) {
-          // New initialization request
-          transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => randomUUID(),
-            onSessionInitialized: (sessionId) => {
-              log(`[MCP Server] HTTP session initialized: ${sessionId}`);
-              transports[sessionId] = transport;
-            }
-          });
-
-          // Set up cleanup on close
-          transport.onclose = () => {
-            const sid = transport.sessionId;
-            if (sid && transports[sid]) {
-              log(`[MCP Server] HTTP session closed: ${sid}`);
-              delete transports[sid];
-            }
-          };
-
-          // Connect to MCP server
-          await this.mcpServer.connect(transport);
+        // Validate Accept header as per spec
+        const acceptHeader = req.headers.accept || '';
+        if (!acceptHeader.includes('application/json') || !acceptHeader.includes('text/event-stream')) {
+          return this.sendJsonRpcError(res, -32000, 'Not Acceptable: Client must accept both application/json and text/event-stream', null);
         }
 
-        if (!transport) {
-          res.status(400).json({
-            jsonrpc: '2.0',
-            error: { code: -32602, message: 'Invalid session or missing initialization' },
-            id: req.body.id || null
-          });
-          return;
+        // Validate protocol version header
+        const protocolVersion = req.headers['mcp-protocol-version'];
+        if (protocolVersion && protocolVersion !== '2025-06-18') {
+          return this.sendJsonRpcError(res, -32000, `Unsupported protocol version: ${protocolVersion}`, null);
         }
 
-        // Handle the request
-        await transport.handleRequest(req, res);
+        // Parse and validate JSON-RPC message
+        const message = req.body;
+        if (!this.isValidJsonRpcMessage(message)) {
+          return this.sendJsonRpcError(res, -32700, 'Parse error: Invalid JSON-RPC message', null);
+        }
+
+        log(`[MCP Server] Received ${message.method || 'response'} (id: ${message.id})`);
+
+        // Handle the message
+        await this.handleMessage(message, req, res);
+        
       } catch (error) {
         log(`[MCP Server] HTTP handler error: ${error.message}`);
-        res.status(500).json({
-          jsonrpc: '2.0',
-          error: { code: -32603, message: 'Internal server error' },
-          id: req.body.id || null
-        });
+        if (!res.headersSent) {
+          this.sendJsonRpcError(res, -32603, 'Internal server error', req.body?.id || null);
+        }
+      }
+    };
+
+    // MCP endpoint handler for GET requests (SSE stream - optional)
+    const mcpGetHandler = async (req, res) => {
+      try {
+        const acceptHeader = req.headers.accept || '';
+        if (!acceptHeader.includes('text/event-stream')) {
+          return res.status(405).send('Method Not Allowed: GET requires Accept: text/event-stream');
+        }
+
+        // For now, we'll return 405 as we don't implement server-initiated messages
+        res.status(405).send('Method Not Allowed: Server-initiated messages not implemented');
+        
+      } catch (error) {
+        log(`[MCP Server] GET handler error: ${error.message}`);
+        if (!res.headersSent) {
+          res.status(500).send('Internal server error');
+        }
       }
     };
 
     // Add MCP routes to the app
     app.post('/_mcp/message', mcpPostHandler);
+    app.get('/_mcp/message', mcpGetHandler);
     
-    log('[MCP Server] HTTP routes added: POST /_mcp/message');
-    return true;
+    log('[MCP Server] HTTP routes added: POST and GET /_mcp/message');
   }
 
   /**
-   * Register MCP tools with the server
+   * Validate JSON-RPC message format
+   */
+  isValidJsonRpcMessage(message) {
+    if (!message || typeof message !== 'object') return false;
+    if (message.jsonrpc !== '2.0') return false;
+    
+    // Must have either method (request/notification) or result/error (response)
+    if (message.method) {
+      // Request or notification
+      return typeof message.method === 'string';
+    } else {
+      // Response - must have id and either result or error
+      return (message.id !== undefined) && ('result' in message || 'error' in message);
+    }
+  }
+
+  /**
+   * Handle incoming JSON-RPC message
+   */
+  async handleMessage(message, req, res) {
+    const { method, params, id } = message;
+    
+    // Handle different MCP methods
+    switch (method) {
+      case 'initialize':
+        await this.handleInitialize(params, id, req, res);
+        break;
+        
+      case 'notifications/initialized':
+        await this.handleNotificationInitialized(params, res);
+        break;
+        
+      case 'tools/list':
+        await this.handleToolsList(params, id, res);
+        break;
+        
+      case 'tools/call':
+        await this.handleToolsCall(params, id, res);
+        break;
+        
+      case 'logging/setLevel':
+        await this.handleLoggingSetLevel(params, id, res);
+        break;
+        
+      default:
+        this.sendJsonRpcError(res, -32601, `Method not found: ${method}`, id);
+    }
+  }
+
+  /**
+   * Handle initialize request
+   */
+  async handleInitialize(params, id, req, res) {
+    const { protocolVersion, capabilities, clientInfo } = params || {};
+    
+    // Validate protocol version
+    if (protocolVersion !== '2025-06-18') {
+      return this.sendJsonRpcError(res, -32602, 'Invalid protocol version', id);
+    }
+
+    // Generate session ID
+    const sessionId = this.generateSessionId();
+    
+    // Store session info
+    this.sessions.set(sessionId, {
+      clientInfo: clientInfo || {},
+      capabilities: capabilities || {},
+      createdAt: new Date().toISOString()
+    });
+
+    log(`[MCP Server] Initialized session: ${sessionId}`);
+
+    // Send successful response
+    const response = {
+      jsonrpc: '2.0',
+      id,
+      result: {
+        protocolVersion: '2025-06-18',
+        capabilities: this.capabilities,
+        serverInfo: {
+          name: 'lively4-mcp-server',
+          version: '1.0.0',
+          description: 'MCP server for live Lively4 development environment interaction'
+        }
+      }
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Mcp-Session-Id', sessionId);
+    res.json(response);
+  }
+
+  /**
+   * Handle notifications/initialized notification
+   */
+  async handleNotificationInitialized(params, res) {
+    // This is a notification (no id), so we don't send a response
+    // Just log that the client has finished initialization
+    log(`[MCP Server] Client initialization complete`);
+    
+    // For notifications, we should return 204 No Content
+    res.status(204).send();
+  }
+
+  /**
+   * Handle logging/setLevel request
+   */
+  async handleLoggingSetLevel(params, id, res) {
+    const { level } = params || {};
+    
+    // For now, we'll accept any logging level but don't actually change anything
+    // Valid levels according to MCP spec: debug, info, notice, warning, error, critical, alert, emergency
+    const validLevels = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
+    
+    if (level && !validLevels.includes(level)) {
+      return this.sendJsonRpcError(res, -32602, `Invalid logging level: ${level}. Valid levels: ${validLevels.join(', ')}`, id);
+    }
+
+    log(`[MCP Server] Logging level set to: ${level || 'info'}`);
+
+    // Send successful response
+    const response = {
+      jsonrpc: '2.0',
+      id,
+      result: {}
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.json(response);
+  }
+
+  /**
+   * Handle tools/list request
+   */
+  async handleToolsList(params, id, res) {
+    const tools = Array.from(this.tools.entries()).map(([name, tool]) => ({
+      name,
+      description: tool.description,
+      inputSchema: tool.inputSchema
+    }));
+
+    const response = {
+      jsonrpc: '2.0',
+      id,
+      result: {
+        tools
+      }
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.json(response);
+  }
+
+  /**
+   * Handle tools/call request
+   */
+  async handleToolsCall(params, id, res) {
+    const { name, arguments: args } = params || {};
+    
+    if (!name || !this.tools.has(name)) {
+      return this.sendJsonRpcError(res, -32602, `Unknown tool: ${name}`, id);
+    }
+
+    try {
+      const tool = this.tools.get(name);
+      const result = await tool.handler(args || {});
+      
+      const response = {
+        jsonrpc: '2.0',
+        id,
+        result
+      };
+
+      res.setHeader('Content-Type', 'application/json');
+      res.json(response);
+      
+    } catch (error) {
+      log(`[MCP Server] Tool execution error: ${error.message}`);
+      this.sendJsonRpcError(res, -32603, `Tool execution failed: ${error.message}`, id);
+    }
+  }
+
+  /**
+   * Register MCP tools
    */
   registerTools() {
     // Tool: evaluate_code - Execute JavaScript in a specific Lively4 session
-    this.mcpServer.tool(
-      'evaluate_code',
-      'Execute JavaScript code in a specific Lively4 browser session',
-      {
-        sessionId: z.string().describe('Target Lively4 session ID (get from list_sessions)'),
-        code: z.string().describe('JavaScript code to evaluate in the live environment'),
-        timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)')
+    this.tools.set('evaluate_code', {
+      description: 'Execute JavaScript code in a specific Lively4 browser session',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionId: {
+            type: 'string',
+            description: 'Target Lively4 session ID (get from list_sessions)'
+          },
+          code: {
+            type: 'string',
+            description: 'JavaScript code to evaluate in the live environment'
+          },
+          timeout: {
+            type: 'number',
+            description: 'Timeout in milliseconds (default: 30000)',
+            default: 30000
+          }
+        },
+        required: ['sessionId', 'code']
       },
-      async ({ sessionId, code, timeout = 30000 }) => {
-        log(`[MCP Server] Evaluate code in session ${sessionId}: ${code.substring(0, 50)}...`);
-        return await this.handleEvaluateCode({ sessionId, code, timeout });
+      handler: async (args) => {
+        return await this.handleEvaluateCode(args);
       }
-    );
+    });
 
     // Tool: list_sessions - List all active sessions
-    this.mcpServer.tool(
-      'list_sessions',
-      'List all active Lively4 browser sessions available for code execution',
-      {},
-      async () => {
-        log(`[MCP Server] Listing active sessions`);
-        return await this.handleListSessions({});
+    this.tools.set('list_sessions', {
+      description: 'List all active Lively4 browser sessions available for code execution',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      },
+      handler: async (args) => {
+        return await this.handleListSessions(args);
       }
-    );
+    });
 
     // Tool: ping_sessions - Ping all sessions
-    this.mcpServer.tool(
-      'ping_sessions',
-      'Ping all active sessions to check connectivity',
-      {},
-      async () => {
-        log(`[MCP Server] Pinging all sessions`);
-        return await this.handlePingSessions({});
+    this.tools.set('ping_sessions', {
+      description: 'Ping all active sessions to check connectivity',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      },
+      handler: async (args) => {
+        return await this.handlePingSessions(args);
       }
-    );
+    });
 
     log('[MCP Server] Tools registered: evaluate_code, list_sessions, ping_sessions');
   }
 
   /**
    * Handle evaluate_code tool call
-   * @param {Object} args - Tool arguments
-   * @returns {Object} Tool result
    */
   async handleEvaluateCode(args) {
     const { sessionId, code, timeout = 30000 } = args;
@@ -235,8 +407,6 @@ class Lively4McpServer {
 
   /**
    * Handle list_sessions tool call
-   * @param {Object} args - Tool arguments  
-   * @returns {Object} Tool result
    */
   async handleListSessions(args) {
     try {
@@ -280,8 +450,6 @@ class Lively4McpServer {
 
   /**
    * Handle ping_sessions tool call
-   * @param {Object} args - Tool arguments
-   * @returns {Object} Tool result  
    */
   async handlePingSessions(args) {
     try {
@@ -308,18 +476,32 @@ class Lively4McpServer {
   }
 
   /**
+   * Send JSON-RPC error response
+   */
+  sendJsonRpcError(res, code, message, id) {
+    const errorResponse = {
+      jsonrpc: '2.0',
+      error: { code, message },
+      id
+    };
+    
+    res.status(400).json(errorResponse);
+  }
+
+  /**
+   * Generate a unique session ID
+   */
+  generateSessionId() {
+    return 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  }
+
+  /**
    * Stop the MCP server
    */
   async stop() {
-    if (this.isRunning && this.mcpServer) {
-      try {
-        await this.mcpServer.close();
-        this.isRunning = false;
-        log('[MCP Server] MCP server stopped');
-      } catch (error) {
-        log(`[MCP Server] Error stopping server: ${error.message}`);
-      }
-    }
+    this.isRunning = false;
+    this.sessions.clear();
+    log('[MCP Server] MCP server stopped');
   }
 
   /**
@@ -329,7 +511,14 @@ class Lively4McpServer {
   getStatus() {
     return {
       isRunning: this.isRunning,
-      transportType: this.transport?.constructor?.name || 'none',
+      transportType: 'Manual HTTP',
+      sessionCount: this.sessions.size,
+      toolCount: this.tools.size,
+      sessions: Array.from(this.sessions.entries()).map(([id, session]) => ({
+        sessionId: id,
+        clientInfo: session.clientInfo,
+        createdAt: session.createdAt
+      })),
       sessionServiceStatus: this.mcpSessionService.getStatus()
     };
   }
