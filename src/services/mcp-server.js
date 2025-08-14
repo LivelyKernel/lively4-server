@@ -18,7 +18,7 @@ class Lively4McpServer {
         setLevel: true
       }
     };
-    
+
     // Register our tools
     this.registerTools();
   }
@@ -37,10 +37,10 @@ class Lively4McpServer {
       } else {
         throw new Error('Only HTTP transport is supported');
       }
-      
+
       this.isRunning = true;
       log('[MCP Server] MCP server started successfully');
-      
+
       return true;
     } catch (error) {
       log(`[MCP Server] Failed to start: ${error.message}`);
@@ -78,7 +78,7 @@ class Lively4McpServer {
 
         // Handle the message
         await this.handleMessage(message, req, res);
-        
+
       } catch (error) {
         log(`[MCP Server] HTTP handler error: ${error.message}`);
         if (!res.headersSent) {
@@ -97,7 +97,7 @@ class Lively4McpServer {
 
         // For now, we'll return 405 as we don't implement server-initiated messages
         res.status(405).send('Method Not Allowed: Server-initiated messages not implemented');
-        
+
       } catch (error) {
         log(`[MCP Server] GET handler error: ${error.message}`);
         if (!res.headersSent) {
@@ -109,7 +109,7 @@ class Lively4McpServer {
     // Add MCP routes to the app
     app.post('/_mcp/message', mcpPostHandler);
     app.get('/_mcp/message', mcpGetHandler);
-    
+
     log('[MCP Server] HTTP routes added: POST and GET /_mcp/message');
   }
 
@@ -119,7 +119,7 @@ class Lively4McpServer {
   isValidJsonRpcMessage(message) {
     if (!message || typeof message !== 'object') return false;
     if (message.jsonrpc !== '2.0') return false;
-    
+
     // Must have either method (request/notification) or result/error (response)
     if (message.method) {
       // Request or notification
@@ -135,29 +135,33 @@ class Lively4McpServer {
    */
   async handleMessage(message, req, res) {
     const { method, params, id } = message;
-    
+
     // Handle different MCP methods
     switch (method) {
       case 'initialize':
         await this.handleInitialize(params, id, req, res);
         break;
-        
+
       case 'notifications/initialized':
         await this.handleNotificationInitialized(params, res);
         break;
-        
+
       case 'tools/list':
         await this.handleToolsList(params, id, res);
         break;
-        
+
       case 'tools/call':
         await this.handleToolsCall(params, id, res);
         break;
-        
+
       case 'logging/setLevel':
         await this.handleLoggingSetLevel(params, id, res);
         break;
-        
+
+      case 'ping':
+        await this.handlePing(params, id, res);
+        break;
+
       default:
         this.sendJsonRpcError(res, -32601, `Method not found: ${method}`, id);
     }
@@ -168,7 +172,7 @@ class Lively4McpServer {
    */
   async handleInitialize(params, id, req, res) {
     const { protocolVersion, capabilities, clientInfo } = params || {};
-    
+
     // Validate protocol version
     if (protocolVersion !== '2025-06-18') {
       return this.sendJsonRpcError(res, -32602, 'Invalid protocol version', id);
@@ -176,7 +180,7 @@ class Lively4McpServer {
 
     // Generate session ID
     const sessionId = this.generateSessionId();
-    
+
     // Store session info
     this.sessions.set(sessionId, {
       clientInfo: clientInfo || {},
@@ -213,7 +217,7 @@ class Lively4McpServer {
     // This is a notification (no id), so we don't send a response
     // Just log that the client has finished initialization
     log(`[MCP Server] Client initialization complete`);
-    
+
     // For notifications, we should return 204 No Content
     res.status(204).send();
   }
@@ -223,11 +227,11 @@ class Lively4McpServer {
    */
   async handleLoggingSetLevel(params, id, res) {
     const { level } = params || {};
-    
+
     // For now, we'll accept any logging level but don't actually change anything
     // Valid levels according to MCP spec: debug, info, notice, warning, error, critical, alert, emergency
     const validLevels = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
-    
+
     if (level && !validLevels.includes(level)) {
       return this.sendJsonRpcError(res, -32602, `Invalid logging level: ${level}. Valid levels: ${validLevels.join(', ')}`, id);
     }
@@ -272,7 +276,7 @@ class Lively4McpServer {
    */
   async handleToolsCall(params, id, res) {
     const { name, arguments: args } = params || {};
-    
+
     if (!name || !this.tools.has(name)) {
       return this.sendJsonRpcError(res, -32602, `Unknown tool: ${name}`, id);
     }
@@ -280,7 +284,7 @@ class Lively4McpServer {
     try {
       const tool = this.tools.get(name);
       const result = await tool.handler(args || {});
-      
+
       const response = {
         jsonrpc: '2.0',
         id,
@@ -289,11 +293,29 @@ class Lively4McpServer {
 
       res.setHeader('Content-Type', 'application/json');
       res.json(response);
-      
+
     } catch (error) {
       log(`[MCP Server] Tool execution error: ${error.message}`);
       this.sendJsonRpcError(res, -32603, `Tool execution failed: ${error.message}`, id);
     }
+  }
+
+  /**
+   * Handle ping request
+   */
+  async handlePing(params, id, res) {
+    // Simple ping/pong response
+    const response = {
+      jsonrpc: '2.0',
+      id,
+      result: {
+        pong: true,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.json(response);
   }
 
   /**
@@ -383,7 +405,7 @@ class Lively4McpServer {
     try {
       log(`[MCP Server] Evaluating code in session ${sessionId}`);
       const result = await this.mcpSessionService.evaluateCode(sessionId, code, timeout);
-      
+
       return {
         content: [{
           type: 'text',
@@ -391,10 +413,10 @@ class Lively4McpServer {
         }],
         isError: false
       };
-      
+
     } catch (error) {
       log(`[MCP Server] Code evaluation failed: ${error.message}`);
-      
+
       return {
         content: [{
           type: 'text',
@@ -411,7 +433,7 @@ class Lively4McpServer {
   async handleListSessions(args) {
     try {
       const sessions = this.mcpSessionService.getActiveSessions();
-      
+
       if (sessions.length === 0) {
         return {
           content: [{
@@ -422,7 +444,7 @@ class Lively4McpServer {
         };
       }
 
-      const sessionList = sessions.map(session => 
+      const sessionList = sessions.map(session =>
         `Session ID: ${session.sessionId}\n` +
         `Registered: ${session.registeredAt}\n` +
         `Connected: ${session.connected}\n` +
@@ -436,7 +458,7 @@ class Lively4McpServer {
         }],
         isError: false
       };
-      
+
     } catch (error) {
       return {
         content: [{
@@ -455,7 +477,7 @@ class Lively4McpServer {
     try {
       const pingCount = this.mcpSessionService.pingAllSessions();
       const totalSessions = this.mcpSessionService.sessions.size;
-      
+
       return {
         content: [{
           type: 'text',
@@ -463,7 +485,7 @@ class Lively4McpServer {
         }],
         isError: false
       };
-      
+
     } catch (error) {
       return {
         content: [{
@@ -484,7 +506,7 @@ class Lively4McpServer {
       error: { code, message },
       id
     };
-    
+
     res.status(400).json(errorResponse);
   }
 
