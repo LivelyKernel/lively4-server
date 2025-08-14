@@ -94,6 +94,8 @@ import GITService from './services/git.js';
 import TranspileService from './services/transpile.js';
 import FileWatchService from './services/filewatch.js';
 import TerminalService from './services/terminal.js';
+import McpSessionService from './services/mcp-session.js';
+import Lively4McpServer from './services/mcp-server.js';
 
 
 // Regex constants
@@ -145,6 +147,10 @@ export class Server {
     this.optionsService = new OPTIONS(this);
     this.fileWatchService = new FileWatchService(this.sourceDir);
     this.terminalService = new TerminalService(this);
+    
+    // Initialize MCP services
+    this.mcpSessionService = new McpSessionService();
+    this.lively4McpServer = new Lively4McpServer(this.mcpSessionService);
 
 
   }
@@ -189,12 +195,22 @@ export class Server {
 
     // Create Express app with WebSocket support
     this.app = express();
+    
+    // Add JSON parsing middleware for MCP endpoints
+    this.app.use(express.json());
+    
     const wsInstance = expressWs(this.app);
 
     // WebSocket endpoint for file watching
     this.app.ws('/_filewatch', (ws, req) => {
       log('[FileWatch] WebSocket connection established');
       this.fileWatchService.addClient(ws);
+    });
+
+    // WebSocket endpoint for MCP sessions
+    this.app.ws('/_mcp-session', (ws, req) => {
+      log('[MCP Session] WebSocket connection established');
+      this.mcpSessionService.addClient(ws);
     });
 
     // WebSocket endpoint for terminals
@@ -230,7 +246,49 @@ export class Server {
       res.json(validation);
     });
 
-    // Handle all other HTTP requests
+    // REST endpoints for MCP service
+    this.app.get('/_mcp/status', (req, res) => {
+      res.json(this.lively4McpServer.getStatus());
+    });
+
+    this.app.get('/_mcp/sessions', (req, res) => {
+      res.json(this.mcpSessionService.getActiveSessions());
+    });
+
+    this.app.post('/_mcp/ping-sessions', (req, res) => {
+      const pingCount = this.mcpSessionService.pingAllSessions();
+      res.json({ pinged: pingCount, total: this.mcpSessionService.sessions.size });
+    });
+
+    // Add test routes for both GET and POST
+    this.app.get('/_mcp/message', (req, res) => {
+      log('[MCP Test] GET route called successfully!');
+      res.json({
+        jsonrpc: '2.0',
+        result: {
+          message: 'MCP endpoint is working',
+          note: 'Use POST for actual MCP requests',
+          available_tools: ['evaluate_code', 'list_sessions', 'ping_sessions']
+        }
+      });
+    });
+    
+    this.app.post('/_mcp/message', (req, res) => {
+      log('[MCP Test] POST route called successfully!');
+      log(`[MCP Test] Method: ${req.body?.method || 'none'}`);
+      res.json({
+        jsonrpc: '2.0',
+        id: req.body?.id || null,
+        result: {
+          test: 'Route is working',
+          method: req.body?.method || 'none'
+        }
+      });
+    });
+    
+    log('[MCP Test] Routes added: GET and POST /_mcp/message');
+
+    // Handle all other HTTP requests (MUST be last)
     this.app.use((req, res) => {
       this.onRequest(req, res, proxy);
     });
@@ -243,6 +301,8 @@ export class Server {
       log('Server running on port ' + this.port + ' in directory ' + this.sourceDir);
       log('[FileWatch] WebSocket endpoint available at /_filewatch');
       log('[FileWatch] File watching will start on-demand when clients request specific paths');
+      log('[MCP Session] WebSocket endpoint available at /_mcp-session');
+      log('[MCP Session] Browser sessions can register for code evaluation');
     });
 
     // Track new connections
@@ -265,6 +325,10 @@ export class Server {
     if (this.terminalService) {
       this.terminalService.cleanup();
     }
+    
+    // Cleanup MCP services
+    this.mcpSessionService.cleanup();
+    await this.lively4McpServer.stop();
 
     // Clear all timeouts
     if (this.tmpStorageTimeouts) {

@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/LivelyKernel/lively4-server",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.2",
     "argv": "^0.0.3",
     "express": "^4.21.2",
     "express-ws": "^5.0.2",
