@@ -393,26 +393,48 @@ class Lively4McpServer {
    * Handle generic Lively tool call (routes to browser via session service)
    */
   async handleGenericLivelyTool(messageType, args) {
-    const { sessionId, timeout = 30000 } = args;
+    let { sessionId, timeout = 30000 } = args;
 
+    // Smart session selection if no sessionId provided
     if (!sessionId) {
-      return {
-        content: [{
-          type: 'text',
-          text: 'Error: sessionId is required'
-        }],
-        isError: true
-      };
+      const sessions = this.mcpSessionService.getActiveSessions();
+      
+      if (sessions.length === 0) {
+        return {
+          content: [{
+            type: 'text',
+            text: 'No active Lively4 sessions found. Please open a browser session by:\n1. Navigate to http://localhost:9005\n2. Right-click → Tools → MCP'
+          }],
+          isError: true
+        };
+      } else if (sessions.length === 1) {
+        sessionId = sessions[0].sessionId;
+        log(`[MCP Server] Auto-selected session: ${sessionId}`);
+      } else {
+        const sessionList = sessions.map(session =>
+          `• ${session.sessionId.substring(0, 8)}... (${session.userAgent || 'Unknown browser'})`
+        ).join('\n');
+        
+        return {
+          content: [{
+            type: 'text',
+            text: `Multiple sessions available. Please specify sessionId parameter:\n\n${sessionList}\n\nOr use list_sessions tool to see full session details.`
+          }],
+          isError: true
+        };
+      }
     }
 
     try {
       log(`[MCP Server] Executing ${messageType} tool in session ${sessionId}`);
-      const result = await this.mcpSessionService.handleLivelyToolCall(messageType, args, timeout);
+      const result = await this.mcpSessionService.handleLivelyToolCall(messageType, { ...args, sessionId }, timeout);
 
+      const autoSelectedNote = args.sessionId ? '' : ` (auto-selected session ${sessionId.substring(0, 8)}...)`;
+      
       return {
         content: [{
           type: 'text',
-          text: `${messageType} successful in ${result.duration}ms:\n\n${result.result}`
+          text: `${messageType} successful in ${result.duration}ms${autoSelectedNote}:\n\n${result.result}`
         }],
         isError: false
       };

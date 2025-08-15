@@ -1,13 +1,13 @@
 {
   "tools": {
     "evaluate_code": {
-      "description": "Execute JavaScript code in a specific Lively4 browser session",
+      "description": "Execute JavaScript code in a Lively4 browser session. If sessionId is not provided, automatically selects an available session.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "sessionId": {
             "type": "string",
-            "description": "Target Lively4 session ID (get from list_sessions)"
+            "description": "Target Lively4 session ID (optional - auto-selects if not provided)"
           },
           "code": {
             "type": "string",
@@ -19,7 +19,7 @@
             "default": 30000
           }
         },
-        "required": ["sessionId", "code"]
+        "required": ["code"]
       },
       "type": "lively",
       "messageType": "evaluate-code"
