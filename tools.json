@@ -1,0 +1,46 @@
+{
+  "tools": {
+    "evaluate_code": {
+      "description": "Execute JavaScript code in a specific Lively4 browser session",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Target Lively4 session ID (get from list_sessions)"
+          },
+          "code": {
+            "type": "string",
+            "description": "JavaScript code to evaluate in the live environment"
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Timeout in milliseconds (default: 30000)",
+            "default": 30000
+          }
+        },
+        "required": ["sessionId", "code"]
+      },
+      "type": "lively",
+      "messageType": "evaluate-code"
+    },
+    "list_sessions": {
+      "description": "List all active Lively4 browser sessions available for code execution",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "type": "meta",
+      "handler": "handleListSessions"
+    },
+    "ping_sessions": {
+      "description": "Ping all active sessions to check connectivity",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "type": "meta",
+      "handler": "handlePingSessions"
+    }
+  }
+}
