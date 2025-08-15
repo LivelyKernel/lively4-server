@@ -196,8 +196,19 @@ export class Server {
     // Create Express app with WebSocket support
     this.app = express();
 
-    // Add JSON parsing middleware for MCP endpoints
-    this.app.use(express.json());
+    // Add JSON parsing middleware only for specific routes that need it
+    this.app.use('/_mcp/*', express.json());           // MCP server needs JSON
+    this.app.use('/_terminal/exec/*', express.json()); // Terminal exec needs JSON
+
+    // Add error handler for JSON parsing errors - converts Express HTML errors to JSON
+    this.app.use((error, req, res, next) => {
+      if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+        // Return JSON error for JSON parsing failures instead of HTML error page
+        return res.status(400).json({ error: 'Invalid JSON in request body' });
+      }
+      // Let other errors pass through
+      next(error);
+    });
 
     const wsInstance = expressWs(this.app);
 

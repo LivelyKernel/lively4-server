@@ -8,14 +8,14 @@ describe("Terminal Service", () => {
   var url = `http://localhost:${port}`;
   var server;
 
-  before(async function() {
+  before(async function () {
     this.timeout(10000);
     server = new Server();
     server.setup();
     server.lively4dir = 'test/tmp/';
     server.port = port;
     server.options['authorize-requests'] = false; // Disable auth for tests
-    
+
     // Start server
     Promise.resolve().then(() => {
       server.start();
@@ -56,7 +56,7 @@ describe("Terminal Service", () => {
       });
 
       expect(response.status).to.equal(403);
-      
+
       // Restore auth settings
       server.options['authorize-requests'] = false;
     });
@@ -69,7 +69,7 @@ describe("Terminal Service", () => {
       const response = await fetch(`${url}/_terminal/create?cols=80&rows=24`, {
         method: 'POST',
         headers: {
-          'gitusername': 'testuser', 
+          'gitusername': 'testuser',
           'gitpassword': 'testtoken'
         }
       });
@@ -89,6 +89,131 @@ describe("Terminal Service", () => {
     });
   });
 
+  describe("Terminal Command Execution", () => {
+    let terminalPid;
+
+    beforeEach(async () => {
+      const response = await fetch(`${url}/_terminal/create`, {
+        method: 'POST',
+        headers: {
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        }
+      });
+      terminalPid = await response.text();
+    });
+
+    it("should execute a simple command and return output", async () => {
+      const response = await fetch(`${url}/_terminal/exec/${terminalPid}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'echo "test command"' })
+      });
+
+      expect(response.status).to.equal(200);
+      const result = await response.json();
+
+      expect(result).to.have.property('output');
+      expect(result).to.have.property('exitCode');
+      expect(result).to.have.property('duration');
+      expect(result).to.have.property('finished');
+      expect(result.output).to.include('test command');
+    });
+
+    it("should handle command with no output", async () => {
+      const response = await fetch(`${url}/_terminal/exec/${terminalPid}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'true' })
+      });
+
+      expect(response.status).to.equal(200);
+      const result = await response.json();
+      expect(result).to.have.property('output');
+      expect(result).to.have.property('finished');
+    });
+
+    it("should return error for invalid terminal PID", async () => {
+      const response = await fetch(`${url}/_terminal/exec/99999`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'echo "test"' })
+      });
+
+      expect(response.status).to.equal(404);
+      const result = await response.json();
+      expect(result).to.have.property('error');
+      expect(result.error).to.equal('Terminal not found');
+    });
+
+    it("should return error for missing command", async () => {
+      const response = await fetch(`${url}/_terminal/exec/${terminalPid}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({})
+      });
+
+      expect(response.status).to.equal(400);
+      const result = await response.json();
+      expect(result).to.have.property('error');
+      expect(result.error).to.equal('Command is required');
+    });
+
+    it("should return error for invalid JSON", async () => {
+      const response = await fetch(`${url}/_terminal/exec/${terminalPid}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: 'invalid json'
+      });
+
+      expect(response.status).to.equal(400);
+      const result = await response.json();
+      expect(result).to.have.property('error');
+      expect(result.error).to.equal('Invalid JSON in request body');
+    });
+
+    xit("should handle long running commands with timeout", async function () {
+      this.timeout(8000); // Extend test timeout
+
+      const response = await fetch(`${url}/_terminal/exec/${terminalPid}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'sleep 10' })
+      });
+
+      expect(response.status).to.equal(200);
+      const result = await response.json();
+
+      expect(result).to.have.property('timeout');
+      expect(result.timeout).to.equal(true);
+      expect(result.finished).to.equal(false);
+    });
+  });
+
   describe("WebSocket Terminal Connection", () => {
     let terminalPid;
 
@@ -97,7 +222,7 @@ describe("Terminal Service", () => {
         method: 'POST',
         headers: {
           'gitusername': 'testuser',
-          'gitpassword': 'testtoken'  
+          'gitpassword': 'testtoken'
         }
       });
       terminalPid = await response.text();
@@ -105,7 +230,7 @@ describe("Terminal Service", () => {
 
     it("should establish WebSocket connection to terminal", (done) => {
       let completed = false;
-      
+
       const ws = new WebSocket(`ws://localhost:${port}/_terminal/ws/${terminalPid}`, {
         headers: {
           'gitusername': 'testuser',

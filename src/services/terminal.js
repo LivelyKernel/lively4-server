@@ -32,7 +32,7 @@ export default class TerminalService extends Service {
     if (pathname.match(/\/_terminal\/create/)) {
       return this.createTerminal(req, res);
     }
-    
+
     if (pathname.match(/\/_terminal\/size\/(\d+)/)) {
       const pidMatch = pathname.match(/\/_terminal\/size\/(\d+)/);
       const pid = parseInt(pidMatch[1]);
@@ -61,12 +61,12 @@ export default class TerminalService extends Service {
       const cols = parseInt(req.query.cols) || 80;
       const rows = parseInt(req.query.rows) || 24;
       let cwd = req.headers.cwd;
-      
+
       // Handle relative paths from header - resolve them relative to /home/jens/lively4
       if (cwd && cwd.startsWith('/') && !cwd.startsWith('/home')) {
         cwd = `/home/jens/lively4${cwd}`;
       }
-      
+
       // Fallback to environment if no header cwd provided
       if (!cwd) {
         cwd = process.env.PWD || process.cwd();
@@ -83,7 +83,7 @@ export default class TerminalService extends Service {
       });
 
       logRequest(req, `Created terminal with PID: ${term.pid}`);
-      
+
       this.terminals[term.pid] = term;
       this.logs[term.pid] = '';
 
@@ -147,6 +147,7 @@ export default class TerminalService extends Service {
    * @param {Object} res - Express response object
    */
   async executeCommand(pid, req, res) {
+    console.log("executeCommand")
     try {
       const term = this.terminals[pid];
       if (!term) {
@@ -155,35 +156,22 @@ export default class TerminalService extends Service {
         return;
       }
 
-      // Parse command from request body
-      let body = '';
-      req.on('data', chunk => {
-        body += chunk.toString();
-      });
+      // Express middleware has already parsed the JSON body
+      const { command } = req.body || {};
+      
+      if (!command) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Command is required' }));
+        return;
+      }
 
-      req.on('end', async () => {
-        try {
-          const { command } = JSON.parse(body);
-          if (!command) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Command is required' }));
-            return;
-          }
+      logRequest(req, `Executing command in terminal ${pid}: ${command}`);
 
-          logRequest(req, `Executing command in terminal ${pid}: ${command}`);
+      // Execute command and capture output
+      const result = await this.captureCommandOutput(term, command, pid);
 
-          // Execute command and capture output
-          const result = await this.captureCommandOutput(term, command, pid);
-
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-
-        } catch (error) {
-          logRequest(req, `Error parsing request: ${error.message}`);
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Invalid JSON in request body' }));
-        }
-      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
 
     } catch (error) {
       logRequest(req, `Error executing command: ${error.message}`);
@@ -205,15 +193,15 @@ export default class TerminalService extends Service {
       let outputBuffer = '';
       let promptPattern = /[\$#>]\s*$/; // Basic prompt detection
       let timeoutId;
-      
+
       // Capture output
       const onData = (data) => {
         outputBuffer += data;
         this.logs[pid] += data; // Keep adding to main log
-        
+
         // Reset timeout on new data
         if (timeoutId) clearTimeout(timeoutId);
-        
+
         // Check for command completion (prompt pattern)
         if (promptPattern.test(outputBuffer)) {
           cleanup();
@@ -225,7 +213,7 @@ export default class TerminalService extends Service {
           });
           return;
         }
-        
+
         // Set timeout for command completion
         timeoutId = setTimeout(() => {
           cleanup();
@@ -246,7 +234,7 @@ export default class TerminalService extends Service {
 
       // Start listening for output
       term.on('data', onData);
-      
+
       // Send command with newline
       const cmd = command.endsWith('\n') ? command : command + '\n';
       term.write(cmd);
@@ -308,7 +296,7 @@ export default class TerminalService extends Service {
     ws.on('close', () => {
       console.log(`[Terminal] WebSocket disconnected from terminal ${pid}`);
       term.removeListener('data', onData);
-      
+
       // Kill terminal when WebSocket closes
       try {
         term.kill();
@@ -316,7 +304,7 @@ export default class TerminalService extends Service {
       } catch (ex) {
         console.log(`[Terminal] Error killing terminal ${pid}:`, ex.message);
       }
-      
+
       // Clean up
       delete this.terminals[pid];
       delete this.logs[pid];
@@ -337,7 +325,7 @@ export default class TerminalService extends Service {
   createBuffer(socket, timeout) {
     let buffer = '';
     let sender = null;
-    
+
     return (data) => {
       buffer += data;
       if (!sender) {
