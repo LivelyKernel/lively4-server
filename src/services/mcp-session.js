@@ -78,7 +78,8 @@ class McpSessionService {
         break;
         
       case 'evaluation-result':
-        this.handleEvaluationResult(message);
+      case 'tool-result':
+        this.handleToolResult(message);
         break;
         
       case 'pong':
@@ -166,6 +167,22 @@ class McpSessionService {
    * @returns {Promise<Object>} Evaluation result
    */
   async evaluateCode(sessionId, code, timeout = this.defaultTimeout) {
+    return await this.handleLivelyToolCall('evaluate-code', { sessionId, code }, timeout);
+  }
+
+  /**
+   * Send generic Lively tool call to specific session
+   * @param {string} messageType - Message type to send to browser
+   * @param {Object} args - Arguments for the tool call
+   * @param {number} timeout - Timeout in milliseconds (optional)
+   * @returns {Promise<Object>} Tool execution result
+   */
+  async handleLivelyToolCall(messageType, args, timeout = this.defaultTimeout) {
+    const { sessionId } = args;
+    if (!sessionId) {
+      throw new Error('sessionId is required for Lively tool calls');
+    }
+
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
@@ -174,18 +191,23 @@ class McpSessionService {
     const requestId = generateUUID();
     const startTime = Date.now();
 
-    log(`[MCP Session] Sending evaluation request to session ${sessionId}: ${code.substring(0, 100)}${code.length > 100 ? '...' : ''}`);
+    // Create log message based on tool type
+    let logMessage = `[MCP Session] Sending ${messageType} request to session ${sessionId}`;
+    if (args.code) {
+      logMessage += `: ${args.code.substring(0, 100)}${args.code.length > 100 ? '...' : ''}`;
+    }
+    log(logMessage);
 
-    // Send evaluation request to browser
+    // Send tool request to browser
     const sent = this.sendToClient(session.ws, {
-      type: 'evaluate-code',
+      type: messageType,
       requestId,
-      code,
+      ...args,
       timestamp: new Date().toISOString()
     });
 
     if (!sent) {
-      throw new Error(`Could not send evaluation request to session: ${sessionId}`);
+      throw new Error(`Could not send ${messageType} request to session: ${sessionId}`);
     }
 
     // Set up promise that waits for response
@@ -193,17 +215,18 @@ class McpSessionService {
       // Store request for response handling
       this.requestQueue.set(requestId, {
         sessionId,
+        messageType,
         resolve,
         reject,
         startTime,
-        code: code.substring(0, 200) // Store snippet for logging
+        args: JSON.stringify(args).substring(0, 200) // Store args snippet for logging
       });
 
       // Set timeout
       const timeoutHandle = setTimeout(() => {
         if (this.requestQueue.has(requestId)) {
           this.requestQueue.delete(requestId);
-          reject(new Error(`Code evaluation timeout after ${timeout}ms`));
+          reject(new Error(`${messageType} timeout after ${timeout}ms`));
         }
       }, timeout);
 
@@ -213,10 +236,10 @@ class McpSessionService {
   }
 
   /**
-   * Handle evaluation result from browser
+   * Handle tool result from browser (generic for all tool types)
    * @param {Object} message - Result message from browser
    */
-  handleEvaluationResult(message) {
+  handleToolResult(message) {
     const { requestId, success, result, sessionId } = message;
     
     const request = this.requestQueue.get(requestId);
@@ -234,9 +257,13 @@ class McpSessionService {
     this.requestQueue.delete(requestId);
 
     const duration = Date.now() - request.startTime;
+    const toolType = request.messageType || 'tool';
     
     if (success) {
-      log(`[MCP Session] Code evaluation success in ${duration}ms for session ${sessionId}: ${result.substring(0, 100)}${result.length > 100 ? '...' : ''}`);
+      const resultPreview = typeof result === 'string' 
+        ? result.substring(0, 100) + (result.length > 100 ? '...' : '')
+        : JSON.stringify(result).substring(0, 100);
+      log(`[MCP Session] ${toolType} success in ${duration}ms for session ${sessionId}: ${resultPreview}`);
       request.resolve({
         success: true,
         result,
@@ -244,9 +271,17 @@ class McpSessionService {
         sessionId
       });
     } else {
-      log(`[MCP Session] Code evaluation error in ${duration}ms for session ${sessionId}: ${result}`);
+      log(`[MCP Session] ${toolType} error in ${duration}ms for session ${sessionId}: ${result}`);
       request.reject(new Error(result));
     }
+  }
+
+  /**
+   * Handle evaluation result from browser (legacy compatibility)
+   * @param {Object} message - Result message from browser
+   */
+  handleEvaluationResult(message) {
+    return this.handleToolResult(message);
   }
 
   /**

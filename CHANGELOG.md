@@ -4,6 +4,71 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2025-08-15] - MCP Tool Framework Refactoring
+
+### Changed — MCP Architecture
+
+- **Refactored MCP tool system** to separate meta tools from Lively-specific tools
+- Moved tool definitions from hardcoded server logic to configurable `tools.json`
+- Created hybrid approach: meta tools (server-side) vs. lively tools (browser-side)
+- Enhanced tool registration system with automatic type-based routing
+
+### Added — Generic Tool Framework
+
+- New `tools.json` configuration file with tool type classification (`meta` vs `lively`)
+- Generic `handleLivelyToolCall()` method in McpSessionService for browser-bound tools
+- `handleGenericLivelyTool()` method in MCP server for tool-agnostic request handling
+- Enhanced browser client with dynamic tool handler discovery pattern
+- Support for both `evaluation-result` and `tool-result` message types
+
+### Enhanced — Browser Integration
+
+- Updated `lively-mcp` component with generic `handleToolExecution()` method
+- Automatic handler method discovery: `handle{ToolName}Tool()` pattern
+- Enhanced display logic for different tool types with backward compatibility
+- Improved error handling and logging for generic tool operations
+
+### Technical Benefits
+
+- **Extensibility**: New Lively tools only require JSON config + browser handler
+- **Separation of Concerns**: Server handles infrastructure, browser handles application logic
+- **Backward Compatibility**: All existing code continues to work unchanged
+- **Developer Experience**: Easy tool addition without server-side code changes
+
+---
+
+## [2025-08-14] - Complete MCP Integration Implementation
+
+### Added — MCP Protocol Support
+
+- **Full MCP server implementation** with manual protocol handling (no SDK dependencies)
+- HTTP transport integration with JSON-RPC 2.0 message handling
+- Session management service with WebSocket-based browser communication
+- Three core MCP tools: `evaluate_code`, `list_sessions`, `ping_sessions`
+
+### Added — Browser MCP Agent
+
+- New `lively-mcp` component for in-browser MCP session management
+- Real-time WebSocket connection to server with auto-reconnection
+- JavaScript code evaluation using SystemJS and eval() with proper error handling
+- Session registration with UUID-based isolation for multi-user support
+
+### Added — Session Architecture
+
+- Dual-connection design: Browser ↔ Server (WebSocket) + Claude Code ↔ Server (MCP)
+- Request/response correlation with unique request IDs and timeout protection
+- Activity logging and status monitoring for debugging and transparency
+- Connection health monitoring with ping/pong keep-alive mechanism
+
+### Technical Implementation
+
+- HTTP endpoints: `/_mcp/message` (JSON-RPC), `/_mcp-session` (WebSocket)
+- MCP protocol validation with proper error responses and status codes
+- Session service integration with main HTTP server and Express middleware
+- Comprehensive documentation in `MCP_INTEGRATION.md`
+
+---
+
 ## [2025-08-13] - Terminal Working Directory Support & Command Execution API
 
 ### Added — Terminal Service

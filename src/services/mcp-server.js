@@ -1,4 +1,10 @@
 import { log } from '../utils.js';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Manual MCP (Model Context Protocol) Server for Lively4
@@ -319,68 +325,75 @@ class Lively4McpServer {
   }
 
   /**
-   * Register MCP tools
+   * Load tools configuration from tools.json
    */
-  registerTools() {
-    // Tool: evaluate_code - Execute JavaScript in a specific Lively4 session
-    this.tools.set('evaluate_code', {
-      description: 'Execute JavaScript code in a specific Lively4 browser session',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          sessionId: {
-            type: 'string',
-            description: 'Target Lively4 session ID (get from list_sessions)'
-          },
-          code: {
-            type: 'string',
-            description: 'JavaScript code to evaluate in the live environment'
-          },
-          timeout: {
-            type: 'number',
-            description: 'Timeout in milliseconds (default: 30000)',
-            default: 30000
-          }
-        },
-        required: ['sessionId', 'code']
-      },
-      handler: async (args) => {
-        return await this.handleEvaluateCode(args);
-      }
-    });
-
-    // Tool: list_sessions - List all active sessions
-    this.tools.set('list_sessions', {
-      description: 'List all active Lively4 browser sessions available for code execution',
-      inputSchema: {
-        type: 'object',
-        properties: {}
-      },
-      handler: async (args) => {
-        return await this.handleListSessions(args);
-      }
-    });
-
-    // Tool: ping_sessions - Ping all sessions
-    this.tools.set('ping_sessions', {
-      description: 'Ping all active sessions to check connectivity',
-      inputSchema: {
-        type: 'object',
-        properties: {}
-      },
-      handler: async (args) => {
-        return await this.handlePingSessions(args);
-      }
-    });
-
-    log('[MCP Server] Tools registered: evaluate_code, list_sessions, ping_sessions');
+  loadToolsConfig() {
+    try {
+      const toolsConfigPath = join(__dirname, '../../tools.json');
+      const configData = readFileSync(toolsConfigPath, 'utf8');
+      return JSON.parse(configData);
+    } catch (error) {
+      log(`[MCP Server] Failed to load tools.json: ${error.message}`);
+      throw new Error(`Could not load tools configuration: ${error.message}`);
+    }
   }
 
   /**
-   * Handle evaluate_code tool call
+   * Register MCP tools from tools.json configuration
    */
-  async handleEvaluateCode(args) {
-    const { sessionId, code, timeout = 30000 } = args;
+  registerTools() {
+    const config = this.loadToolsConfig();
+    const toolNames = [];
+
+    for (const [toolName, toolConfig] of Object.entries(config.tools)) {
+      const { description, inputSchema, type } = toolConfig;
+      
+      if (type === 'meta') {
+        // Meta tools: Use specific handler methods (server-side operations)
+        const { handler } = toolConfig;
+        if (!this[handler] || typeof this[handler] !== 'function') {
+          log(`[MCP Server] Warning: Handler method '${handler}' not found for meta tool '${toolName}'`);
+          continue;
+        }
+
+        this.tools.set(toolName, {
+          description,
+          inputSchema,
+          handler: async (args) => {
+            return await this[handler](args);
+          }
+        });
+      } else if (type === 'lively') {
+        // Lively tools: Use generic handler that forwards to browser
+        const { messageType } = toolConfig;
+        if (!messageType) {
+          log(`[MCP Server] Warning: messageType missing for lively tool '${toolName}'`);
+          continue;
+        }
+
+        this.tools.set(toolName, {
+          description,
+          inputSchema,
+          handler: async (args) => {
+            return await this.handleGenericLivelyTool(messageType, args);
+          }
+        });
+      } else {
+        log(`[MCP Server] Warning: Unknown tool type '${type}' for tool '${toolName}'`);
+        continue;
+      }
+
+      toolNames.push(toolName);
+    }
+
+    log(`[MCP Server] Tools registered from tools.json: ${toolNames.join(', ')}`);
+  }
+
+  /**
+   * Handle generic Lively tool call (routes to browser via session service)
+   */
+  async handleGenericLivelyTool(messageType, args) {
+    const { sessionId, timeout = 30000 } = args;
 
     if (!sessionId) {
       return {
@@ -392,35 +405,25 @@ class Lively4McpServer {
       };
     }
 
-    if (!code) {
-      return {
-        content: [{
-          type: 'text',
-          text: 'Error: code is required'
-        }],
-        isError: true
-      };
-    }
-
     try {
-      log(`[MCP Server] Evaluating code in session ${sessionId}`);
-      const result = await this.mcpSessionService.evaluateCode(sessionId, code, timeout);
+      log(`[MCP Server] Executing ${messageType} tool in session ${sessionId}`);
+      const result = await this.mcpSessionService.handleLivelyToolCall(messageType, args, timeout);
 
       return {
         content: [{
           type: 'text',
-          text: `Evaluation successful in ${result.duration}ms:\n\n${result.result}`
+          text: `${messageType} successful in ${result.duration}ms:\n\n${result.result}`
         }],
         isError: false
       };
 
     } catch (error) {
-      log(`[MCP Server] Code evaluation failed: ${error.message}`);
+      log(`[MCP Server] ${messageType} tool failed: ${error.message}`);
 
       return {
         content: [{
           type: 'text',
-          text: `Code evaluation failed: ${error.message}`
+          text: `${messageType} tool failed: ${error.message}`
         }],
         isError: true
       };
