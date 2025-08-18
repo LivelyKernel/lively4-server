@@ -214,6 +214,128 @@ describe("Terminal Service", () => {
     });
   });
 
+  describe("Non-Interactive Run Command", () => {
+    it("should execute a simple command and return stdout/stderr", async () => {
+      const response = await fetch(`${url}/_terminal/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'echo "hello world"' })
+      });
+
+      expect(response.status).to.equal(200);
+      const result = await response.json();
+
+      expect(result).to.have.property('stdout');
+      expect(result).to.have.property('stderr');
+      expect(result).to.have.property('error');
+      expect(result.stdout).to.include('hello world');
+      expect(result.error).to.be.null;
+    });
+
+    it("should handle commands that produce stderr output", async () => {
+      const response = await fetch(`${url}/_terminal/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'echo "error message" >&2' })
+      });
+
+      expect(response.status).to.equal(200);
+      const result = await response.json();
+
+      expect(result).to.have.property('stdout');
+      expect(result).to.have.property('stderr');
+      expect(result).to.have.property('error');
+      expect(result.stderr).to.include('error message');
+    });
+
+    it("should handle commands with exit codes", async () => {
+      const response = await fetch(`${url}/_terminal/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'exit 1' })
+      });
+
+      expect(response.status).to.equal(200);
+      const result = await response.json();
+
+      expect(result).to.have.property('stdout');
+      expect(result).to.have.property('stderr');
+      expect(result).to.have.property('error');
+      expect(result.error).to.not.be.null;
+      expect(result.error.code).to.equal(1);
+    });
+
+    it("should return error for missing command", async () => {
+      const response = await fetch(`${url}/_terminal/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({})
+      });
+
+      expect(response.status).to.equal(400);
+      const result = await response.json();
+      expect(result).to.have.property('error');
+      expect(result.error).to.equal('Command is required');
+    });
+
+    it("should handle complex commands with pipes", async () => {
+      const response = await fetch(`${url}/_terminal/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'echo "line1\nline2\nline3" | grep "line2"' })
+      });
+
+      expect(response.status).to.equal(200);
+      const result = await response.json();
+
+      expect(result).to.have.property('stdout');
+      expect(result.stdout).to.include('line2');
+      expect(result.stdout).to.not.include('line1');
+      expect(result.stdout).to.not.include('line3');
+    });
+
+    it("should work without requiring an existing terminal session", async () => {
+      // This test verifies that run works independently of terminal creation
+      const response = await fetch(`${url}/_terminal/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'gitusername': 'testuser',
+          'gitpassword': 'testtoken'
+        },
+        body: JSON.stringify({ command: 'pwd' })
+      });
+
+      expect(response.status).to.equal(200);
+      const result = await response.json();
+
+      expect(result).to.have.property('stdout');
+      expect(result).to.have.property('stderr');
+      expect(result).to.have.property('error');
+      expect(result.stdout).to.be.a('string');
+    });
+  });
+
   describe("WebSocket Terminal Connection", () => {
     let terminalPid;
 

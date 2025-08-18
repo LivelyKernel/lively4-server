@@ -1,6 +1,7 @@
 import Service from './service.js';
 import pty from 'node-pty';
 import os from 'os';
+import { exec } from 'child_process';
 import { logRequest } from '../utils.js';
 
 /**
@@ -43,6 +44,10 @@ export default class TerminalService extends Service {
       const pidMatch = pathname.match(/\/_terminal\/exec\/(\d+)/);
       const pid = parseInt(pidMatch[1]);
       return this.executeCommand(pid, req, res);
+    }
+
+    if (pathname.match(/\/_terminal\/run/)) {
+      return this.runCommand(req, res);
     }
 
     res.writeHead(404);
@@ -177,6 +182,37 @@ export default class TerminalService extends Service {
       logRequest(req, `Error executing command: ${error.message}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: `Error executing command: ${error.message}` }));
+    }
+  }
+
+  /**
+   * Execute a command non-interactively without requiring a terminal session
+   * @param {Object} req - Express request object with command in body
+   * @param {Object} res - Express response object
+   */
+  async runCommand(req, res) {
+    try {
+      // Express middleware has already parsed the JSON body
+      const { command } = req.body || {};
+      
+      if (!command) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Command is required' }));
+        return;
+      }
+
+      logRequest(req, `Running command: ${command}`);
+
+      // Execute command using the non-interactive run method
+      const result = await this.run(command);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+
+    } catch (error) {
+      logRequest(req, `Error running command: ${error.message}`);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: `Error running command: ${error.message}` }));
     }
   }
 
@@ -338,6 +374,20 @@ export default class TerminalService extends Service {
         }, timeout);
       }
     };
+  }
+
+  /**
+   * Execute a command non-interactively using child_process.exec
+   * @param {string} cmd - Command to execute
+   * @returns {Promise<Object>} Promise resolving to {stdout, stderr, error}
+   */
+  async run(cmd) {
+    return new Promise((resolve) => {
+      // Use same large buffer size as utils.js
+      exec(cmd, { maxBuffer: 1024 * 2000 * 100 }, (error, stdout, stderr) => {
+        resolve({ stdout, stderr, error });
+      });
+    });
   }
 
   /**

@@ -199,6 +199,7 @@ export class Server {
     // Add JSON parsing middleware only for specific routes that need it
     this.app.use('/_mcp/*', express.json());           // MCP server needs JSON
     this.app.use('/_terminal/exec/*', express.json()); // Terminal exec needs JSON
+    this.app.use('/_terminal/run', express.json());    // Terminal run needs JSON
 
     // Add error handler for JSON parsing errors - converts Express HTML errors to JSON
     this.app.use((error, req, res, next) => {
