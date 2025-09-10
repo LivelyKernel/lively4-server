@@ -107,28 +107,32 @@ export default class FilesService extends Service {
    * @returns {Promise<void>}
    */
   async readFileVersion(repositorypath, filepath, fileversion, req, res) {
+    // Try git show with the specific commit hash, avoiding any remote references
     var { stdout, stderr, error } = await run(
-      'cd ' + repositorypath + ';' + 'git show ' + fileversion + ':"' + filepath + '"',
+      `cd "${repositorypath}"; git show "${fileversion}":"${filepath}"`,
       res
     );
     var headers = {}
     headers['Content-Type'] = mime.lookup(filepath);
-    // console.log("[readfile version] stderr " + stderr )
-    // console.log("[readfile version] err ", error == null )
-
-    // ok, this is not easy to figure out
-
-    // console.log("[readfile version] version ", fileversion )
-
     headers['fileversion'] = fileversion;
 
     if (error == null) {
       res.writeHead(200, headers);
       res.end(stdout);
     } else {
-      // console.log("ERROR ERROR 300")
-      res.writeHead(300, headers);
-      res.end(stdout + stderr);
+      // If git show fails, try to check if the commit exists locally first
+      var { stdout: commitCheck, error: commitError } = await run(
+        `cd "${repositorypath}"; git cat-file -e "${fileversion}" 2>/dev/null && echo "exists" || echo "missing"`
+      );
+      
+      if (commitError || commitCheck.trim() === "missing") {
+        res.writeHead(404, headers);
+        res.end(`Commit ${fileversion} not found in local repository`);
+      } else {
+        // Commit exists but file might not exist at that commit
+        res.writeHead(404, headers);
+        res.end(`File ${filepath} not found at commit ${fileversion}`);
+      }
     }
   }
 
