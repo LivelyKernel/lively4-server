@@ -63,9 +63,10 @@ class Lively4McpServer {
     const mcpPostHandler = async (req, res) => {
       try {
         // Validate Accept header as per spec
+        // Note: We're relaxing the requirement to allow clients that only accept application/json
         const acceptHeader = req.headers.accept || '';
-        if (!acceptHeader.includes('application/json') || !acceptHeader.includes('text/event-stream')) {
-          return this.sendJsonRpcError(res, -32000, 'Not Acceptable: Client must accept both application/json and text/event-stream', null);
+        if (!acceptHeader.includes('application/json') && !acceptHeader.includes('text/event-stream')) {
+          return this.sendJsonRpcError(res, -32000, 'Not Acceptable: Client must accept application/json or text/event-stream', null);
         }
 
         // Validate protocol version header
