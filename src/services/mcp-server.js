@@ -180,9 +180,15 @@ class Lively4McpServer {
   async handleInitialize(params, id, req, res) {
     const { protocolVersion, capabilities, clientInfo } = params || {};
 
-    // Validate protocol version
-    if (protocolVersion !== '2025-06-18') {
-      return this.sendJsonRpcError(res, -32602, 'Invalid protocol version', id);
+    log(`[MCP Server] Initialize params:`, JSON.stringify(params, null, 2));
+    log(`[MCP Server] Client protocol version: ${protocolVersion}`);
+    log(`[MCP Server] Client info: ${JSON.stringify(clientInfo)}`);
+
+    // Validate protocol version - be more flexible
+    if (protocolVersion && protocolVersion !== '2025-06-18') {
+      log(`[MCP Server] Warning: Protocol version mismatch. Expected 2025-06-18, got ${protocolVersion}`);
+      // Don't reject - try to proceed anyway
+      // return this.sendJsonRpcError(res, -32602, 'Invalid protocol version', id);
     }
 
     // Generate session ID
@@ -260,11 +266,15 @@ class Lively4McpServer {
    * Handle tools/list request
    */
   async handleToolsList(params, id, res) {
+    log(`[MCP Server] Listing ${this.tools.size} tools`);
+
     const tools = Array.from(this.tools.entries()).map(([name, tool]) => ({
       name,
       description: tool.description,
       inputSchema: tool.inputSchema
     }));
+
+    log(`[MCP Server] Returning tools: ${tools.map(t => t.name).join(', ')}`);
 
     const response = {
       jsonrpc: '2.0',
