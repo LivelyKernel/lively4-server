@@ -184,31 +184,36 @@ class Lively4McpServer {
     log(`[MCP Server] Client protocol version: ${protocolVersion}`);
     log(`[MCP Server] Client info: ${JSON.stringify(clientInfo)}`);
 
-    // Validate protocol version - be more flexible
-    if (protocolVersion && protocolVersion !== '2025-06-18') {
-      log(`[MCP Server] Warning: Protocol version mismatch. Expected 2025-06-18, got ${protocolVersion}`);
-      // Don't reject - try to proceed anyway
-      // return this.sendJsonRpcError(res, -32602, 'Invalid protocol version', id);
+    // Support multiple protocol versions
+    const supportedVersions = ['2025-03-26', '2025-06-18'];
+    const clientVersion = protocolVersion || '2025-06-18';
+
+    if (!supportedVersions.includes(clientVersion)) {
+      log(`[MCP Server] Unsupported protocol version: ${clientVersion}`);
+      return this.sendJsonRpcError(res, -32602, `Unsupported protocol version: ${clientVersion}. Supported: ${supportedVersions.join(', ')}`, id);
     }
+
+    log(`[MCP Server] Using protocol version: ${clientVersion}`);
 
     // Generate session ID
     const sessionId = this.generateSessionId();
 
-    // Store session info
+    // Store session info with protocol version
     this.sessions.set(sessionId, {
       clientInfo: clientInfo || {},
       capabilities: capabilities || {},
+      protocolVersion: clientVersion,
       createdAt: new Date().toISOString()
     });
 
     log(`[MCP Server] Initialized session: ${sessionId}`);
 
-    // Send successful response
+    // Send successful response matching the client's protocol version
     const response = {
       jsonrpc: '2.0',
       id,
       result: {
-        protocolVersion: '2025-06-18',
+        protocolVersion: clientVersion, // Return the same version the client requested
         capabilities: this.capabilities,
         serverInfo: {
           name: 'lively4-mcp-server',
