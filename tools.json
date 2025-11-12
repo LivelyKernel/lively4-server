@@ -1,29 +1,5 @@
 {
   "tools": {
-    "evaluate_code": {
-      "description": "Execute JavaScript code in a Lively4 browser session. If sessionId is not provided, automatically selects an available session.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "sessionId": {
-            "type": "string",
-            "description": "Target Lively4 session ID (optional - auto-selects if not provided)"
-          },
-          "code": {
-            "type": "string",
-            "description": "JavaScript code to evaluate in the live environment"
-          },
-          "timeout": {
-            "type": "number",
-            "description": "Timeout in milliseconds (default: 30000)",
-            "default": 30000
-          }
-        },
-        "required": ["code"]
-      },
-      "type": "lively",
-      "messageType": "evaluate-code"
-    },
     "list_sessions": {
       "description": "List all active Lively4 browser sessions available for code execution",
       "inputSchema": {

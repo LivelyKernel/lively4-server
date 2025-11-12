@@ -15,6 +15,8 @@ class McpSessionService {
     this.clients = new Set(); // WebSocket connections
     this.requestQueue = new Map(); // requestId -> { sessionId, resolve, reject, timeout }
     this.defaultTimeout = 30000; // 30 seconds for code evaluation
+    this.onSessionRegistered = null; // Callback when session registers
+    this.onSessionDisconnected = null; // Callback when session disconnects
   }
 
   /**
@@ -60,6 +62,13 @@ class McpSessionService {
     if (sessionId) {
       this.sessions.delete(sessionId);
       log(`[MCP Session] Removed session: ${sessionId}`);
+
+      // Notify MCP server if callback registered
+      if (this.onSessionDisconnected) {
+        this.onSessionDisconnected(sessionId).catch(err => {
+          log(`[MCP Session] Error in session disconnect callback: ${err.message}`);
+        });
+      }
     }
 
     this.clients.delete(ws);
@@ -79,6 +88,7 @@ class McpSessionService {
         
       case 'evaluation-result':
       case 'tool-result':
+      case 'tool-discovery-result':
         this.handleToolResult(message);
         break;
         
@@ -137,6 +147,13 @@ class McpSessionService {
       sessionId,
       message: 'Session registered successfully'
     });
+
+    // Notify MCP server if callback registered
+    if (this.onSessionRegistered) {
+      this.onSessionRegistered(sessionId).catch(err => {
+        log(`[MCP Session] Error in session registration callback: ${err.message}`);
+      });
+    }
   }
 
   /**
@@ -236,6 +253,53 @@ class McpSessionService {
   }
 
   /**
+   * Discover available tools from a browser session
+   * @param {string} sessionId - Target session ID
+   * @param {number} timeout - Timeout in milliseconds
+   * @returns {Promise<Array>} Array of tool definitions
+   */
+  async discoverSessionTools(sessionId, timeout = 5000) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const requestId = generateUUID();
+    log(`[MCP Session] Discovering tools from session ${sessionId}`);
+
+    // Send discovery request to browser
+    const sent = this.sendToClient(session.ws, {
+      type: 'discover-tools',
+      requestId,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!sent) {
+      throw new Error(`Could not send tool discovery request to session: ${sessionId}`);
+    }
+
+    // Wait for response
+    return new Promise((resolve, reject) => {
+      this.requestQueue.set(requestId, {
+        sessionId,
+        messageType: 'discover-tools',
+        resolve: (response) => resolve(response.result.tools),
+        reject,
+        startTime: Date.now()
+      });
+
+      const timeoutHandle = setTimeout(() => {
+        if (this.requestQueue.has(requestId)) {
+          this.requestQueue.delete(requestId);
+          reject(new Error(`Tool discovery timeout after ${timeout}ms`));
+        }
+      }, timeout);
+
+      this.requestQueue.get(requestId).timeoutHandle = timeoutHandle;
+    });
+  }
+
+  /**
    * Handle tool result from browser (generic for all tool types)
    * @param {Object} message - Result message from browser
    */
@@ -260,9 +324,15 @@ class McpSessionService {
     const toolType = request.messageType || 'tool';
     
     if (success) {
-      const resultPreview = typeof result === 'string' 
-        ? result.substring(0, 100) + (result.length > 100 ? '...' : '')
-        : JSON.stringify(result).substring(0, 100);
+      let resultPreview;
+      if (typeof result === 'string') {
+        resultPreview = result.substring(0, 100) + (result.length > 100 ? '...' : '');
+      } else if (result === undefined || result === null) {
+        resultPreview = String(result);
+      } else {
+        const jsonStr = JSON.stringify(result);
+        resultPreview = jsonStr ? jsonStr.substring(0, 100) : 'undefined';
+      }
       log(`[MCP Session] ${toolType} success in ${duration}ms for session ${sessionId}: ${resultPreview}`);
       request.resolve({
         success: true,

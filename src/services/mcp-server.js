@@ -18,8 +18,11 @@ class Lively4McpServer {
     this.isRunning = false;
     this.sessions = new Map(); // sessionId -> session data
     this.tools = new Map(); // tool name -> tool handler
+    this.sessionTools = new Map(); // sessionId -> Set of tool names from browser
     this.capabilities = {
-      tools: {},
+      tools: {
+        listChanged: true  // Enable tool change notifications
+      },
       logging: {
         setLevel: true
       }
@@ -27,6 +30,19 @@ class Lively4McpServer {
 
     // Register our tools
     this.registerTools();
+
+    // Register session lifecycle callbacks for dynamic tool discovery
+    this.mcpSessionService.onSessionRegistered = async (sessionId) => {
+      await this.discoverAndRegisterSessionTools(sessionId);
+    };
+
+    this.mcpSessionService.onSessionDisconnected = async (sessionId) => {
+      // Remove session tools
+      if (this.sessionTools.has(sessionId)) {
+        this.sessionTools.delete(sessionId);
+        this.notifyToolsChanged();
+      }
+    };
   }
 
   /**
@@ -271,15 +287,9 @@ class Lively4McpServer {
    * Handle tools/list request
    */
   async handleToolsList(params, id, res) {
-    log(`[MCP Server] Listing ${this.tools.size} tools`);
+    const tools = this.getAllTools();
 
-    const tools = Array.from(this.tools.entries()).map(([name, tool]) => ({
-      name,
-      description: tool.description,
-      inputSchema: tool.inputSchema
-    }));
-
-    log(`[MCP Server] Returning tools: ${tools.map(t => t.name).join(', ')}`);
+    log(`[MCP Server] Returning ${tools.length} tools: ${tools.map(t => t.name).join(', ')}`);
 
     const response = {
       jsonrpc: '2.0',
@@ -403,6 +413,91 @@ class Lively4McpServer {
     }
 
     log(`[MCP Server] Tools registered from tools.json: ${toolNames.join(', ')}`);
+  }
+
+  /**
+   * Get all available tools (static meta tools + session-discovered browser tools)
+   * @returns {Array} Array of tool definitions
+   */
+  getAllTools() {
+    const allTools = [];
+
+    // Add static tools from tools.json
+    for (const [name, tool] of this.tools) {
+      allTools.push({
+        name,
+        description: tool.description,
+        inputSchema: tool.inputSchema
+      });
+    }
+
+    log(`[MCP Server] Returning ${allTools.length} tools (${this.tools.size} static, ${this.sessionTools.size} sessions with tools)`);
+
+    return allTools;
+  }
+
+  /**
+   * Discover tools from a browser session and update registry
+   * @param {string} sessionId - Session to discover from
+   */
+  async discoverAndRegisterSessionTools(sessionId) {
+    try {
+      log(`[MCP Server] Discovering tools from session ${sessionId}`);
+
+      const tools = await this.mcpSessionService.discoverSessionTools(sessionId);
+      const toolNames = tools.map(t => t.name);
+
+      // Store tool metadata for this session
+      const previousTools = this.sessionTools.get(sessionId) || new Set();
+
+      // Register each discovered tool if not already registered
+      for (const tool of tools) {
+        if (!this.tools.has(tool.name)) {
+          // Tool not in static registry, add it dynamically
+          this.tools.set(tool.name, {
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+            handler: async (args) => {
+              // Route to browser session
+              return await this.handleGenericLivelyTool(tool.name, {
+                ...args,
+                sessionId: sessionId // Use the session that provides this tool
+              });
+            }
+          });
+          log(`[MCP Server] Dynamically registered browser tool: ${tool.name}`);
+        }
+      }
+
+      this.sessionTools.set(sessionId, new Set(toolNames));
+
+      log(`[MCP Server] Session ${sessionId} provides ${toolNames.length} tools: ${toolNames.join(', ')}`);
+
+      // Check if tools changed
+      const toolsChanged =
+        previousTools.size !== toolNames.length ||
+        !toolNames.every(name => previousTools.has(name));
+
+      if (toolsChanged) {
+        // Send notification to all connected MCP clients
+        this.notifyToolsChanged();
+      }
+
+      return tools;
+
+    } catch (error) {
+      log(`[MCP Server] Failed to discover tools from session ${sessionId}: ${error.message}`);
+      // Don't throw - tool discovery failure shouldn't break session registration
+    }
+  }
+
+  /**
+   * Send tools/list_changed notification to all connected clients
+   * Note: Requires SSE implementation (Phase 5) - currently just logs
+   */
+  notifyToolsChanged() {
+    log(`[MCP Server] Tool list changed - would notify clients if SSE was implemented`);
+    // SSE implementation will be added in Phase 5
   }
 
   /**
