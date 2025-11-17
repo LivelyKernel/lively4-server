@@ -37,10 +37,11 @@ class Lively4McpServer {
     };
 
     this.mcpSessionService.onSessionDisconnected = async (sessionId) => {
-      // Remove session tools
+      // Just track that this session disconnected
+      // Don't remove tools - they're shared across all sessions
       if (this.sessionTools.has(sessionId)) {
         this.sessionTools.delete(sessionId);
-        this.notifyToolsChanged();
+        log(`[MCP Server] Session ${sessionId} disconnected`);
       }
     };
   }
@@ -450,23 +451,22 @@ class Lively4McpServer {
       // Store tool metadata for this session
       const previousTools = this.sessionTools.get(sessionId) || new Set();
 
-      // Register each discovered tool if not already registered
+      // Register/update browser tools
+      // Always update to ensure tools use current dispatch logic (not hardcoded sessionId)
       for (const tool of tools) {
-        if (!this.tools.has(tool.name)) {
-          // Tool not in static registry, add it dynamically
-          this.tools.set(tool.name, {
-            description: tool.description,
-            inputSchema: tool.inputSchema,
-            handler: async (args) => {
-              // Route to browser session
-              return await this.handleGenericLivelyTool(tool.name, {
-                ...args,
-                sessionId: sessionId // Use the session that provides this tool
-              });
-            }
-          });
-          log(`[MCP Server] Dynamically registered browser tool: ${tool.name}`);
-        }
+        const isNew = !this.tools.has(tool.name);
+
+        this.tools.set(tool.name, {
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          handler: async (args) => {
+            // Don't hardcode sessionId - let handleGenericLivelyTool auto-select
+            // This allows the tool to work with any available session
+            return await this.handleGenericLivelyTool(tool.name, args);
+          }
+        });
+
+        log(`[MCP Server] ${isNew ? 'Registered' : 'Updated'} browser tool: ${tool.name}`);
       }
 
       this.sessionTools.set(sessionId, new Set(toolNames));
