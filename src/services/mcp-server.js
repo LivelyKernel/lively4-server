@@ -86,10 +86,10 @@ class Lively4McpServer {
           return this.sendJsonRpcError(res, -32000, 'Not Acceptable: Client must accept application/json or text/event-stream', null);
         }
 
-        // Validate protocol version header
+        // Log protocol version header (permissive - accept any version)
         const protocolVersion = req.headers['mcp-protocol-version'];
-        if (protocolVersion && protocolVersion !== '2025-06-18') {
-          return this.sendJsonRpcError(res, -32000, `Unsupported protocol version: ${protocolVersion}`, null);
+        if (protocolVersion) {
+          log(`[MCP Server] Client protocol version header: ${protocolVersion}`);
         }
 
         // Parse and validate JSON-RPC message
@@ -201,16 +201,11 @@ class Lively4McpServer {
     log(`[MCP Server] Client protocol version: ${protocolVersion}`);
     log(`[MCP Server] Client info: ${JSON.stringify(clientInfo)}`);
 
-    // Support multiple protocol versions
-    const supportedVersions = ['2025-03-26', '2025-06-18'];
-    const clientVersion = protocolVersion || '2025-06-18';
+    // Accept any protocol version - negotiate down to our highest supported
+    const HIGHEST_SUPPORTED = '2025-11-25';
+    const clientVersion = protocolVersion || HIGHEST_SUPPORTED;
 
-    if (!supportedVersions.includes(clientVersion)) {
-      log(`[MCP Server] Unsupported protocol version: ${clientVersion}`);
-      return this.sendJsonRpcError(res, -32602, `Unsupported protocol version: ${clientVersion}. Supported: ${supportedVersions.join(', ')}`, id);
-    }
-
-    log(`[MCP Server] Using protocol version: ${clientVersion}`);
+    log(`[MCP Server] Client requested version: ${clientVersion}, responding with: ${HIGHEST_SUPPORTED}`);
 
     // Generate session ID
     const sessionId = this.generateSessionId();
@@ -219,7 +214,7 @@ class Lively4McpServer {
     this.sessions.set(sessionId, {
       clientInfo: clientInfo || {},
       capabilities: capabilities || {},
-      protocolVersion: clientVersion,
+      protocolVersion: HIGHEST_SUPPORTED,
       createdAt: new Date().toISOString()
     });
 
@@ -230,7 +225,7 @@ class Lively4McpServer {
       jsonrpc: '2.0',
       id,
       result: {
-        protocolVersion: clientVersion, // Return the same version the client requested
+        protocolVersion: HIGHEST_SUPPORTED,
         capabilities: this.capabilities,
         serverInfo: {
           name: 'lively4-mcp-server',
