@@ -23,6 +23,7 @@ export default class GITService extends Service {
     var filepath = req.headers['gitfilepath'];
     var gitcommit = req.headers['gitcommit'];
     var usecolor = req.headers['gitusecolor'];
+    var porcelain = req.headers['gitporcelain'];
 
     var versionA = req.headers['gitversiona'];
     var versionB = req.headers['gitversionb'];
@@ -108,8 +109,12 @@ export default class GITService extends Service {
         "'";
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/status/)) {
-      cmd = `cd ${this.server.lively4dir}/${repository};
-        git -c color.status=always  status ; git log --color=always HEAD...origin/${branch} --pretty="format:%h\t%aN\t%cD\t%f"`;
+      if (porcelain && porcelain === 'true') {
+        cmd = `cd ${this.server.lively4dir}/${repository}; git status --porcelain`;
+      } else {
+        cmd = `cd ${this.server.lively4dir}/${repository};
+          git -c color.status=always  status ; git log --color=always HEAD...origin/${branch} --pretty="format:%h\t%aN\t%cD\t%f"`;
+      }
       respondWithCMD(cmd, res, dryrun);
     } else if (pathname.match(/\/_git\/log/)) {
       cmd =
@@ -145,6 +150,30 @@ export default class GITService extends Service {
           echo "merge in progress - you had conflicts or a manual merge is in progress";
         else
           git commit -m'${msg}' -a ;
+        fi`;
+
+      respondWithCMD(cmd, res, dryrun);
+    } else if (pathname.match(/\/_git\/checkpoint/)) {
+      if (!msg) {
+        return res.end('Please provide a commit message!');
+      }
+      cmd =
+        "cd '" +
+        this.server.lively4dir +
+        '/' +
+        repository +
+        "';\n" +
+        'git config user.name ' +
+        username +
+        ';\n' +
+        'git config user.email ' +
+        email +
+        ';\n' +
+        `if [ -e ".git/MERGE_HEAD" ];
+        then
+          echo "merge in progress - you had conflicts or a manual merge is in progress";
+        else
+          git add --all . && git commit -m'${msg}' ;
         fi`;
 
       respondWithCMD(cmd, res, dryrun);
