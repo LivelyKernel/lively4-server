@@ -67,9 +67,9 @@ export default class TerminalService extends Service {
       const rows = parseInt(req.query.rows) || 24;
       let cwd = req.headers.cwd;
 
-      // Handle relative paths from header - resolve them relative to /home/jens/lively4
+      // Handle relative paths from header - resolve them relative to the configured server directory
       if (cwd && cwd.startsWith('/') && !cwd.startsWith('/home')) {
-        cwd = `/home/jens/lively4${cwd}`;
+        cwd = `${this.server.sourceDir}${cwd}`;
       }
 
       // Fallback to environment if no header cwd provided
