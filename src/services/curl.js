@@ -21,8 +21,8 @@ export default class CurlService extends Service {
       curlArgs += ` -X ${req.method}`;
     }
     
-    // Forward headers (skip some internal headers)
-    const skipHeaders = ['host', 'connection', 'content-length'];
+    // Forward headers (skip internal headers and headers that should only be set via x-header-)
+    const skipHeaders = ['host', 'connection', 'content-length', 'origin', 'referer'];
     for (let [key, value] of Object.entries(req.headers)) {
       if (!skipHeaders.includes(key.toLowerCase())) {
         curlArgs += ` -H "${key}: ${value.replace(/"/g, '\\"')}"`;
