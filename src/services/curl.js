@@ -28,6 +28,15 @@ export default class CurlService extends Service {
         curlArgs += ` -H "${key}: ${value.replace(/"/g, '\\"')}"`;
       }
     }
+    
+    // Inject custom headers from query parameters (prefixed with x-header-)
+    // This allows spoofing headers like Origin, Referer that browsers restrict
+    for (let [key, value] of Object.entries(url.query)) {
+      if (key.startsWith('x-header-')) {
+        const headerName = key.substring(9); // Remove 'x-header-' prefix
+        curlArgs += ` -H "${headerName}: ${value.replace(/"/g, '\\"')}"`;
+      }
+    }
 
     // If there's a body, read and forward it
     if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH") {
@@ -44,15 +53,21 @@ export default class CurlService extends Service {
       }
     }
 
-    exec(`curl ${curlArgs}`, {
+    const fullCommand = `curl ${curlArgs}`;
+    console.log('[CURL] Executing:', fullCommand.substring(0, 500));
+    console.log('[CURL] Full command length:', fullCommand.length);
+    
+    exec(fullCommand, {
       encoding: 'binary',
       maxBuffer: 1024 * 1000 * 100
     }, (error, stdout, stderr) => {
       if (error) {
+        console.log('[CURL] Error:', stderr || error.message);
         res.writeHead(500);
         res.end(`curl error: ${stderr || error.message}`);
         return;
       }
+      console.log('[CURL] Success, output length:', stdout.length);
       res.writeHead(200);
       res.end(stdout, "binary");
     });
