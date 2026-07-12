@@ -65,10 +65,11 @@ describe('FileWatchService', function () {
       expect(relativePath).to.equal('test.js');
     });
 
-    it('should handle nested directory paths', function () {
+    it('should handle nested directory paths (POSIX separators on all platforms)', function () {
       const testFile = path.join(tempDir, 'src', 'components', 'test.js');
       const relativePath = fileWatchService.makeRelativePath(testFile);
-      expect(relativePath).to.equal(path.join('src', 'components', 'test.js'));
+      // Emitted paths always use '/', regardless of the OS separator.
+      expect(relativePath).to.equal('src/components/test.js');
     });
 
     it('should return absolute path for files outside lively4 directory', function () {

@@ -12,8 +12,13 @@ class FileWatchService {
     this.clientInterests = new Map(); // client -> Set of paths they're interested in
     this.lively4Directory = lively4Directory; // Base directory for relative paths
     this.fileExistenceCache = new Map(); // Track file existence for CREATE/DELETE detection
-    this.recentNotifications = new Map(); // path -> { eventType, timestamp } for deduplication
-    this.deduplicationWindow = 50; // milliseconds - ignore duplicate events within this window
+    // Per-file coalescing: the first raw event for a file opens a fixed-length window; every
+    // raw event for that file within the window is folded into a single notification whose
+    // eventType is the NET effect (CREATE / CHANGE / DELETE) computed from before/after
+    // existence. Keyed by fullPath, so each file is coalesced independently and can never
+    // suppress events for a different file.
+    this.pendingEvents = new Map(); // fullPath -> { timer, existedBefore, existsNow, ... }
+    this.coalesceWindow = 50; // milliseconds - window opened on the first event of a burst
   }
 
   /**
@@ -271,9 +276,21 @@ class FileWatchService {
    * @param {string} absolutePath - The absolute file path
    * @return {string} Relative path from Lively4 directory
    */
+  /**
+   * Convert an OS path to POSIX ('/') separators without corrupting legitimate characters.
+   * Splits on the platform separator (Path.sep) and rejoins with '/': on Windows this turns
+   * '\\' into '/', and on Unix (where '\\' is a valid filename character) it is a no-op that
+   * leaves any literal backslashes intact.
+   * @param {string} p - A path using the OS-native separator
+   * @return {string} The same path with '/' separators
+   */
+  toPosixPath(p) {
+    return p.split(Path.sep).join('/');
+  }
+
   makeRelativePath(absolutePath) {
     if (!this.lively4Directory) {
-      return absolutePath;
+      return this.toPosixPath(absolutePath);
     }
 
     // Normalize paths to handle different separators
@@ -283,11 +300,15 @@ class FileWatchService {
     // Check if path is within the Lively4 directory
     if (normalizedPath.startsWith(normalizedBase)) {
       const relativePath = Path.relative(normalizedBase, normalizedPath);
-      return relativePath || '.'; // Return '.' for the root directory itself
+      // Always emit POSIX ('/') separators: URLs and lively4 module ids use '/'. On Windows
+      // Path.relative yields '\\', which breaks the client - it can't match open containers
+      // (their URLs are '/'-style) and reloads the module under a '\\'-keyed identity, so the
+      // running instance is never migrated and silently goes stale.
+      return this.toPosixPath(relativePath || '.'); // '.' for the root directory itself
     }
 
-    // If not within Lively4 directory, return the absolute path
-    return absolutePath;
+    // If not within Lively4 directory, return the absolute path (POSIX-normalized)
+    return this.toPosixPath(absolutePath);
   }
 
   /**
@@ -372,34 +393,103 @@ class FileWatchService {
   }
 
   /**
-   * Check if a notification is a duplicate within the deduplication window
-   * @param {string} fullPath - The full path to the file
-   * @param {string} operationType - The operation type (CREATE, CHANGE, DELETE)
-   * @param {number} timestamp - Current timestamp
-   * @return {boolean} True if this is a duplicate notification
+   * Feed a raw fs event into the per-file coalescing window. The first event for a file opens
+   * a fixed window (this.coalesceWindow ms); further raw events for the same file within the
+   * window update the pending state instead of emitting. On flush a single notification is
+   * sent with the net operation type. Fixed (non-resetting) window == throttle: bounds latency
+   * and avoids starvation under continuous writes.
+   * @param {string} rawEventType - Raw fs.watch event ('rename' | 'change')
+   * @param {string} watchedPath - The watched path this event came from
+   * @param {string} filename - The changed filename relative to watchedPath
+   * @param {string} fullPath - Absolute path of the changed file
+   * @param {boolean} exists - Whether the file exists right now
+   * @param {boolean} isDirectory - Whether the path is a directory
    */
-  isDuplicateNotification(fullPath, operationType, timestamp) {
-    const key = `${fullPath}:${operationType}`;
-    const recent = this.recentNotifications.get(key);
-    
-    if (recent && (timestamp - recent.timestamp) < this.deduplicationWindow) {
-      return true; // This is a duplicate
-    }
-    
-    // Update the recent notification
-    this.recentNotifications.set(key, { timestamp });
-    
-    // Clean up old entries to prevent memory leak
-    if (this.recentNotifications.size > 1000) {
-      const cutoff = timestamp - this.deduplicationWindow * 10;
-      for (const [k, v] of this.recentNotifications.entries()) {
-        if (v.timestamp < cutoff) {
-          this.recentNotifications.delete(k);
-        }
+  coalesceEvent(rawEventType, watchedPath, filename, fullPath, exists, isDirectory) {
+    let pending = this.pendingEvents.get(fullPath);
+    if (!pending) {
+      // Existence BEFORE this window opened, used to derive the net effect on flush. When the
+      // cache has no prior record, infer from the raw event: a 'change' can only target an
+      // existing file; a 'rename' that leaves the file gone must have removed an existing one;
+      // a 'rename' that leaves it present is treated as a fresh create.
+      let inferredBefore;
+      if (rawEventType === 'change') {
+        inferredBefore = true;
+      } else if (rawEventType === 'rename') {
+        inferredBefore = !exists;
+      } else {
+        inferredBefore = exists;
       }
+      const existedBefore = this.fileExistenceCache.has(fullPath)
+        ? this.fileExistenceCache.get(fullPath)
+        : inferredBefore;
+
+      pending = {
+        watchedPath,
+        filename,
+        fullPath,
+        isDirectory,
+        existedBefore,
+        existsNow: exists,
+        lastRawEventType: rawEventType,
+        timer: setTimeout(() => this.flushCoalesced(fullPath), this.coalesceWindow)
+      };
+      this.pendingEvents.set(fullPath, pending);
+    } else {
+      pending.existsNow = exists;
+      pending.isDirectory = isDirectory;
+      pending.lastRawEventType = rawEventType;
     }
-    
-    return false;
+
+    // Remember the latest known existence so the next window has an accurate before-state.
+    this.fileExistenceCache.set(fullPath, exists);
+  }
+
+  /**
+   * Emit the single coalesced notification for a file once its window closes.
+   * @param {string} fullPath - Absolute path whose window is closing
+   */
+  flushCoalesced(fullPath) {
+    const pending = this.pendingEvents.get(fullPath);
+    if (!pending) return;
+    this.pendingEvents.delete(fullPath);
+
+    const { existedBefore, existsNow } = pending;
+
+    // Net effect over the window from before/after existence. This is robust against atomic
+    // saves (write-temp + rename), which surface an existing-file modification as a rename
+    // that the OS reports like a create - the existence delta still resolves to CHANGE.
+    let operationType;
+    if (existsNow && !existedBefore) {
+      operationType = 'CREATE';
+    } else if (existsNow && existedBefore) {
+      operationType = 'CHANGE';
+    } else if (!existsNow && existedBefore) {
+      operationType = 'DELETE';
+    } else {
+      // Created and removed within the same window: no net change, nothing to report.
+      return;
+    }
+
+    const timestamp = Date.now();
+    const livelyRelativePath = this.makeRelativePath(pending.fullPath);
+    const watchedRelativePath = this.makeRelativePath(pending.watchedPath);
+
+    const changeEvent = {
+      type: 'file-change',
+      eventType: operationType,
+      rawEventType: pending.lastRawEventType, // last raw fs event that fed this window
+      path: livelyRelativePath,
+      relativePath: this.toPosixPath(pending.filename),
+      watchedPath: watchedRelativePath,
+      isDirectory: pending.isDirectory,
+      exists: existsNow,
+      timestamp
+    };
+
+    log(`[FileWatch] File ${operationType} (coalesced): ${livelyRelativePath}`);
+
+    this.broadcastToClients(changeEvent, pending.watchedPath);
   }
 
   /**
@@ -465,36 +555,9 @@ class FileWatchService {
       exists = false;
     }
 
-    // Determine the specific operation type
-    const operationType = this.determineOperationType(eventType, fullPath, exists);
-    const timestamp = Date.now();
-
-    // Check for duplicate notifications
-    if (this.isDuplicateNotification(fullPath, operationType, timestamp)) {
-      log(`[FileWatch] Skipping duplicate ${operationType} event for: ${fullPath}`);
-      return;
-    }
-
-    // Convert paths to be relative to Lively4 directory
-    const livelyRelativePath = this.makeRelativePath(fullPath);
-    const watchedRelativePath = this.makeRelativePath(watchedPath);
-
-    const changeEvent = {
-      type: 'file-change',
-      eventType: operationType,
-      rawEventType: eventType, // Keep the original for debugging
-      path: livelyRelativePath,
-      relativePath: filename,
-      watchedPath: watchedRelativePath,
-      isDirectory,
-      exists,
-      timestamp
-    };
-
-    log(`[FileWatch] File ${operationType}: ${livelyRelativePath}`);
-
-    // Broadcast to interested clients
-    this.broadcastToClients(changeEvent, watchedPath);
+    // Feed the raw event into the per-file coalescing window rather than emitting immediately.
+    // A single notification with the net operation type is broadcast when the window closes.
+    this.coalesceEvent(eventType, watchedPath, filename, fullPath, exists, isDirectory);
   }
 
   /**
@@ -780,7 +843,12 @@ class FileWatchService {
     }
     this.watchers.clear();
     this.fileExistenceCache.clear();
-    this.recentNotifications.clear();
+
+    // Cancel any pending coalescing timers so they don't fire after shutdown
+    for (const pending of this.pendingEvents.values()) {
+      clearTimeout(pending.timer);
+    }
+    this.pendingEvents.clear();
 
     // Close all client connections
     for (const client of this.clients) {
