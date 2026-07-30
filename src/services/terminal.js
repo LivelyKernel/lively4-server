@@ -2,7 +2,7 @@ import Service from './service.js';
 import pty from 'node-pty';
 import os from 'os';
 import { exec } from 'child_process';
-import { logRequest } from '../utils.js';
+import { logRequest, config } from '../utils.js';
 
 /**
  * Terminal service that provides PTY terminal creation and WebSocket connections
@@ -61,7 +61,11 @@ export default class TerminalService extends Service {
    */
   createTerminal(req, res) {
     try {
-      const shell = '/bin/bash';
+      // Honour --bash-bin (config.bashBin, default "bash"). The option is
+      // declared in options-spec.js and plumbed in http-server.js, but this
+      // service used to hardcode /bin/bash — which does not exist on Windows,
+      // so terminal creation failed with "File not found" there.
+      const shell = config.bashBin;
       const args = [];
       const cols = parseInt(req.query.cols) || 80;
       const rows = parseInt(req.query.rows) || 24;

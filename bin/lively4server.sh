@@ -37,6 +37,13 @@ if [ $AUTHORIZE ]; then
   OPTIONS=$OPTIONS" --authorize-requests=true --github-organization=$ORGANIZATION --github-team=$TEAM "
 fi
 
+# Optional shell override for the terminal service (node-pty). Needed on Windows,
+# where node-pty does not resolve a bare "bash" and wants "bash.exe" (or a full
+# path). Value must be space-free — $OPTIONS is used unquoted below.
+if [ "$BASHBIN" ]; then
+  OPTIONS=$OPTIONS" --bash-bin=$BASHBIN "
+fi
+
 while true; do
   # cheap log rotate
   cp $LOGFILE $LOGFILE.last
