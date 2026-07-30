@@ -17,7 +17,10 @@
 #   but no upstream wrapper ever sets it — it silently expands empty. Setting it
 #   here fixes that without forking upstream.
 
-LIVELY=/c/Users/Stefan/lively/lively4
+# Self-locate the lively4 root from this script's own path
+# ($LIVELY/lively4-server/bin/lively4W1.sh → ../.. is $LIVELY). Portable across
+# checkouts; override by exporting LIVELY. pwd -P gives an absolute POSIX path.
+LIVELY="${LIVELY:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
 
 SERVER=lively4-server
 LIVELY4=.
