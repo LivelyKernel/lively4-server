@@ -19,6 +19,16 @@ class FileWatchService {
     // suppress events for a different file.
     this.pendingEvents = new Map(); // fullPath -> { timer, existedBefore, existsNow, ... }
     this.coalesceWindow = 50; // milliseconds - window opened on the first event of a burst
+    // Content-signature cache: fullPath -> `${mtimeMs}:${size}`. Used to drop 'change' events
+    // that don't reflect a real content change. On Windows, fs.watch fires 'change' on a mere
+    // READ (last-access-time update); with an event-based watcher and a client that re-fetches
+    // on CHANGE, that becomes a read->event->refetch feedback loop. Suppressing no-op events
+    // breaks it regardless of the OS-level atime setting.
+    this.lastKnownStat = new Map();
+    // A genuine write lands an mtime of ~now; a spurious atime-only event leaves mtime at the
+    // file's real (usually much older) last-write. On first sight of a file (no cached sig),
+    // treat an mtime older than this as spurious and drop it.
+    this.freshWriteWindowMs = 5000;
   }
 
   /**
@@ -544,15 +554,42 @@ class FileWatchService {
       return;
     }
 
-    // Get file stats to determine if it's a file or directory
+    // Get file stats to determine if it's a file or directory, and its content signature.
     let isDirectory = false;
     let exists = true;
+    let mtimeMs = 0;
+    let size = 0;
     try {
       const stats = fs.statSync(fullPath);
       isDirectory = stats.isDirectory();
+      mtimeMs = stats.mtimeMs;
+      size = stats.size;
     } catch (error) {
       // File might have been deleted
       exists = false;
+    }
+
+    // Drop 'change' events that don't reflect a real write (see lastKnownStat above). This
+    // applies to directories too: a real structural change (add/remove/rename a child) bumps
+    // a directory's mtime, but an access-only touch does not — and on Windows, reading files
+    // inside a watched dir fires a spurious 'change' for the dir. Existence changes
+    // (create/delete) still pass through so the coalescer can emit CREATE/DELETE.
+    if (exists) {
+      const sig = `${mtimeMs}:${size}`;
+      const prevSig = this.lastKnownStat.get(fullPath);
+      this.lastKnownStat.set(fullPath, sig);
+      if (prevSig === sig) {
+        // Identical mtime+size since we last saw it: no real write happened (e.g. an
+        // atime-only touch reported by Windows fs.watch). Ignore.
+        return;
+      }
+      if (prevSig === undefined && (Date.now() - mtimeMs) > this.freshWriteWindowMs) {
+        // First sighting of a path that was not written recently: a spurious read event,
+        // not a genuine edit. Seed the cache (done above) and ignore this one.
+        return;
+      }
+    } else {
+      this.lastKnownStat.delete(fullPath);
     }
 
     // Feed the raw event into the per-file coalescing window rather than emitting immediately.

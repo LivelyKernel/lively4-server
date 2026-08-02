@@ -488,6 +488,48 @@ describe('FileWatchService', function () {
       }, 3000);
     });
 
+    it('suppresses spurious change events on unmodified files, but not real writes', function (done) {
+      // Regression for the Windows read-triggered flood: with NTFS last-access updates enabled,
+      // libuv's fs.watch fires 'change' every time a file is merely READ. Those events carry no
+      // real write, so they must be dropped — otherwise the client re-fetches, which reads again,
+      // which fires another event: a feedback loop that surfaces as "upgrading 100s of files".
+      this.timeout(5000);
+
+      const testFile = path.join(tempDir, 'spurious.js');
+      testFiles.push(testFile);
+      fs.writeFileSync(testFile, 'content');
+      // Age the file so it looks like a long-untouched repo file being read during world load.
+      const old = new Date(Date.now() - 60000);
+      fs.utimesSync(testFile, old, old);
+
+      const events = [];
+      const mockClient = {
+        readyState: 1, OPEN: 1,
+        send(data) { const m = JSON.parse(data); if (m.type === 'file-change') events.push(m); },
+        on() { }
+      };
+      fileWatchService.addClient(mockClient);
+      fileWatchService.addClientInterest(mockClient, tempDir);
+
+      // Two read-triggered 'change' events on the unmodified file — both must be suppressed.
+      fileWatchService.handleFileChange('change', tempDir, 'spurious.js');
+      fileWatchService.handleFileChange('change', tempDir, 'spurious.js');
+
+      setTimeout(() => {
+        const spurious = events.filter(e => e.path === 'spurious.js');
+        expect(spurious, 'spurious read events must be suppressed').to.have.lengthOf(0);
+
+        // A genuine write (fresh mtime) must still propagate.
+        fs.writeFileSync(testFile, 'really modified');
+        fileWatchService.handleFileChange('change', tempDir, 'spurious.js');
+        setTimeout(() => {
+          const changes = events.filter(e => e.path === 'spurious.js' && e.eventType === 'CHANGE');
+          expect(changes.length, 'a real write must still emit CHANGE').to.be.greaterThan(0);
+          done();
+        }, 400);
+      }, 400);
+    });
+
     it('should not send duplicate change notifications', function (done) {
       this.timeout(5000);
 
