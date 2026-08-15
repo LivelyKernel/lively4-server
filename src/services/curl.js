@@ -1,6 +1,6 @@
 import Service from "./service.js";
 import URL from 'url';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 
 export default class CurlService extends Service {
 
@@ -14,27 +14,31 @@ export default class CurlService extends Service {
       return;
     }
 
-    let curlArgs = `-L "${target}"`;
-    
+    // Build an argv array and invoke curl via execFile (no shell). This avoids
+    // shell quoting entirely, so it behaves identically under cmd.exe (Windows)
+    // and bash (Linux) — the previous string+exec form used POSIX single-quote
+    // escaping that cmd.exe does not honour.
+    const args = ['-L', target];
+
     // Use the incoming request method
     if (req.method && req.method !== "GET") {
-      curlArgs += ` -X ${req.method}`;
+      args.push('-X', req.method);
     }
-    
+
     // Forward headers (skip internal headers and headers that should only be set via x-header-)
     const skipHeaders = ['host', 'connection', 'content-length', 'origin', 'referer'];
     for (let [key, value] of Object.entries(req.headers)) {
       if (!skipHeaders.includes(key.toLowerCase())) {
-        curlArgs += ` -H "${key}: ${value.replace(/"/g, '\\"')}"`;
+        args.push('-H', `${key}: ${value}`);
       }
     }
-    
+
     // Inject custom headers from query parameters (prefixed with x-header-)
     // This allows spoofing headers like Origin, Referer that browsers restrict
     for (let [key, value] of Object.entries(url.query)) {
       if (key.startsWith('x-header-')) {
         const headerName = key.substring(9); // Remove 'x-header-' prefix
-        curlArgs += ` -H "${headerName}: ${value.replace(/"/g, '\\"')}"`;
+        args.push('-H', `${headerName}: ${value}`);
       }
     }
 
@@ -45,19 +49,15 @@ export default class CurlService extends Service {
         req.on('data', chunk => data += chunk);
         req.on('end', () => resolve(data));
       });
-      
+
       if (body) {
-        // Escape single quotes for shell
-        const escapedBody = body.replace(/'/g, "'\\''");
-        curlArgs += ` -d '${escapedBody}'`;
+        args.push('-d', body);
       }
     }
 
-    const fullCommand = `curl ${curlArgs}`;
-    console.log('[CURL] Executing:', fullCommand.substring(0, 500));
-    console.log('[CURL] Full command length:', fullCommand.length);
-    
-    exec(fullCommand, {
+    console.log('[CURL] Executing: curl', args.join(' ').substring(0, 500));
+
+    execFile('curl', args, {
       encoding: 'binary',
       maxBuffer: 1024 * 1000 * 100
     }, (error, stdout, stderr) => {

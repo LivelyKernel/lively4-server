@@ -387,8 +387,10 @@ export default class TerminalService extends Service {
    */
   async run(cmd) {
     return new Promise((resolve) => {
-      // Use same large buffer size as utils.js
-      exec(cmd, { maxBuffer: 1024 * 2000 * 100 }, (error, stdout, stderr) => {
+      // Use same large buffer size as utils.js, and run under bash (config.bashBin)
+      // rather than the platform default shell (cmd.exe on Windows), so the
+      // bash/coreutils commands sent here behave the same on Windows and Linux.
+      exec(cmd, { shell: config.bashBin, maxBuffer: 1024 * 2000 * 100 }, (error, stdout, stderr) => {
         resolve({ stdout, stderr, error });
       });
     });
