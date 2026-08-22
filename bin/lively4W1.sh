@@ -30,12 +30,12 @@ LOGFILE=lively4-server/server.log
 AUTOCOMMIT=true
 MYURL="http://127.0.0.1:$PORT/"
 
-# node-pty needs an explicit "bash.exe" on Windows (it will not resolve a bare
-# "bash"). Pass it through the --bash-bin option — lively4server.sh forwards the
-# BASHBIN env var. Kept space-free so it survives $OPTIONS word-splitting; PATH
-# below makes bash.exe resolvable to the Windows node process.
+# node-pty and the server's internal run() need an explicit bash on Windows. Pin the FULL Git Bash
+# path (8.3 short form to stay space-free for $OPTIONS word-splitting) — a bare "bash.exe" resolves
+# to C:\Windows\System32\bash.exe (the WSL launcher), which cannot cd into Windows repo paths, so
+# git-log/find return empty and the whole file index / editor navbar goes yellow.
 export PATH="/c/Program Files/Git/bin:$PATH"
-BASHBIN=bash.exe
+BASHBIN=C:/PROGRA~1/Git/bin/bash.exe
 
 # Node 22 via nvm-windows: Git Bash may not inherit the machine PATH.
 if ! command -v node >/dev/null 2>&1; then

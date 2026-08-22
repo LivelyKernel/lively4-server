@@ -32,6 +32,8 @@ while true; do
             echo "JavaScript file(s) changed: $CHANGED"
             echo "Executing: $COMMAND"
             bash -c "$COMMAND" &
+            sleep 3  # debounce: let the restart settle before re-baselining, so one edit = one bounce
+            NEW_STATE=$(get_js_files_state)
         fi
         LAST_STATE="$NEW_STATE"
     fi

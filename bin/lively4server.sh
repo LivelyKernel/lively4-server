@@ -8,27 +8,31 @@ echo "SERVER " $SERVER
 OPTIONS=""
 
 cd $LIVELY
-_term() { 
-  echo "Caught kill signal! Kill watcher and node, too!" 
+
+# File holding the RUNNING node's OS-level PID so the watcher can terminate it cross-platform:
+# the real Windows PID on MSYS/Git Bash (via /proc/<pid>/winpid), the native PID elsewhere.
+NODEPIDFILE="$SERVER/.node.pid"
+
+_term() {
+  echo "Caught kill signal! Kill watcher and node, too!"
   kill -TERM "$WATCHERPID" 2>/dev/null
-  kill -TERM "$NODEPID"
+  bash "$SERVER/bin/kill-node.sh" "$NODEPIDFILE"
+  rm -f "$NODEPIDFILE"
   popd
   exit
 }
 trap _term SIGTERM
 trap _term SIGINT
 
-_restart() { 
-  echo "restart server from watcher: "$NODEPID 
-  kill $NODEPID
-}
-trap _restart SIGUSR1
-
 pushd $LIVELY
 
 export PATH=$SERVER/bin:$PATH
 
-$SERVER/bin/watch.sh $SERVER/src 'kill -USR1 '$$ &
+# Watch server sources; on change, terminate the running node by its recorded OS PID and let the
+# supervisor loop below relaunch it. Replaces the old SIGUSR1 -> wrapper -> 'kill $NODEPID' path,
+# whose SIGUSR1 delivery to the wrapper and pipeline-$! kill of node were both unreliable for a
+# native node.exe under Windows/Git Bash (the server ended up dead instead of cycled).
+$SERVER/bin/watch.sh $SERVER/src "bash $SERVER/bin/kill-node.sh $NODEPIDFILE" &
 WATCHERPID=$!
 
 OPTIONS=" --server="$SERVER" --myurl="$MYURL" "
@@ -61,8 +65,12 @@ while true; do
   node $SERVER/src/http-server.js $OPTIONS --directory="$LIVELY4" --port="$PORT" --auto-commit="$AUTOCOMMIT" 2>&1 > >(\
   	  sed -u 's/https:\/\/.*@github.com/https:\/\/SECRET@github.com/' | \
 	  sed -u 's/lively4sync.*/lively4sync.../' | \
-	  tee -a $LOGFILE ) & 
+	  tee -a $LOGFILE ) &
 	NODEPID=$!
+	# Record node's OS PID for the watcher: its real Windows PID on MSYS (/proc/<pid>/winpid),
+	# else the native PID. bin/kill-node.sh reads this to bounce node on a source change.
+	WINPID=$(cat /proc/$NODEPID/winpid 2>/dev/null)
+	echo "${WINPID:-$NODEPID}" > "$NODEPIDFILE"
 	wait $NODEPID
 	sleep 1 # wait a bit
 done
